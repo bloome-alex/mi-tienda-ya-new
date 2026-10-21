@@ -25,7 +25,7 @@ const colorMode=computed(()=>storeTheme.resolved(design.value));
 useStoreBranding(design,{appearance:()=>appearance.deviceAppearance,preference:()=>appearance.preference});
 watch([()=>store.value?._id||store.value?.slug,()=>isPreview.value],([identifier,preview])=>storeTheme.useStore(identifier,{preview}),{immediate:true});
 const storefrontStyle=computed(()=>{
- const style={...designStyle(design.value,appearance.deviceAppearance,appearance.preference),'--store-header-offset':navbarHeight.value+'px','--store-mobile-cols':Math.min(design.value.shop.columns,2)},wallpaper=design.value.wallpaper;
+ const style={...designStyle(design.value,appearance.deviceAppearance,appearance.preference),'--store-header-offset':navbarHeight.value+'px','--store-mobile-cols':design.value.shop.catalogMobileColumns},wallpaper=design.value.wallpaper;
  if(!wallpaper.enabled)return style;
  const image=value=>value?`url(${JSON.stringify(value)})`:'none';
  return {...style,'--wallpaper-desktop':image(wallpaper.mode==='shared'?wallpaper.sharedImage:wallpaper.desktopImage),'--wallpaper-mobile':image(wallpaper.mode==='shared'?wallpaper.sharedImage:wallpaper.mobileImage),'--wallpaper-position':wallpaper.position,'--wallpaper-fit':wallpaper.fit,'--wallpaper-attachment':wallpaper.attachment,'--wallpaper-overlay':`${colorMode.value==='dark'?wallpaper.darkOverlay:wallpaper.overlay}%`};

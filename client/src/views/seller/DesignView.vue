@@ -4,6 +4,7 @@ import { onBeforeRouteLeave } from 'vue-router';
 import { api } from '../../services/api.js';
 import { workspace, registerStoreSwitchGuard } from '../../services/workspace.js';
 import { normalizeDesign, defaultDesign, wallpaperSpecs, storeTextFields, socialNetworks } from '../../services/design.js';
+import { DesignTextCatalog } from '../../services/designTextCatalog.js';
 import { notify, confirmDialog, unsavedChangesDialog } from '../../services/notifications.js';
 import { PREVIEW_MESSAGE, isTrustedPreviewMessage, previewSectionPath, readPreviewLocation } from '../../services/previewProtocol.js';
 import { editorGroups, wallpaperFields } from '../../components/editor/fields.js';
@@ -36,16 +37,17 @@ const dirty=computed(()=>changedDesign.value||changedGeneral.value||pendingUploa
 const protectedTabs=new Set(['brand','navbar','copy','sections']);
 const sections=[
   {key:'brand',label:'Identidad',icon:'sparkles',description:'Marca, temas, fondos y datos de tu tienda.'},
-  {key:'navbar',label:'Cabecera',icon:'menu',description:'Logo, título, altura y navegación propios de tu tienda.'},
+  {key:'navbar',label:'Cabecera',icon:'menu',description:'Logo, altura, visibilidad y navegación de tu tienda.'},
   {key:'shop',label:'Tienda',icon:'store',description:'Portada, destacados y catálogo con tu estilo.'},
   {key:'sections',label:'Secciones',icon:'grid',description:'Contenido propio, organizado por secciones y complementos.'},
-  {key:'copy',label:'Textos',icon:'edit',description:'Mensajes únicos, títulos complementarios y botones para cada página.'},
+  {key:'copy',label:'Textos',icon:'edit',description:'Único lugar para editar títulos, descripciones, etiquetas, botones y mensajes.'},
   {key:'product',label:'Producto',icon:'package',description:'Presentá cada producto con claridad.'},
   {key:'cart',label:'Carrito',icon:'cart',description:'Prepará una experiencia de compra simple.'},
   {key:'checkout',label:'Checkout',icon:'credit-card',description:'Datos, entrega y pago a tu manera.'},
-  {key:'terms',label:'Términos',icon:'receipt',description:'Una página propia de términos y condiciones.'}
+  {key:'terms',label:'Términos',icon:'receipt',description:'Publicación y presentación de la página de términos.'}
 ];
 const current=computed(()=>sections.find(item=>item.key===section.value));
+const visibleEditorGroups=computed(()=>(editorGroups[section.value]||[]).filter(group=>group.special||group.items.some(field=>!['text','textarea'].includes(field.type))));
 const previewPageLabel=computed(()=>sections.find(item=>item.key===previewPage.value.section)?.label||'Tienda');
 const previewPath=computed(()=>store.value&&previewPage.value.path?`${previewPage.value.path}?preview=${store.value._id}`:'');
 const wallpaperDevices=computed(()=>draft.value.wallpaper.mode==='responsive'?['desktop','mobile']:['shared']);
@@ -195,9 +197,14 @@ function validateBeforeSave(design,details){
     const value=design[tab]?.[field.key];
     if(field.type==='color'&&!/^#[a-f\d]{6}$/i.test(value))throw problem(`${field.label}: usá un color hexadecimal de seis dígitos, por ejemplo #18181b.`,tab,group.key,field.key);
     if(field.type==='range'&&(!Number.isFinite(value)||!Number.isInteger(value)||value<field.min||value>field.max))throw problem(`${field.label}: ingresá un número entre ${field.min} y ${field.max}.`,tab,group.key,field.key);
-    if(['text','textarea','url'].includes(field.type)&&(typeof value!=='string'||value.length>field.max))throw problem(`${field.label}: usá un texto de hasta ${field.max} caracteres.`,tab,group.key,field.key);
+    if(['text','textarea','url'].includes(field.type)&&(typeof value!=='string'||value.length>field.max)){
+      const target=['text','textarea'].includes(field.type)?{tab:'copy',group:undefined,field:`${tab}.${field.key}`}:{tab,group:group.key,field:field.key};
+      throw problem(`${field.label}: usá un texto de hasta ${field.max} caracteres.`,target.tab,target.group,target.field);
+    }
   }
   for(const field of storeTextFields)if(typeof design.copy[field.key]!=='string'||design.copy[field.key].length>field.max)throw problem(`${field.label}: el texto admite hasta ${field.max} caracteres.`,'copy',field.section,field.key);
+  const textCatalog=new DesignTextCatalog(design);
+  for(const field of textCatalog.fields()){const value=textCatalog.value(field);if(typeof value!=='string'||value.length>field.max)throw problem(`${field.label}: el texto admite hasta ${field.max} caracteres.`,'copy',field.section,field.path);}
   for(const link of design.navbar.links){
     const target={path:`navbar.links.${link.id}.sectionId`,itemId:link.id};
     if(link.enabled&&link.target==='section'&&!link.sectionId)throw problem(`Elegí una sección de destino para el enlace “${link.label||'sin texto'}”, o desactivalo.`,'navbar','links','sectionId',target);
@@ -215,7 +222,7 @@ function validateBeforeSave(design,details){
       }
     }
   }
-  if(design.terms.enabled&&(!design.terms.title.trim()||!design.terms.content.trim()))throw problem('Completá el título y el contenido antes de publicar los términos.','terms','content',!design.terms.title.trim()?'title':'content');
+  if(design.terms.enabled&&(!design.terms.title.trim()||!design.terms.content.trim()))throw problem('Completá el título y el contenido antes de publicar los términos.','copy',undefined,!design.terms.title.trim()?'terms.title':'terms.content');
   if(design.terms.updatedAt&&(!/^\d{4}-\d{2}-\d{2}$/.test(design.terms.updatedAt)||Number.isNaN(Date.parse(design.terms.updatedAt))||new Date(design.terms.updatedAt).toISOString().slice(0,10)!==design.terms.updatedAt))throw problem('La fecha de actualización de los términos no es válida.','terms','appearance','updatedAt');
   if(design.wallpaper.enabled){
     const keys=design.wallpaper.mode==='responsive'?['desktop','mobile']:['shared'];
@@ -293,27 +300,24 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
 </script>
 <template>
   <div class="design-view">
-    <header class="design-header">
-      <div class="design-heading"><span class="design-eyebrow">TU MARCA, TU ESTILO</span><h1>Diseño de tu tienda</h1><p>Personalizá cada detalle y recorré el resultado en tiempo real.</p></div>
-      <div v-if="store" class="design-top-actions"><span class="design-save-state" :class="{dirty}" aria-live="polite"><i></i>{{saving ? 'Guardando…' : pendingUploads ? 'Cargando imágenes…' : dirty ? 'Cambios sin guardar' : 'Todo guardado'}}</span><button class="btn btn-primary" :disabled="saving || publishing || !dirty" @click="save"><span v-if="saving" class="spinner"></span><Icon v-else name="check" :size="17"/><span>{{saveLabel}}</span></button></div>
-    </header>
     <div v-if="loading" class="design-state loading"><span class="spinner"></span>Preparando el editor…</div>
     <div v-else-if="loadError" class="design-state card empty-state"><Icon name="info" :size="36"/><h2>No pudimos abrir el editor</h2><p>{{loadError}}</p><button class="btn btn-secondary" @click="load">Volver a intentar</button></div>
     <div v-else-if="!store" class="design-state card empty-state"><Icon name="palette" :size="40"/><h2>Tu tienda empieza acá.</h2><p>Seleccioná una tienda para personalizar su diseño.</p></div>
     <template v-else>
-      <div class="design-store-status"><div class="design-store-info"><span class="badge" :class="store.active ? 'badge-success' : 'badge-warning'">{{store.active ? 'Publicada' : 'En preparación'}}</span><div class="design-store-name"><strong>{{store.name}}</strong><small>/t/{{store.slug}}</small></div></div><div class="design-store-actions"><button class="btn btn-ghost btn-sm" :disabled="publishing || saving || dirty" :title="dirty ? 'Guardá tus cambios antes de cambiar la publicación.' : ''" @click="togglePublish">{{publishing ? 'Actualizando…' : store.active ? 'Pausar tienda' : 'Publicar tienda'}}</button><a :href="'/t/' + store.slug" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><Icon name="external-link" :size="15"/><span>Ver tienda</span></a></div></div>
+      <div class="design-store-status"><div class="design-store-info"><span class="badge" :class="store.active ? 'badge-success' : 'badge-warning'">{{store.active ? 'Publicada' : 'En preparación'}}</span><div class="design-store-name"><strong>{{store.name}}</strong><small>/t/{{store.slug}}</small></div></div><div class="design-store-actions"><button class="btn btn-ghost btn-sm" :disabled="publishing || saving || dirty" :title="dirty ? 'Guardá tus cambios antes de cambiar la publicación.' : ''" @click="togglePublish">{{publishing ? 'Actualizando…' : store.active ? 'Pausar tienda' : 'Publicar tienda'}}</button><a :href="'/t/' + store.slug" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><Icon name="external-link" :size="15"/><span>Ver tienda</span></a><span class="design-save-state" :class="{dirty}" aria-live="polite"><i></i>{{saving ? 'Guardando…' : pendingUploads ? 'Cargando imágenes…' : dirty ? 'Cambios sin guardar' : 'Todo guardado'}}</span><button class="btn btn-primary btn-sm design-save-button" :disabled="saving || publishing || !dirty" @click="save"><span v-if="saving" class="spinner"></span><Icon v-else name="check" :size="15"/><span>{{saveLabel}}</span></button></div></div>
       <div class="design-section-tabs" role="tablist" aria-label="Secciones de diseño"><button v-for="(item,index) in sections" :key="item.key" :id="'design-tab-' + item.key" role="tab" :aria-selected="section === item.key" aria-controls="design-controls-panel" :tabindex="section === item.key ? 0 : -1" :class="{active:section===item.key}" @click="selectSection(item.key)" @keydown="tabKeydown($event,index)"><Icon :name="item.icon" :size="17"/><span>{{item.label}}</span></button></div>
       <div class="design-editor">
         <aside id="design-controls-panel" ref="controls" class="design-controls" role="tabpanel" :aria-labelledby="'design-tab-' + section" tabindex="0">
           <div class="design-controls-title"><h2>{{current.label}}</h2><p>{{current.description}}</p></div>
           <div v-if="saveError" class="ed-error" role="alert"><Icon name="warning" :size="16"/><span>{{saveError}}</span><button type="button" aria-label="Cerrar mensaje de error" @click="saveError=''">×</button></div>
+          <p v-if="['navbar','shop','sections','product','cart','checkout','terms'].includes(section)" class="ed-notice ed-text-centralized"><Icon name="edit" :size="14"/><span>Los títulos, descripciones, etiquetas y textos de esta zona se editan únicamente en <button type="button" class="link" @click="selectSection('copy')">Textos</button>.</span></p>
           <DesignSectionsEditor v-if="section==='sections'" ref="sectionsEditor" v-model="draft.sections" :uploads="uploads" :disabled="saving" :design="draft" @upload="requestUpload"/>
-          <DesignCopyEditor v-if="section==='copy'" ref="copyEditor" v-model="draft.copy" :active-page="previewPage.section" :disabled="saving"/>
-          <DesignGroup v-for="group in (editorGroups[section] || [])" :key="section + '-' + group.key" :title="group.title" :description="group.description" :model-value="expandedGroups[section]===group.key" @update:model-value="expandedGroups[section]=$event?group.key:''">
+          <DesignCopyEditor v-if="section==='copy'" ref="copyEditor" v-model="draft" :active-page="previewPage.section" :disabled="saving"/>
+          <DesignGroup v-for="group in visibleEditorGroups" :key="section + '-' + group.key" :title="group.title" :description="group.description" :model-value="expandedGroups[section]===group.key" @update:model-value="expandedGroups[section]=$event?group.key:''">
             <form v-if="group.special==='general'" class="ed-general-form" @submit.prevent="save"><DesignField v-for="field in generalFields" :key="field.key" v-model="general[field.key]" :field="field" scope="general"/><div class="ed-address-preview"><Icon name="link" :size="14"/><span>/t/{{general.slug || 'tu-tienda'}}</span></div><p class="ed-help">Los datos generales se guardan junto con el diseño usando <strong>Guardar cambios</strong>. La vista previa mantiene la dirección actual hasta guardar.</p></form>
             <template v-if="group.special==='presets'"><div class="design-presets"><button v-for="palette in palettes" :key="palette.name" type="button" :class="{selected:selectedPalette===palette.name}" :aria-pressed="selectedPalette===palette.name" @click="preset(palette)"><span class="palette-swatches"><i v-for="(color,index) in palette.colors" :key="index" :style="{background:color}"></i></span><strong>{{palette.name}}<Icon v-if="selectedPalette===palette.name" name="check" :size="12"/></strong><small>{{palette.description}}</small></button></div><p class="ed-help">Cada estilo incluye paletas clara y oscura. Conserva tus imágenes, textos y secciones.</p></template>
             <DesignField v-if="group.special==='logo'" v-model="draft.brand.logo" :field="logoField" scope="brand" :disabled="saving" :busy="!!uploads['brand.logo']" @upload="uploadLogo"/>
-            <DesignField v-for="field in group.items" :key="field.key" v-model="draft[section][field.key]" :field="field" :scope="section" :disabled="saving && field.type==='image'" :reason="field.needs?.(draft) || ''" :busy="!!uploads[section+'.'+field.key]" @upload="uploadField(field,$event)"/>
+            <DesignField v-for="field in group.items.filter(item=>!['text','textarea'].includes(item.type))" :key="field.key" v-model="draft[section][field.key]" :field="field" :scope="section" :disabled="saving && field.type==='image'" :reason="field.needs?.(draft) || ''" :busy="!!uploads[section+'.'+field.key]" @upload="uploadField(field,$event)"/>
             <p v-if="group.special==='logo'" class="ed-notice">El logo se adapta a la altura disponible de la cabecera sin deformarse. Para verlo más grande, aumentá también esa altura en Tamaño y posición.</p>
             <DesignNavigationEditor v-if="group.special==='navigation'" :ref="registerNavigationEditor" v-model="draft.navbar.links" :design="draft" :disabled="saving"/>
             <DesignSlidesEditor v-if="group.special==='slides'" v-model="draft.shop.heroSlides" :disabled="saving" :reason="slidesDisabledReason" :uploads="uploads" :design="draft" @upload="requestUpload"/>
@@ -351,12 +355,6 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
 }
 .design-view { width: 100%; min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; color: var(--text, #18181b); }
 .design-view button, .design-view summary { cursor: pointer; }
-.design-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex: none; min-width: 0; }
-.design-heading { min-width: 0; }
-.design-eyebrow { display: block; margin-bottom: 5px; font-size: 9px; letter-spacing: 1.3px; font-weight: 650; color: var(--muted, #71717a); }
-.design-heading h1 { font-family: inherit; font-size: 24px; font-weight: 700; line-height: 1.25; letter-spacing: -.75px; margin: 0; color: var(--text, #18181b); }
-.design-heading p { font-size: 12px; line-height: 1.5; color: var(--muted, #71717a); margin: 5px 0 0; }
-.design-top-actions { display: flex; align-items: center; gap: 16px; flex: none; }
 .design-save-state { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted, #71717a); white-space: nowrap; }
 .design-save-state > i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted, #71717a); }
 .design-save-state.dirty { color: var(--text, #18181b); }
@@ -368,8 +366,8 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
 .design-store-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .design-store-name strong { font-size: 12px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .design-store-name small { font-size: 10px; color: var(--muted, #71717a); white-space: nowrap; }
-.design-store-actions { display: flex; gap: 7px; flex: none; }
-.design-view .design-store-actions .btn { min-height: 31px; padding: 6px 10px; font-size: 11px; }
+.design-store-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex: none; min-width: 0; }
+.design-view .design-store-actions .btn { min-height: 31px; padding: 6px 10px; font-size: 11px; }.design-save-button .spinner{width:14px;height:14px}
 .design-section-tabs { display: flex; gap: 5px; flex: none; overflow-x: auto; border-bottom: 1px solid var(--line, #e4e4e7); scrollbar-width: thin; }
 .design-section-tabs > button { display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 5px 5px 0 0; padding: 10px 14px; color: var(--muted, #71717a); font-size: 12px; font-weight: 500; background: transparent; white-space: nowrap; }
 .design-section-tabs > button:hover { background: var(--surface-alt, #f4f4f5); color: var(--text, #18181b); }
@@ -460,12 +458,9 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
   .design-preview-caption { display: none; }
   .design-store-name small { display: none; }
   .design-save-state { font-size: 10px; }
-  .design-top-actions { gap: 10px; }
 }
 @media (max-width: 1050px) {
   .design-editor { grid-template-columns: 250px minmax(0, 1fr); gap: 10px; }
-  .design-heading p { display: none; }
-  .design-save-state { display: none; }
   .design-section-tabs > button { padding: 9px 11px; font-size: 11px; }
   .design-fields { padding-inline: 14px; }
   .design-group > summary { padding-inline: 14px; }
@@ -475,14 +470,10 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
 @media (max-width: 800px) {
   :global(.p-main.p-main-design) { padding-top: calc(var(--p-navbar-height, 112px) + 10px); padding-bottom: 10px; }
   .design-view { gap: 8px; }
-  .design-header { gap: 10px; }
-  .design-eyebrow { display: none; }
-  .design-heading h1 { font-size: 20px; letter-spacing: -.5px; }
-  .design-top-actions > .btn { font-size: 11px; min-height: 36px; padding: 8px 11px; }
   .design-store-status { padding: 6px 9px; }
   .design-store-info { gap: 8px; }
   .design-store-info .badge { font-size: 9px; }
-  .design-store-actions { gap: 3px; }
+  .design-store-actions { gap: 3px; flex-wrap: wrap; }
   .design-view .design-store-actions .btn { padding: 5px 7px; font-size: 10px; }
   .design-store-actions > a > span { display: none; }
   .design-section-tabs { gap: 0; }
@@ -511,17 +502,12 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
   .design-color-row input[type=text] { width: 77px; font-size: 14px; }
 }
 @media (max-width: 420px) {
-  .design-heading h1 { font-size: 18px; }
-  .design-top-actions > .btn { padding: 7px 9px; font-size: 10px; }
-  .design-top-actions > .btn > svg { display: none; }
   .design-store-name strong { max-width: 100px; font-size: 11px; }
   .design-store-info .badge { max-width: 80px; text-align: center; line-height: 1.25; white-space: normal; }
   .design-section-tabs > button { flex-direction: column; gap: 3px; padding: 7px 5px; font-size: 9px; }
 }
 @media (max-height: 700px) and (min-width: 801px) {
-  .design-eyebrow, .design-heading p { display: none; }
   .design-view { gap: 8px; }
-  .design-heading h1 { font-size: 21px; }
   .design-store-status { padding-block: 5px; }
   .design-preview-footer { display: none; }
 }

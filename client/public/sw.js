@@ -1,4 +1,4 @@
-const CACHE = 'mty2-shell-v1.3.0';
+const CACHE = 'mty2-shell-v1.4.0';
 const SHELL = ['/', '/offline.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL))); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('mty2-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())); });

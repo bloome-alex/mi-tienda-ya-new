@@ -61,3 +61,18 @@ test('datos importados malformados no causan bucles y siguen siendo inspeccionab
   assert.deepEqual(tree.assignableParents('a').map(category=>category._id),['orphan']);
   assert.deepEqual(tree.children(null),[]); assert.equal(tree.get(null),null);
 });
+
+test('el listado ABM parte de categorías principales y revela cada rama de forma progresiva', () => {
+  const tree = new CategoryTree(categories);
+  assert.deepEqual(tree.visibleRows().map(row => row._id), ['hogar','ropa']);
+  assert.deepEqual(tree.visibleRows(['ropa']).map(row => row._id), ['hogar','ropa','buzos','remeras']);
+  assert.deepEqual(tree.visibleRows(['ropa','remeras']).map(row => row._id), ['hogar','ropa','buzos','remeras','algodon']);
+  assert.deepEqual(tree.visibleRows(['ropa','remeras','algodon']).map(row => row._id), ['hogar','ropa','buzos','remeras','algodon','talles']);
+});
+
+test('buscar en el árbol muestra coincidencias con todos sus ancestros sin exigir desplegarlos', () => {
+  const tree = new CategoryTree(categories);
+  assert.deepEqual(tree.visibleRows([], 'Talles especiales').map(row => row._id), ['ropa','remeras','algodon','talles']);
+  assert.deepEqual(tree.visibleRows([], 'algodon').map(row => row._id), ['ropa','remeras','algodon','talles']);
+  assert.deepEqual(tree.visibleRows([], 'no existe'), []);
+});

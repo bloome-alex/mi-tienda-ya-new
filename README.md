@@ -1,10 +1,10 @@
-# mi-tienda-ya-2 · v1.3.0
+# mi-tienda-ya-2 · v1.7.0
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.3.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.7.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
-La distribución incluye código fuente, `package-lock.json`, configuración de ejemplo, cliente compilado en `client/dist`, pruebas, documentación y opciones de despliegue con PM2 o Docker Compose. No incluye `node_modules`, credenciales reales, bases de datos ni archivos de clientes.
+La distribución incluye código fuente, `package-lock.json`, configuración de ejemplo, pruebas, documentación y opciones de despliegue con PM2 o Docker Compose. No incluye `node_modules`, credenciales reales, bases de datos ni archivos de clientes.
 
 ## Qué incluye
 
@@ -25,7 +25,7 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
 
-La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios de la versión 1.3.0](docs/CAMBIOS-1.3.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
+La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios de la versión 1.7.0](docs/CAMBIOS-1.7.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
 ## 1. Preparar el entorno
 
@@ -228,13 +228,18 @@ También se incluyen `Dockerfile` y `compose.yaml`, con MongoDB autenticado, dat
 
 ## 9. Verificación de esta entrega
 
-**134 pruebas aprobadas: 72 de API y 62 del cliente, sin fallos ni casos omitidos.** También se completaron la compilación de 156 módulos, la comprobación de sintaxis y 12 verificaciones de arranque con MongoDB temporal. El informe de [pruebas y revisión de v1.3.0](docs/PRUEBAS.md) documenta los resultados y la revisión visual de componentes con datos ficticios en escritorio y móvil.
+Se ejecutaron **51 pruebas del frontend que no requieren instalar Vue**, todas aprobadas. La versión agrega una regresión que recorre todos los campos publicados en Textos y comprueba especialmente Términos, secciones y complementos personalizados. La guía de [cambios de v1.7.0](docs/CAMBIOS-1.7.0.md) detalla el alcance.
+
+La instalación de dependencias no terminó dentro del límite del entorno de preparación, por lo que no se afirma una recompilación local de Vite para v1.7.0. Para evitar incluir recursos compilados de una versión anterior, el ZIP no contiene `client/dist`: después de `npm ci` ejecutá `npm run build` antes de iniciar la aplicación.
 
 En el primer `npm test`, `mongodb-memory-server` puede descargar el binario de MongoDB. Las pruebas utilizan una base temporal propia y requieren permiso para abrir puertos locales.
 
 ## Documentación
 
-- [Cambios de la versión 1.3.0 y actualización de instalaciones existentes](docs/CAMBIOS-1.3.0.md).
+- [Cambios de la versión 1.7.0 y actualización de instalaciones existentes](docs/CAMBIOS-1.7.0.md).
+- [Historial de cambios de la versión 1.6.0](docs/CAMBIOS-1.6.0.md).
+- [Historial de cambios de la versión 1.5.0](docs/CAMBIOS-1.5.0.md).
+- [Historial de cambios de la versión 1.4.0](docs/CAMBIOS-1.4.0.md).
 - [Historial de cambios de la versión 1.2.0](docs/CAMBIOS-1.2.0.md).
 - [Manual del diseñador, variantes, fondos y secciones](docs/DISENO.md).
 - [Historial de cambios de la versión 1.1.0](docs/CAMBIOS-1.1.0.md).

@@ -2,7 +2,7 @@
 
 La API de Mi Tienda Ya 2 se sirve bajo `/api`. Usa JSON salvo los archivos multipart y las descargas de comprobantes. Los identificadores MongoDB se devuelven como `_id`; las fechas se serializan en ISO 8601. La moneda de esta versión es ARS y los importes se expresan en pesos, con dos decimales como máximo.
 
-Esta referencia describe **v1.3.0**: categorías multinivel, fondos con resoluciones flexibles, cabecera configurable, textos y dirección de lectura por tienda y secciones de redes sociales. Conserva los términos con aceptación registrada, auditoría con detalle y destacados independientes de la paginación.
+Esta referencia describe **v1.6.0**: categorías multinivel, fondos con resoluciones flexibles, cabecera configurable, textos y dirección de lectura por tienda y secciones de redes sociales. Conserva los términos con aceptación registrada, auditoría con detalle y destacados independientes de la paginación.
 
 ## Respuestas, sesión y errores
 

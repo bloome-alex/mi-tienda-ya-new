@@ -44,13 +44,13 @@ Para usar **sólo el logo**, cargalo en Identidad y desactivá Mostrar título e
 
 El tamaño del logo se adapta al espacio disponible en el navbar, sin desbordarlo. Para mostrar una imagen alta, aumentá también la altura de la barra. En forma circular o cuadrada se usa un recuadro de lados iguales; la forma libre conserva el ancho y alto que elijas. **Contener** muestra la imagen completa y **Cubrir** puede recortar sus bordes.
 
-Cada enlace puede dirigir a inicio, catálogo, destacados, contacto, términos, redes o una sección personalizada específica. Elegí el destino y cambiá el texto visible. Los controles permiten mover el enlace, ocultarlo y quitarlo. Quitar un enlace conserva la sección. Si la sección está desactivada o no existe, el acceso correspondiente no aparece en la tienda. Los enlaces a destacados, contacto y redes también se omiten cuando falta su contenido visible. En móvil los enlaces se reúnen en un menú dentro de la cabecera.
+Cada enlace puede dirigir a inicio, catálogo, destacados, contacto, términos, redes o una sección personalizada específica. En **Cabecera** elegís el destino, el orden y la visibilidad; el texto visible del enlace se modifica únicamente desde **Textos → Cabecera y navegación**. Los controles permiten mover el enlace, ocultarlo y quitarlo. Quitar un enlace conserva la sección. Si la sección está desactivada o no existe, el acceso correspondiente no aparece en la tienda. Los enlaces a destacados, contacto y redes también se omiten cuando falta su contenido visible. En móvil los enlaces se reúnen en un menú dentro de la cabecera.
 
 ## Textos, alineación y dirección
 
-La pestaña **Textos** reúne los textos propios de tienda y catálogo, contacto y WhatsApp, producto, carrito, checkout, términos y seguimiento. Incluye títulos secundarios, descripciones, etiquetas, placeholders, botones, mensajes vacíos y textos de ayuda. El buscador permite encontrar un texto por su nombre; cada grupo conserva sus controles separados.
+La pestaña **Textos** es el **único lugar del diseñador** donde se modifica contenido escrito visible de la tienda. Reúne textos comunes, cabecera y navegación, tienda y catálogo, contacto y WhatsApp, producto, carrito, checkout, términos, seguimiento y secciones personalizadas. Incluye títulos, descripciones, etiquetas, placeholders, botones, mensajes vacíos, textos de ayuda, carruseles y labels de redes. El buscador permite encontrar un texto por su nombre; cada grupo conserva sus controles separados. Cada edición actualiza el borrador y la vista previa en tiempo real y activa **Guardar cambios**. Esto también se aplica a Términos, diapositivas y al contenido anidado de secciones y complementos creados por el vendedor.
 
-Los títulos principales de portada, catálogo, destacados, producto relacionado, carrito y términos también se editan en las pestañas de esas secciones. El contenido comercial, los datos del producto y las instrucciones de cobro se administran desde sus formularios correspondientes. Los mensajes de error, estados de pedidos y avisos del sistema mantienen su significado y no forman parte de la personalización editorial.
+Cabecera, Tienda, Secciones, Producto, Carrito, Checkout y Términos ya no duplican esos campos: allí se controlan únicamente estructura, imágenes, destinos, visibilidad, tamaños, variantes y comportamiento. El contenido comercial de cada producto y las instrucciones de cobro siguen administrándose desde sus formularios funcionales. Los mensajes operativos del sistema conservan su significado y no forman parte de la personalización editorial.
 
 Un campo de texto vacío permanece vacío y no se reemplaza al guardar. Donde haya variables como `{count}`, `{storeName}`, `{current}`, `{pages}` o `{amount}`, conservá su escritura para que se reemplacen con los datos de la tienda. El contenido es texto, no HTML ni JavaScript.
 
@@ -82,7 +82,7 @@ El carrusel reserva espacio alrededor de las tarjetas para sus sombras y efectos
 
 ### Catálogo y tarjetas
 
-El catálogo puede usar grilla, una vista compacta o una composición editorial. Configurá columnas, proporción de fotos, buscador, categorías, visibilidad y título. Las categorías y subcategorías se administran desde su sección del panel.
+El catálogo puede usar grilla, una vista compacta o una composición editorial. Configurá por separado las columnas de escritorio y celular, además de proporción de fotos, buscador, categorías, visibilidad y título. Las categorías y subcategorías se administran desde su sección del panel.
 
 Las categorías admiten varios niveles, por ejemplo **Indumentaria → Remeras → Manga corta → Estampadas**. En el formulario de una categoría se elige cualquier padre válido. No se puede colocar una categoría dentro de sí misma ni de sus descendientes. Al seleccionar una categoría en la tienda, el catálogo incluye los productos de toda su rama. Una categoría desactivada oculta su rama de la navegación pública; no elimina sus productos.
 
@@ -91,12 +91,12 @@ En **Tienda → Catálogo**, elegí la presentación de categorías:
 | Presentación | Comportamiento |
 | --- | --- |
 | Categorías por niveles | Botones para recorrer los niveles y volver a los anteriores. |
-| Submenús en el navbar | Categorías principales en la cabecera y submenús con sus descendientes. |
-| Panel desplegable | Botón que abre los filtros en un costado. |
+| Submenús en el navbar | Categorías principales en la cabecera; en escritorio el submenú abre al pasar el mouse o recibir foco, y en táctil conserva un control explícito. |
+| Panel desplegable | Botón que expande un árbol dentro de la propia sección de catálogo, sin drawer global ni superposición sobre la tienda. |
 | Selector compacto | Lista desplegable con las rutas completas de categorías. |
 | Panel lateral | Árbol al costado del catálogo en escritorio; panel desplegable en pantallas pequeñas. |
 
-La categoría seleccionada se refleja en la URL y se puede limpiar para volver al catálogo completo. Los submenús se pueden abrir mediante clic o teclado, además de la interacción disponible con el puntero.
+La categoría seleccionada se refleja en la URL y se puede limpiar para volver al catálogo completo. En la variante de cabecera, pasar el mouse por una categoría con hijos abre su submenú automáticamente; el panel se solapa ligeramente con la fila superior y aplica una tolerancia breve de salida para que el cursor pueda cruzar sin cerrarlo. El foco de teclado hace lo mismo. En dispositivos táctiles se mantiene un botón de expansión porque no existe hover estable. El panel desplegable crece dentro del catálogo y usa scroll interno cuando la jerarquía es extensa.
 
 Las tarjetas ofrecen cuatro estilos: mínimo, con borde, elevado y con información superpuesta. Podés mostrar precio anterior, descripción, stock y botón de compra. La ficha sigue disponible al tocar la foto o el nombre aunque ocultes el botón.
 
@@ -118,8 +118,8 @@ Cada sección tiene controles para:
 
 - Activar, desactivar, duplicar, mover y quitar.
 - Elegir su ubicación y variante visual.
-- Editar título, subtítulo, texto, foto y botón.
-- Elegir fondo, alineación, columnas, ancho y espaciados.
+- Configurar foto, destino del botón y estructura visual; título, subtítulo, texto y texto del botón se editan únicamente desde **Textos → Secciones personalizadas**.
+- Elegir fondo, alineación, columnas independientes para escritorio y celular, ancho y espaciados.
 - Agregar complementos internos de texto, imagen, botón, beneficio o pregunta.
 
 Los complementos tienen su propia visibilidad y orden. Un beneficio puede mostrar un icono; una pregunta se abre para mostrar su respuesta; los botones usan destinos internos. El límite es de 12 secciones con hasta 12 complementos cada una. Hay un nivel de anidamiento de complementos; no es un editor de HTML libre ni admite scripts.

@@ -4,7 +4,7 @@
 
 El proyecto usa JavaScript ESM y dos workspaces npm: `api` y `client`. El frontend está construido con Vue y CSS propio; no incorpora un segundo framework visual. La API usa Node.js, Express y MongoDB mediante Mongoose. El enfoque de Programación Orientada a Objetos concentra las reglas del negocio en servicios con responsabilidades separadas.
 
-La versión 1.3.0 incorpora categorías anidadas sin un máximo fijo de niveles, fondos de resolución flexible y configuración de cabecera, textos, dirección de lectura y redes sociales por tienda. Mantiene los destacados independientes de la paginación, los términos con aceptación registrada, la auditoría histórica y las reglas de roles, planes y reservas de stock.
+La versión 1.6.0 conserva categorías anidadas sin un máximo fijo de niveles, fondos de resolución flexible y configuración de cabecera, textos, dirección de lectura y redes sociales por tienda. Mantiene los destacados independientes de la paginación, los términos con aceptación registrada, la auditoría histórica y las reglas de roles, planes y reservas de stock.
 
 En desarrollo, `npm run dev` inicia los dos procesos de trabajo. En la distribución compilada, `npm run build` genera `client/dist` y `npm start` inicia una sola aplicación Express: sirve `/api`, las imágenes de productos y el cliente compilado. PM2 puede administrar ese proceso único. El proceso incorpora el trabajador de correos y reconciliación de pedidos; WhatsApp sólo inicia su navegador cuando el administrador pulsa Conectar.
 

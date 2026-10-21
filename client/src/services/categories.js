@@ -45,6 +45,29 @@ export class CategoryTree {
     }
     return result;
   }
+  visibleRows(expandedIds = [], query = '') {
+    const rows = this.rows(), expanded = new Set([...expandedIds].map(CategoryTree.id));
+    const normalized = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
+    const term = normalized(query).trim();
+    if (term) {
+      const visible = new Set();
+      for (const row of rows) {
+        if (!normalized([row.name, row.description, row.categoryPath].join(' ')).includes(term)) continue;
+        for (const parent of this.trail(row)) visible.add(CategoryTree.id(parent));
+      }
+      return rows.filter(row => visible.has(CategoryTree.id(row)));
+    }
+    return rows.filter(row => {
+      if (!row.depth) return true;
+      const seen = new Set(); let parent = this.parent(row);
+      while (parent) {
+        const id = CategoryTree.id(parent);
+        if (seen.has(id) || !expanded.has(id)) return false;
+        seen.add(id); parent = this.parent(parent);
+      }
+      return true;
+    });
+  }
   rows() {
     const result = [], seen = new Set();
     const visit = start => {

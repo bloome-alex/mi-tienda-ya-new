@@ -1,19 +1,20 @@
 <script setup>
-import { computed, ref, watch, onUnmounted } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { api } from '../../services/api.js';
 import { workspace } from '../../services/workspace.js';
 import { notify, confirmDialog } from '../../services/notifications.js';
 import { fetchAll } from '../../services/panel.js';
 import { CategoryTree } from '../../services/categories.js';
-import Icon from '../../components/Icon.vue';
 import DataTable from '../../components/DataTable.vue';
-const categories = ref([]), loading = ref(false), error = ref('');
-const rows = computed(() => new CategoryTree(categories.value).rows());
+import Icon from '../../components/Icon.vue';
+const categories = ref([]), loading = ref(false), error = ref(''), search = ref(''), expanded = ref(new Set());
+const tree = computed(() => new CategoryTree(categories.value));
+const rows = computed(() => tree.value.visibleRows(expanded.value, search.value));
 const columns = [{ key: 'name', label: 'Categoría' }, { key: 'type', label: 'Nivel' }, { key: 'parentPath', label: 'Ubicación' }, { key: 'active', label: 'Estado' }];
 let requestId = 0;
 async function load() {
   const storeId = workspace.activeStoreId, run = ++requestId;
-  categories.value = []; error.value = ''; loading.value = false;
+  categories.value = []; expanded.value = new Set(); search.value=''; error.value = ''; loading.value = false;
   if (!storeId) return;
   loading.value = true;
   try {
@@ -22,6 +23,13 @@ async function load() {
   } catch (e) { if (run === requestId) error.value = e.message; }
   finally { if (run === requestId) loading.value = false; }
 }
+function toggle(row){
+  if(!row.childCount)return;
+  const next=new Set(expanded.value),id=CategoryTree.id(row);
+  if(next.has(id))next.delete(id);else next.add(id);
+  expanded.value=next;
+}
+function isExpanded(row){return expanded.value.has(CategoryTree.id(row));}
 async function remove(row) {
   if (row.childCount) { notify.info('Primero mové o quitá las subcategorías de esta categoría.'); return; }
   if (!await confirmDialog({ title: 'Quitar categoría', message: `¿Querés quitar ${row.name}? Los productos se conservarán.`, confirmText: 'Quitar categoría', danger: true })) return;
@@ -38,16 +46,17 @@ onUnmounted(() => { requestId++; });
 <template>
   <div>
     <header class="p-page-header">
-      <div><p class="p-eyebrow">UN CATÁLOGO BIEN ORGANIZADO</p><h1>Categorías</h1><p>Ordená tus productos en categorías y subcategorías con los niveles que necesites.</p></div>
+      <div><p class="p-eyebrow">UN CATÁLOGO BIEN ORGANIZADO</p><h1>Categorías</h1><p>El listado muestra primero las categorías principales. Desplegá cada fila para recorrer todos sus niveles.</p></div>
       <RouterLink v-if="workspace.activeStoreId" to="/app/categories/new" class="btn btn-primary"><Icon name="plus" :size="16"/>Nueva categoría</RouterLink>
     </header>
     <div v-if="error" class="p-error">{{ error }} <button type="button" class="link" @click="load">Reintentar</button></div>
-    <DataTable :rows="rows" :columns="columns" :loading="loading" search-placeholder="Buscar categorías o su ubicación..." empty-text="Agrupá tus productos con tu primera categoría.">
+    <DataTable :rows="rows" :columns="columns" :loading="loading" :searchable="false" :limit="Math.max(rows.length,1)" empty-text="Agrupá tus productos con tu primera categoría.">
+      <template #toolbar><label class="p-search category-search"><Icon name="search" :size="18"/><input v-model="search" placeholder="Buscar categorías o su ubicación..." aria-label="Buscar categorías" type="search"/></label></template>
       <template #cell-name="{row}">
-        <div class="p-product-cell" :class="{'category-child': row.isSubcategory}" :style="{'padding-inline-start':Math.min(row.depth,6)*16+'px'}">
-          <Icon v-if="row.isSubcategory" name="chevron-right" :size="15" class="category-branch"/>
-          <span v-else class="p-product-thumb"><Icon name="tag" :size="18"/></span>
-          <span><strong>{{ row.name }}</strong><small v-if="row.description" class="category-description">{{ row.description }}</small><small v-else-if="row.childCount">{{ row.childCount }} {{ row.childCount === 1 ? 'subcategoría' : 'subcategorías' }}</small></span>
+        <div class="p-product-cell category-name-cell" :style="{'padding-inline-start':Math.min(row.depth,10)*18+'px'}">
+          <button v-if="row.childCount" type="button" class="category-expand" :aria-label="`${isExpanded(row)?'Contraer':'Desplegar'} subcategorías de ${row.name}`" :aria-expanded="isExpanded(row)" @click="toggle(row)"><Icon name="chevron-down" :size="15"/></button><span v-else class="category-leaf-space" aria-hidden="true"></span>
+          <span v-if="!row.depth" class="p-product-thumb"><Icon name="tag" :size="18"/></span>
+          <span><strong>{{ row.name }}</strong><small v-if="row.description" class="category-description">{{ row.description }}</small><small v-else-if="row.childCount">{{ row.childCount }} {{ row.childCount === 1 ? 'subcategoría directa' : 'subcategorías directas' }}</small></span>
         </div>
       </template>
       <template #cell-type="{row}"><span class="p-badge">{{ row.depth ? 'Nivel '+(row.depth+1) : 'Principal' }}</span></template>
@@ -63,5 +72,5 @@ onUnmounted(() => { requestId++; });
   </div>
 </template>
 <style scoped>
-.category-path{display:block;min-width:120px;max-width:320px;white-space:normal;overflow-wrap:anywhere;font-size:12px;line-height:1.65}.category-branch{color:var(--muted);flex:none}.category-description{max-width:330px;white-space:normal;overflow-wrap:anywhere;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.category-search{width:min(100%,430px)}.category-name-cell{min-width:270px}.category-expand{width:28px;height:28px;flex:none;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--muted);padding:0}.category-expand:hover{background:var(--surface-alt);color:var(--text)}.category-expand svg{transition:transform .16s ease}.category-expand[aria-expanded=true] svg{transform:rotate(180deg)}.category-leaf-space{width:28px;flex:none}.category-path{display:block;min-width:120px;max-width:320px;white-space:normal;overflow-wrap:anywhere;font-size:12px;line-height:1.65}.category-description{max-width:330px;white-space:normal;overflow-wrap:anywhere;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}@media(prefers-reduced-motion:reduce){.category-expand svg{transition:none}}
 </style>

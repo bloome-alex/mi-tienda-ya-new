@@ -28,11 +28,7 @@ const types = [
 ];
 const blockTypes = [['text','Texto'],['image','Imagen'],['button','Botón'],['benefit','Beneficio'],['faq','Pregunta y respuesta']];
 const sectionFields = [
-  {key:'title',label:'Título',type:'text',max:240,optional:true},
-  {key:'subtitle',label:'Subtítulo',type:'text',max:240,optional:true},
-  {key:'body',label:'Texto',type:'textarea',max:4000,optional:true},
   {key:'image',label:'Imagen de la sección',type:'image',help:'JPG, PNG o WebP, hasta 5 MiB. También podés agregar imágenes como complementos.'},
-  {key:'buttonText',label:'Texto del botón',type:'text',max:240,optional:true,help:'Dejalo vacío para ocultar el botón de la sección.'},
   {key:'buttonTarget',label:'Destino del botón',type:'select',options:targetOptions}
 ];
 const styleFields = [
@@ -41,7 +37,8 @@ const styleFields = [
   {key:'alignment',label:'Alineación',type:'select',options:alignmentOptions},
   {key:'textDirection',label:'Dirección del texto',type:'select',options:directionOptions,help:'Define el sentido de lectura. La alineación se configura por separado.'},
   {key:'background',label:'Fondo de la sección',type:'select',options:[['transparent','Transparente'],['surface','Fondo de la tienda'],['muted','Suave'],['contrast','Contraste']]},
-  {key:'columns',label:'Columnas de complementos',type:'range',min:1,max:4,unit:'',help:'En pantallas pequeñas se adaptan automáticamente.'},
+  {key:'columns',label:'Columnas de complementos en escritorio',type:'range',min:1,max:4,unit:''},
+  {key:'mobileColumns',label:'Columnas de complementos en celular',type:'range',min:1,max:4,unit:''},
   ...spacingFields()
 ];
 function add(type) {
@@ -94,11 +91,9 @@ async function removeBlock(section,block) {
 }
 function fieldsForBlock(block) {
   const fields=[];
-  if(block.type!=='button')fields.push({key:'title',label:block.type==='faq'?'Pregunta':'Título',type:'text',max:240,optional:block.type!=='faq'});
-  if(['text','benefit','faq'].includes(block.type))fields.push({key:'text',label:block.type==='faq'?'Respuesta':'Texto',type:'textarea',max:4000});
-  if(block.type==='image')fields.push({key:'image',label:'Imagen',type:'image',help:'JPG, PNG o WebP, hasta 5 MiB.'},{key:'text',label:'Descripción de la imagen',type:'textarea',max:4000,optional:true});
+  if(block.type==='image')fields.push({key:'image',label:'Imagen',type:'image',help:'JPG, PNG o WebP, hasta 5 MiB.'});
   if(block.type==='benefit')fields.push({key:'icon',label:'Ícono',type:'select',options:[['star','Estrella'],['heart','Corazón'],['truck','Entrega'],['shield','Protección'],['store','Tienda'],['package','Paquete'],['check','Confirmación'],['gift','Regalo'],['mail','Correo']]});
-  if(block.type==='button')fields.push({key:'buttonText',label:'Texto del botón',type:'text',max:240},{key:'buttonTarget',label:'Destino',type:'select',options:targetOptions});
+  if(block.type==='button')fields.push({key:'buttonTarget',label:'Destino',type:'select',options:targetOptions});
   fields.push({key:'alignment',label:'Alineación del complemento',type:'select',options:[['inherit','Usar la de la sección'],...alignmentOptions]},{key:'textDirection',label:'Dirección del texto',type:'select',options:[['inherit','Usar la de la sección'],...directionOptions.filter(option=>option[0]!=='inherit')]});
   return fields;
 }
@@ -112,7 +107,7 @@ function requestUpload(target,field,file,scope) { emit('upload',{file,target,fie
 </script>
 <template>
   <div class="ed-sections-editor">
-    <div class="ed-intro"><strong>Armá una tienda a tu medida</strong><p>Agregá secciones listas para personalizar: contenido, fotos, beneficios, preguntas o redes sociales. Cada una puede incluir hasta 12 complementos.</p><span class="ed-count">{{modelValue.length}} de 12 secciones</span></div>
+    <div class="ed-intro"><strong>Armá una tienda a tu medida</strong><p>Agregá secciones, fotos, beneficios, preguntas o redes sociales. Acá definís su estructura y presentación; todos sus títulos, descripciones, preguntas, respuestas y botones se editan en Textos.</p><span class="ed-count">{{modelValue.length}} de 12 secciones</span></div>
     <div class="ed-section-presets" aria-label="Agregar una sección">
       <button v-for="type in types" :key="type.type" type="button" :disabled="disabled || modelValue.length >= 12" @click="add(type.type)"><Icon :name="type.icon" :size="19"/><span><strong>{{type.title}}</strong><small>{{type.description}}</small></span><Icon name="plus" :size="14"/></button>
     </div>
@@ -123,7 +118,7 @@ function requestUpload(target,field,file,scope) { emit('upload',{file,target,fie
       <div class="ed-item-heading"><button type="button" class="ed-item-toggle" :aria-expanded="expanded===item.id" :aria-controls="'section-editor-'+item.id" @click="expanded=expanded===item.id?'':item.id"><span class="ed-item-number">{{index+1}}</span><span><strong>{{item.title || label(item.type)}}</strong><small>{{label(item.type)}} · {{item.placement==='beforeCatalog'?'Antes':'Después'}} del catálogo</small></span><Icon name="chevron-down" :size="15"/></button></div>
       <div class="ed-item-actions"><label><input v-model="item.enabled" type="checkbox" :disabled="disabled"/>{{item.enabled?'Visible':'Oculta'}}</label><div><button type="button" class="ed-icon-button" :disabled="disabled || index===0" :aria-label="'Subir '+(item.title||'sección')" @click="move(index,-1)"><Icon name="arrow-right" class="ed-arrow-up" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled || index===modelValue.length-1" :aria-label="'Bajar '+(item.title||'sección')" @click="move(index,1)"><Icon name="arrow-right" class="ed-arrow-down" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled || modelValue.length>=12" aria-label="Duplicar sección" @click="duplicate(item,index)"><Icon name="copy" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled" aria-label="Eliminar sección" @click="remove(item)"><Icon name="trash" :size="14"/></button></div></div>
       <div v-if="expanded===item.id" :id="'section-editor-'+item.id" class="ed-item-body">
-        <p v-if="!item.enabled" class="ed-notice">Esta sección está oculta. Podés editarla y hacerla visible cuando esté lista.</p>
+        <p v-if="!item.enabled" class="ed-notice">Esta sección está oculta. Podés editarla y hacerla visible cuando esté lista.</p><p class="ed-help">El contenido escrito de esta sección se administra únicamente desde <strong>Textos → Secciones personalizadas</strong>.</p>
         <DesignField v-for="field in sectionFields" :key="field.key" v-model="item[field.key]" :field="field" :scope="'sections.'+item.id" :disabled="disabled" :reason="field.key==='buttonTarget'&&!item.buttonText?'Escribí el texto del botón para elegir un destino.':''" :busy="!!uploads['sections.'+item.id+'.'+field.key]" @upload="requestUpload(item,field,$event,'sections.'+item.id)"/>
         <p v-if="item.buttonText && targetHelp(item.buttonTarget)" class="ed-notice">{{targetHelp(item.buttonTarget)}}</p>
         <details class="ed-inner-details"><summary>Presentación y espaciado<Icon name="chevron-down" :size="14"/></summary><div><DesignField v-for="field in styleFields" :key="field.key" v-model="item[field.key]" :field="field" :scope="'sections.'+item.id" :disabled="disabled"/></div></details>
@@ -134,7 +129,7 @@ function requestUpload(target,field,file,scope) { emit('upload',{file,target,fie
           <DesignSocialEditor :ref="editor=>rememberSocialEditor(item.id,editor)" v-model="item.socialLinks" :scope="'sections.'+item.id+'.socialLinks'" :disabled="disabled"/>
         </template>
         <section class="ed-blocks"><div class="ed-blocks-title"><h3>Complementos</h3><span>{{item.blocks.length}} / 12</span></div>
-          <p class="ed-help">Un nivel de contenido dentro de la sección. Usá los botones de orden para organizarlo.</p>
+          <p class="ed-help">Un nivel de contenido dentro de la sección. Usá los botones de orden para organizarlo; su contenido escrito se edita en Textos.</p>
           <article v-for="(block,blockIndex) in item.blocks" :key="block.id" class="ed-block-item" :class="{ 'ed-item-hidden':!block.enabled }">
             <button type="button" class="ed-block-toggle" :aria-expanded="expandedBlocks[item.id]===block.id" @click="expandedBlocks[item.id]=expandedBlocks[item.id]===block.id?'':block.id"><span><strong>{{block.title || blockLabel(block.type)}}</strong><small>{{blockLabel(block.type)}}</small></span><Icon name="chevron-down" :size="14"/></button>
             <div class="ed-item-actions"><label><input v-model="block.enabled" type="checkbox" :disabled="disabled"/>{{block.enabled?'Visible':'Oculto'}}</label><div><button type="button" class="ed-icon-button" :disabled="disabled || blockIndex===0" aria-label="Subir complemento" @click="moveBlock(item,blockIndex,-1)"><Icon name="arrow-right" class="ed-arrow-up" :size="13"/></button><button type="button" class="ed-icon-button" :disabled="disabled || blockIndex===item.blocks.length-1" aria-label="Bajar complemento" @click="moveBlock(item,blockIndex,1)"><Icon name="arrow-right" class="ed-arrow-down" :size="13"/></button><button type="button" class="ed-icon-button" :disabled="disabled || item.blocks.length>=12" aria-label="Duplicar complemento" @click="duplicateBlock(item,block,blockIndex)"><Icon name="copy" :size="13"/></button><button type="button" class="ed-icon-button" :disabled="disabled" aria-label="Eliminar complemento" @click="removeBlock(item,block)"><Icon name="trash" :size="13"/></button></div></div>

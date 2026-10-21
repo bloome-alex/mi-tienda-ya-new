@@ -23,13 +23,12 @@ defineExpose({openItem(id){expanded.value=id;}});
 <template>
   <div class="ed-social-editor">
     <div class="ed-blocks-title"><h3>Redes de esta sección</h3><span>{{modelValue.length}} / 12</span></div>
-    <p class="ed-help">Seleccioná las redes que querés mostrar y pegá la dirección completa del perfil. Podés ocultarlas y cambiar su orden.</p>
+    <p class="ed-help">Seleccioná las redes que querés mostrar y pegá la dirección completa del perfil. Podés ocultarlas y cambiar su orden. El texto personalizado de cada red se edita en Textos.</p>
     <article v-for="(item,index) in modelValue" :key="item.id" class="ed-block-item" :class="{'ed-item-hidden':!item.enabled}">
       <button type="button" class="ed-block-toggle" :aria-expanded="expanded===item.id" :aria-controls="'social-link-'+item.id" @click="expanded=expanded===item.id?'':item.id"><span><strong>{{item.label||networkName(item.network)}}</strong><small>{{item.url?'Enlace configurado':'Completá la dirección del perfil'}}</small></span><Icon name="chevron-down" :size="14"/></button>
       <div class="ed-item-actions"><label><input v-model="item.enabled" type="checkbox" :disabled="disabled" :aria-label="'Mostrar '+networkName(item.network)"/>Visible</label><div><button type="button" class="ed-icon-button" :disabled="disabled||index===0" :aria-label="'Subir '+networkName(item.network)" @click="move(index,-1)"><Icon name="arrow-right" class="ed-arrow-up" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled||index===modelValue.length-1" :aria-label="'Bajar '+networkName(item.network)" @click="move(index,1)"><Icon name="arrow-right" class="ed-arrow-down" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled" :aria-label="'Quitar '+networkName(item.network)" @click="remove(item)"><Icon name="trash" :size="14"/></button></div></div>
       <div v-if="expanded===item.id" :id="'social-link-'+item.id" class="ed-block-body">
         <DesignField v-model="item.network" :field="{key:'network',label:'Red social',type:'select',options:networks}" :scope="scope+'.'+item.id" :disabled="disabled"/>
-        <DesignField v-model="item.label" :field="{key:'label',label:'Texto personalizado',type:'text',max:120,optional:true,help:'Si queda vacío se muestra el nombre de la red.'}" :scope="scope+'.'+item.id" :disabled="disabled"/>
         <DesignField v-model="item.url" :field="{key:'url',label:'Enlace al perfil',type:'url',max:2048,placeholder:item.network==='whatsapp'?'https://wa.me/549…':'https://…',help:'Usá un enlace HTTP o HTTPS. No hace falta conectar una cuenta.'}" :scope="scope+'.'+item.id" :disabled="disabled"/>
         <p v-if="!item.enabled" class="ed-notice">Esta red está oculta. Conservá su enlace para volver a mostrarla cuando quieras.</p>
       </div>

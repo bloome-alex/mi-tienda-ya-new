@@ -20,7 +20,7 @@ export const sectionTemplate = {
   id: '', type: 'text', enabled: true, title: '', subtitle: '', body: '', image: '',
   buttonText: '', buttonTarget: 'catalog', alignment: 'left', variant: 'plain',
   placement: 'afterCatalog', paddingX: 32, paddingY: 48, fullWidth: false,
-  background: 'surface', columns: 3, textDirection: 'inherit', socialVariant: 'labels', socialIconSize: 24, socialNewTab: true, socialLinks: [], blocks: []
+  background: 'surface', columns: 3, mobileColumns: 1, textDirection: 'inherit', socialVariant: 'labels', socialIconSize: 24, socialNewTab: true, socialLinks: [], blocks: []
 };
 export const defaultDesign = {
   brand: {
@@ -32,7 +32,7 @@ export const defaultDesign = {
   copy: { ...defaultStoreCopy },
   wallpaper: { enabled: false, mode: 'shared', desktopImage: '', mobileImage: '', sharedImage: '', overlay: 15, darkOverlay: 35, position: 'center', attachment: 'scroll', fit: 'cover' },
   shop: {
-    announcementAlign:'center',announcementDirection:'inherit',heroDirection:'inherit',featuredAlign:'left',featuredDirection:'inherit',catalogAlign:'left',catalogDirection:'inherit',cardAlign:'left',cardDirection:'inherit',contactAlign:'left',contactDirection:'inherit',footerAlign:'left',footerDirection:'inherit',categoryNavigation:'chips',
+    announcementAlign:'center',announcementDirection:'inherit',heroDirection:'inherit',featuredAlign:'left',featuredDirection:'inherit',catalogAlign:'left',catalogDirection:'inherit',cardAlign:'left',cardDirection:'inherit',contactAlign:'left',contactDirection:'inherit',footerAlign:'left',footerDirection:'inherit',categoryNavigation:'chips',categoryPanelAnimation:'slide',categoryPanelDuration:260,
     layout: 'minimal', announcement: 'Tu próxima elección está acá.', showAnnouncement: true,
     heroTitle: 'Tu estilo. Tus elegidos.', heroSubtitle: 'Descubrí nuestra colección y encontrá algo para vos.',
     heroImage: '', heroButton: 'Ver productos', showHero: true,
@@ -42,15 +42,15 @@ export const defaultDesign = {
     showSearch: true, showCategories: true, showCatalog: true, catalogTitle: 'Descubrí nuestra colección',
     showFeatured: true, featuredTitle: 'Productos destacados', featuredLayout: 'grid', featuredAutoplay: false,
     featuredInterval: 4, featuredSpeed: 500, featuredLoop: true, featuredPauseOnHover: true,
-    featuredPaddingX: 32, featuredPaddingY: 48, featuredFullWidth: false,
-    catalogPaddingX: 32, catalogPaddingY: 48, catalogFullWidth: false, catalogVariant: 'grid',
+    featuredPaddingX: 32, featuredPaddingY: 48, featuredFullWidth: false, featuredColumns: 3, featuredMobileColumns: 2,
+    catalogPaddingX: 32, catalogPaddingY: 48, catalogFullWidth: false, catalogVariant: 'grid', catalogColumns: 3, catalogMobileColumns: 2,
     columns: 3, imageRatio: 'square', cardVariant: 'minimal', cardShowButton: true, productHoverSwap: false, productHoverEffect: 'none',
     showPreviousPrice: true, showStock: false, showDescription: true,
     footerText: 'Gracias por elegir nuestro negocio.', showContact: true, footerPaddingX: 32, footerPaddingY: 48
   },
   product: {
     textAlign:'left',textDirection:'inherit',
-    galleryLayout: 'thumbnails', layout: 'classic', paddingX: 32, paddingY: 48, fullWidth: false,
+    galleryLayout: 'thumbnails', galleryColumns: 2, galleryMobileColumns: 2, layout: 'classic', paddingX: 32, paddingY: 48, fullWidth: false,
     showBreadcrumbs: true, showCategory: true, showStock: true, showSku: false,
     showRelated: true, showRecommendations: true, relatedTitle: 'Completá tu elección', recommendationTitle: 'También te puede interesar',
     addButton: 'Agregar al carrito', madeToOrderText: 'Lo hacemos especialmente para vos.', showShare: true
@@ -76,7 +76,7 @@ export const designEnums = {
   'brand.textDirection':['ltr','rtl','auto'],
   'navbar.logoShape':['natural','square','rounded','circle'], 'navbar.logoFit':['contain','cover'], 'navbar.linksAlign':['left','center','right'],
   'navbar.links.*.target':['home','catalog','featured','contact','terms','social','section'],
-  'shop.categoryNavigation':['chips','navbar','drawer','select','sidebar'],
+  'shop.categoryNavigation':['chips','navbar','drawer','select','sidebar'], 'shop.categoryPanelAnimation':['slide','fade','scale'],
   ...Object.fromEntries(['announcement','hero','featured','catalog','card','contact','footer'].map(key=>['shop.'+key+'Direction',['inherit','ltr','rtl','auto']])),
   ...Object.fromEntries(['announcement','featured','catalog','card','contact','footer'].map(key=>['shop.'+key+'Align',['left','center','right']])),
   ...Object.fromEntries(['product','cart','checkout','terms'].flatMap(key=>[[key+'.textAlign',['left','center','right']],[key+'.textDirection',['inherit','ltr','rtl','auto']]])),
@@ -104,8 +104,8 @@ export const designNumberRanges = {
   'navbar.logoWidth':[24,480], 'navbar.logoHeight':[24,200], 'navbar.mobileLogoWidth':[24,280], 'navbar.mobileLogoHeight':[24,144], 'navbar.logoRadius':[0,100],
   'sections.*.socialIconSize':[16,64],
   'brand.radius': [0, 40], 'wallpaper.overlay': [0, 90], 'wallpaper.darkOverlay': [0, 90],
-  'shop.columns': [1, 5], 'shop.heroOverlay': [0, 90], 'shop.heroHeight': [240, 900], 'shop.heroMobileHeight': [200, 800],
-  'shop.heroInterval': [3, 20], 'shop.featuredInterval': [2, 20], 'shop.featuredSpeed': [150, 1500], 'sections.*.columns': [1, 4]
+  'shop.columns': [1, 5], 'shop.featuredColumns': [1, 5], 'shop.featuredMobileColumns': [1, 4], 'shop.catalogColumns': [1, 5], 'shop.catalogMobileColumns': [1, 4], 'product.galleryColumns': [1, 4], 'product.galleryMobileColumns': [1, 4], 'shop.heroOverlay': [0, 90], 'shop.heroHeight': [240, 900], 'shop.heroMobileHeight': [200, 800],
+  'shop.heroInterval': [3, 20], 'shop.featuredInterval': [2, 20], 'shop.featuredSpeed': [150, 1500], 'shop.categoryPanelDuration': [120, 700], 'sections.*.columns': [1, 4], 'sections.*.mobileColumns': [1, 4]
 };
 
 function mergeKnown(base, value, path = '') {
@@ -125,6 +125,14 @@ export function normalizeDesign(value) {
   const normalized = mergeKnown(defaultDesign, value);
   // Before v1.3 a supplied logo replaced the navbar title. Preserve that initial presentation.
   if (!value?.navbar && value?.brand?.logo) normalized.navbar.showTitle = false;
+  // v1.6 splits product grids by section while preserving the desktop density chosen in previous versions.
+  if (value?.shop) {
+    const legacyColumns = Number.isSafeInteger(value.shop.columns) ? Math.min(5, Math.max(1, value.shop.columns)) : normalized.shop.columns;
+    if (value.shop.catalogColumns === undefined) normalized.shop.catalogColumns = legacyColumns;
+    if (value.shop.featuredColumns === undefined) normalized.shop.featuredColumns = legacyColumns;
+  }
+  // Custom sections used one column on small phones before v1.6. Keep that result until the seller chooses another mobile density.
+  if (Array.isArray(value?.sections)) normalized.sections.forEach((section,index)=>{ if (value.sections[index]?.mobileColumns === undefined) section.mobileColumns = 1; });
   // Existing stores keep their previous automatic dark primary until they customize it.
   if (normalized?.brand && value?.brand && value.brand.darkPrimary === undefined && /^#[a-f\d]{6}$/i.test(value.brand.primary || '')) {
     const color = value.brand.primary, channels = rgb(color);
@@ -174,7 +182,7 @@ export function designStyle(design, appearance = 'light', customerPreference = n
   return {
     '--store-primary': primary, '--store-on-primary': readableOn(primary), '--store-accent': dark ? d.brand.darkAccent : d.brand.accent,
     '--store-bg': background, '--store-text': text, '--store-surface': surface, '--store-surface-alt': alternate,
-    '--store-muted': muted, '--store-line': line, '--store-radius': `${d.brand.radius}px`, '--store-font': font, '--store-cols': String(d.shop.columns),
+    '--store-muted': muted, '--store-line': line, '--store-radius': `${d.brand.radius}px`, '--store-font': font, '--store-cols': String(d.shop.catalogColumns), '--store-mobile-cols': String(d.shop.catalogMobileColumns),
     '--primary': primary, '--primary-dark': dark ? mix(primary, '#000000', 0.15) : mix(primary, '#ffffff', 0.13), '--on-primary': readableOn(primary),
     '--surface': surface, '--surface-alt': alternate, '--surface-strong': mix(background, text, dark ? 0.16 : 0.08),
     '--bg': background, '--text': text, '--text-secondary': text, '--muted': muted, '--line': line, 'color-scheme': dark ? 'dark' : 'light'
