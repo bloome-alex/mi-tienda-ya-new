@@ -52,6 +52,14 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-Mi Tienda Ya <no-reply@example.com>}
       ORDER_RESERVATION_MINUTES: ${ORDER_RESERVATION_MINUTES:-60}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?Completá R2_ACCOUNT_ID en .env}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?Completá R2_ACCESS_KEY_ID en .env}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?Completá R2_SECRET_ACCESS_KEY en .env}
+      R2_ASSETS_BUCKET_NAME: ${R2_ASSETS_BUCKET_NAME:?Completá R2_ASSETS_BUCKET_NAME en .env}
+      R2_RECEIPTS_BUCKET_NAME: ${R2_RECEIPTS_BUCKET_NAME:?Completá R2_RECEIPTS_BUCKET_NAME en .env}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:?Completá R2_PUBLIC_URL en .env}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_PREFIX: ${R2_PREFIX:-mi-tienda-ya-2}
       UPLOAD_DIR: /app/api/data/uploads
       WHATSAPP_DATA_PATH: /app/api/data/whatsapp
       WHATSAPP_CLIENT_ID: ${WHATSAPP_CLIENT_ID:-mi-tienda-ya-2}

@@ -12,6 +12,8 @@ import { defaultDesign, normalizeDesign } from '../../../client/src/services/des
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 import { MercadoPagoService } from './MercadoPagoService.js';
 import { categoryService } from './CategoryService.js';
+import { r2Storage } from './R2StorageService.js';
+import { storageCleanupService } from './StorageCleanupService.js';
 
 export const FINAL_STATUSES = Object.freeze(['paid', 'cancelled']);
 const ACTIVE_STATUSES = ['pending', 'awaiting_payment', 'processing'];
@@ -532,7 +534,8 @@ export class CommerceService {
 }
 
 export class ReceiptService {
-  get directory() { return path.resolve(config.uploadDir, 'receipts'); }
+  constructor({ storage = r2Storage, cleanup = storageCleanupService } = {}) { this.storage = storage; this.cleanup = cleanup; }
+  get legacyDirectory() { return path.resolve(config.uploadDir, 'receipts'); }
   async store(order, file) {
     if (order.payment.type !== 'transfer') throw commerceError('Este pedido no permite adjuntar un comprobante.', 422);
     if (FINAL_STATUSES.includes(order.status)) throw commerceError('Este pedido ya fue finalizado.', 409);
@@ -549,20 +552,37 @@ export class ReceiptService {
         ext = 'jpg'; mimeType = 'image/jpeg';
       } catch { throw commerceError('El archivo debe ser una imagen JPEG, PNG, WebP o un PDF válido.'); }
     }
-    await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const fullPath = path.join(this.directory, filename);
-    await fs.writeFile(fullPath, buffer, { mode: 0o600, flag: 'wx' });
-    const before = await Order.findOneAndUpdate({ _id: order._id, status: { $in: ACTIVE_STATUSES }, 'payment.type': 'transfer' }, { $set: { receipt: { path: filename, name: `comprobante-${order.number}.${ext}`, mimeType, uploadedAt: new Date() } }, $push: { history: { status: 'receipt_uploaded', at: new Date(), note: 'El comprador adjuntó un comprobante. El vendedor debe verificar el ingreso del dinero.' } } }, { returnDocument: 'before' }).select('+receipt.path');
-    if (!before) { await fs.unlink(fullPath).catch(() => {}); throw commerceError('El pedido cambió y no admite comprobantes.', 409); }
-    if (before.receipt?.path) await fs.unlink(path.join(this.directory, path.basename(before.receipt.path))).catch(() => {});
-    await audit({ actorType: 'customer', storeId: order.storeId, action: 'order.receipt.uploaded', entityId: order._id, entityName: order.number, details: { number: order.number, fileType: mimeType, replaced: Boolean(before.receipt?.uploadedAt) } });
+    const receiptStorage = { bucket: config.r2.receiptsBucket, bucketVariable: 'R2_RECEIPTS_BUCKET_NAME' };
+    this.storage.assertConfigured(receiptStorage);
+    const objectKey = this.storage.objectKey({ storeId: order.storeId, kind: `receipts/${order._id}`, extension: ext });
+    await this.storage.put(objectKey, buffer, { contentType: mimeType, cacheControl: 'private, no-store', ...receiptStorage });
+    const before = await Order.findOneAndUpdate(
+      { _id: order._id, status: { $in: ACTIVE_STATUSES }, 'payment.type': 'transfer' },
+      { $set: { receipt: { objectKey, name: `comprobante-${order.number}.${ext}`, mimeType, uploadedAt: new Date() } }, $push: { history: { status: 'receipt_uploaded', at: new Date(), note: 'El comprador adjuntó un comprobante. El vendedor debe verificar el ingreso del dinero.' } } },
+      { returnDocument: 'before' }
+    ).select('+receipt.objectKey +receipt.path');
+    if (!before) {
+      try { await this.storage.delete(objectKey, receiptStorage); } catch (error) { await this.cleanup.schedule({ storeId: order.storeId, objectKey, bucket: config.r2.receiptsBucket, reason: 'receipt-uncommitted', error }); }
+      throw commerceError('El pedido cambió y no admite comprobantes.', 409);
+    }
+    // El reemplazo espera la confirmación de borrado de R2 antes de responder.
+    if (before.receipt?.objectKey) {
+      try { await this.storage.delete(before.receipt.objectKey, receiptStorage); }
+      catch (error) { await this.cleanup.schedule({ storeId: order.storeId, objectKey: before.receipt.objectKey, bucket: config.r2.receiptsBucket, reason: 'receipt-replaced', error }); throw error; }
+    }
+    else if (before.receipt?.path) await fs.unlink(path.join(this.legacyDirectory, path.basename(before.receipt.path))).catch(() => {});
+    await audit({ actorType: 'customer', storeId: order.storeId, action: 'order.receipt.uploaded', entityId: order._id, entityName: order.number, details: { number: order.number, fileType: mimeType, replaced: Boolean(before.receipt?.uploadedAt), storage: 'r2' } });
     return safeOrder(await Order.findById(order._id), { publicView: true });
   }
   async file(storeId, orderId) {
-    const order = await Order.findOne({ _id: id(orderId), storeId }).select('+receipt.path');
-    if (!order?.receipt?.path) throw commerceError('Este pedido no tiene comprobante.', 404);
-    return { path: path.join(this.directory, path.basename(order.receipt.path)), name: order.receipt.name, mimeType: order.receipt.mimeType };
+    const order = await Order.findOne({ _id: id(orderId), storeId }).select('+receipt.objectKey +receipt.path');
+    if (!order?.receipt?.objectKey && !order?.receipt?.path) throw commerceError('Este pedido no tiene comprobante.', 404);
+    if (order.receipt.objectKey) {
+      const remote = await this.storage.get(order.receipt.objectKey, { bucket: config.r2.receiptsBucket, bucketVariable: 'R2_RECEIPTS_BUCKET_NAME' });
+      return { body: remote.body, name: order.receipt.name, mimeType: order.receipt.mimeType };
+    }
+    // Compatibilidad temporal para instalaciones que todavía no ejecutaron migrate:r2.
+    return { path: path.join(this.legacyDirectory, path.basename(order.receipt.path)), name: order.receipt.name, mimeType: order.receipt.mimeType };
   }
 }
 
@@ -579,7 +599,7 @@ export class CommerceWorker {
   async run() {
     if (this.busy) return;
     this.busy = true;
-    try { await this.repairOrders(); await this.processMail(); } finally { this.busy = false; }
+    try { await this.repairOrders(); await this.processMail(); await storageCleanupService.run(); await storageCleanupService.sweepUnattached(); } finally { this.busy = false; }
   }
 
   async repairOrders() {

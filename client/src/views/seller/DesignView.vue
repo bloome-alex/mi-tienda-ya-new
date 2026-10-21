@@ -29,6 +29,7 @@ const previewPage=ref({section:'shop',path:'',productId:''});
 const expandedGroups=reactive({brand:'general',navbar:'title',shop:'hero',product:'layout',cart:'layout',checkout:'layout',terms:'content'});
 const uploads=reactive({});
 const uploadTasks=new Map();
+const sessionUploads=new Set();
 let observer,messageTimer,releaseStoreGuard,loadSequence=0,navigationId=0,uploadGeneration=0,savePromise,leavePromise,unloadAttached=false;
 const changedDesign=computed(()=>!!saved.value&&JSON.stringify(draft.value)!==saved.value);
 const changedGeneral=computed(()=>!!savedGeneral.value&&JSON.stringify(general.value)!==savedGeneral.value);
@@ -168,7 +169,9 @@ function requestUpload({file,target,field,scope,purpose,specification}){
     const uploaded=Array.isArray(result)?result[0]:result;
     if(!uploaded?.url)throw new Error('La imagen no se pudo procesar. Volvé a intentarlo.');
     if(specification&&Number.isFinite(uploaded.width)&&Number.isFinite(uploaded.height))validateWallpaperDimensions(uploaded,specification);
-    target[field]=uploaded.url;saveError.value='';notify.success('Imagen cargada. Guardá los cambios para aplicarla.');return true;
+    const previous=target[field];target[field]=uploaded.url;sessionUploads.add(uploaded.url);
+    if(previous&&sessionUploads.has(previous)){sessionUploads.delete(previous);api.delete(`/stores/${id}/uploads`,{urls:[previous]}).catch(()=>{});}
+    saveError.value='';notify.success('Imagen cargada en R2. Guardá los cambios para aplicarla.');return true;
   })().catch(error=>{if(error.name!=='AbortError'&&generation===uploadGeneration){saveError.value=error.message;notify.error(error.message);}return false;}).finally(()=>{if(uploadTasks.get(key)===task){uploadTasks.delete(key);delete uploads[key];}});
   uploadTasks.set(key,task);
   return task.promise;
@@ -179,6 +182,7 @@ function registerNavigationEditor(editor){navigationEditor.value=editor;}
 function uploadWallpaper(deviceKey,file){const specification=wallpaperSpecs[deviceKey];requestUpload({file,target:draft.value.wallpaper,field:deviceKey+'Image',scope:'wallpaper',purpose:specification.purpose,specification});}
 function wallpaperImageField(deviceKey){const spec=wallpaperSpecs[deviceKey];return {key:deviceKey+'Image',label:spec.label,type:'image',uploadOnly:true,help:`Medida sugerida: ${spec.width} × ${spec.height} px. Podés usar otra resolución o proporción. JPG, PNG o WebP, hasta 5 MiB y 25 megapíxeles.`};}
 function abortUploads(){uploadGeneration++;for(const task of uploadTasks.values())task.controller.abort();uploadTasks.clear();for(const key of Object.keys(uploads))delete uploads[key];}
+async function cleanupSessionUploads(){const id=store.value?._id,urls=[...sessionUploads];sessionUploads.clear();if(!id||!urls.length)return;try{await api.delete(`/stores/${id}/uploads`,{urls});}catch(error){console.warn('[r2-cleanup]',error.message);}}
 function preset(value){
   ['primary','accent','background','text'].forEach((key,index)=>{draft.value.brand[key]=value.colors[index];});
   ['darkPrimary','darkAccent','darkBackground','darkText'].forEach((key,index)=>{draft.value.brand[key]=value.dark[index];});
@@ -187,7 +191,7 @@ function preset(value){
 }
 async function reset(){
   if(saving.value)return;
-  if(await confirmDialog({title:'Restaurar el diseño inicial',message:'Se reemplazarán las opciones de diseño, los fondos, los términos y las secciones por sus valores iniciales. Los datos generales de la tienda se conservan. Podés revisar el resultado antes de guardar.',confirmText:'Restaurar diseño',danger:true})){abortUploads();draft.value=normalizeDesign(defaultDesign);saveError.value='';notify.info('Diseño inicial cargado en la vista previa.');}
+  if(await confirmDialog({title:'Restaurar el diseño inicial',message:'Se reemplazarán las opciones de diseño, los fondos, los términos y las secciones por sus valores iniciales. Los datos generales de la tienda se conservan. Podés revisar el resultado antes de guardar.',confirmText:'Restaurar diseño',danger:true})){abortUploads();await cleanupSessionUploads();draft.value=normalizeDesign(defaultDesign);saveError.value='';notify.info('Diseño inicial cargado en la vista previa.');}
 }
 function problem(message,tab,group,field,extra={}){const error=new Error(message);error.designField={tab,group,field,...extra};return error;}
 function validateBeforeSave(design,details){
@@ -260,7 +264,7 @@ async function performSave(){
     if(designSnapshot!==saved.value){
       const result=await api.put(`/stores/${id}/design`,{design});
       if(store.value?._id!==id)return false;
-      saved.value=designSnapshot;designWritten=true;updateStoreRecord(result);
+      saved.value=designSnapshot;designWritten=true;updateStoreRecord(result);await cleanupSessionUploads();
     }
     if(generalSnapshot!==savedGeneral.value){
       const result=await api.put(`/stores/${id}`,details);
@@ -290,13 +294,13 @@ async function decideLeave(){
   if(!dirty.value)return true;
   const choice=await unsavedChangesDialog({message:pendingUploads.value?'Hay imágenes en proceso y cambios pendientes. Guardar espera a que terminen de cargar. También podés descartar todo o seguir editando.':'Tenés cambios en el diseño o en los datos de la tienda. ¿Cómo querés continuar?'});
   if(choice==='save')return await save();
-  if(choice==='discard'){abortUploads();draft.value=JSON.parse(saved.value);general.value=JSON.parse(savedGeneral.value);saveError.value='';return true;}
+  if(choice==='discard'){abortUploads();await cleanupSessionUploads();draft.value=JSON.parse(saved.value);general.value=JSON.parse(savedGeneral.value);saveError.value='';return true;}
   return false;
 }
 function mayLeave(){if(leavePromise)return leavePromise;leavePromise=decideLeave().finally(()=>{leavePromise=undefined;});return leavePromise;}
 onBeforeRouteLeave(mayLeave);
 onMounted(()=>{if(window.matchMedia('(max-width: 800px)').matches)device.value='mobile';releaseStoreGuard=registerStoreSwitchGuard(mayLeave);window.addEventListener('message',received);load();});
-onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abortUploads();clearTimeout(messageTimer);window.removeEventListener('message',received);window.removeEventListener('beforeunload',beforeUnload);});
+onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abortUploads();cleanupSessionUploads();clearTimeout(messageTimer);window.removeEventListener('message',received);window.removeEventListener('beforeunload',beforeUnload);});
 </script>
 <template>
   <div class="design-view">

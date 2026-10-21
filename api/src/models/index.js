@@ -42,7 +42,9 @@ auditSchema.index({ createdAt: -1 });
 auditSchema.index({ action: 1, createdAt: -1 });
 auditSchema.index({ storeId: 1, createdAt: -1 });
 auditSchema.index({ actorId: 1, createdAt: -1 });
-const uploadedImageSchema = new Schema({ storeId: { ...ref('Store'), required: true, index: true }, uploadedBy: ref('User'), url: { type: String, required: true, unique: true }, name: { type: String, required: true }, purpose: { type: String, enum: ['image', 'wallpaper-desktop', 'wallpaper-mobile', 'wallpaper-shared'], required: true }, width: Number, height: Number, size: Number, contentHash: { type: String, required: true, select: false } }, { timestamps: true });
+const uploadedImageSchema = new Schema({ storeId: { ...ref('Store'), required: true, index: true }, uploadedBy: ref('User'), url: { type: String, required: true, unique: true }, name: { type: String, required: true }, objectKey: { type: String }, storage: { type: String, enum: ['r2', 'legacy-local'], default: 'r2', index: true }, attached: { type: Boolean, default: false, index: true }, purpose: { type: String, enum: ['image', 'wallpaper-desktop', 'wallpaper-mobile', 'wallpaper-shared'], required: true }, width: Number, height: Number, size: Number, contentHash: { type: String, required: true, select: false } }, { timestamps: true });
+uploadedImageSchema.index({ objectKey: 1 }, { unique: true, partialFilterExpression: { objectKey: { $type: 'string' } } });
+const storageCleanupSchema = new Schema({ storeId: ref('Store'), bucket: { type: String, required: true }, objectKey: { type: String, required: true, unique: true }, reason: { type: String, default: 'cleanup' }, attempts: { type: Number, default: 0 }, lastError: String, availableAt: { type: Date, default: Date.now, index: true } }, options);
 const sessionSchema = new Schema({ userId: { ...ref('User'), required: true, index: true }, tokenHash: { type: String, required: true, unique: true }, csrfToken: { type: String, required: true }, expiresAt: { type: Date, required: true } }, options);
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 const magicSchema = new Schema({ email: { type: String, required: true }, name: String, tokenHash: { type: String, required: true, unique: true }, expiresAt: { type: Date, required: true }, consumedAt: Date }, options);
@@ -56,5 +58,6 @@ export const Product = mongoose.models.Product || mongoose.model('Product', prod
 export const Settings = mongoose.models.Settings || mongoose.model('Settings', settingsSchema);
 export const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', auditSchema);
 export const UploadedImage = mongoose.models.UploadedImage || mongoose.model('UploadedImage', uploadedImageSchema);
+export const StorageCleanup = mongoose.models.StorageCleanup || mongoose.model('StorageCleanup', storageCleanupSchema);
 export const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 export const MagicLink = mongoose.models.MagicLink || mongoose.model('MagicLink', magicSchema);

@@ -1,6 +1,6 @@
-# mi-tienda-ya-2 · v1.7.0
+# mi-tienda-ya-2 · v1.8.1
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.7.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.8.1** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
@@ -25,7 +25,7 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
 
-La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios de la versión 1.7.0](docs/CAMBIOS-1.7.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
+La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
 ## 1. Preparar el entorno
 
@@ -35,6 +35,7 @@ Requisitos:
 - **MongoDB 8 recomendado**, accesible desde la API. Puede ser standalone; no requiere replica set.
 - Un servidor SMTP para enviar enlaces de acceso y correos de pedidos.
 - Chromium/Puppeteer cuando se utilice la conexión de WhatsApp. El resto de la aplicación puede iniciarse sin abrir ese navegador.
+- Una cuenta de **Cloudflare R2** con dos buckets: uno público para assets visibles y otro privado para comprobantes.
 
 Desde la carpeta extraída del ZIP:
 
@@ -63,6 +64,13 @@ Completá el archivo `.env`; contiene comentarios para cada opción.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Servidor de correo. Habitualmente, puerto 587 con `false` para STARTTLS o 465 con `true`. |
 | `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Credenciales y remitente autorizado por tu proveedor de correo. |
 | `WHATSAPP_CLIENT_ID` | Identificador exclusivo de esta instalación, por ejemplo `mi-tienda-ya-2-produccion`. |
+| `R2_ACCOUNT_ID` | Account ID de Cloudflare. |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Credenciales S3 de R2 con lectura/escritura limitada a los buckets de esta aplicación. |
+| `R2_ASSETS_BUCKET_NAME` | Bucket de imágenes y archivos públicos de las tiendas. |
+| `R2_RECEIPTS_BUCKET_NAME` | Bucket **privado** de comprobantes de transferencia. No debe tener dominio público. |
+| `R2_PUBLIC_URL` | Custom Domain o URL pública conectada exclusivamente al bucket de assets. |
+| `R2_ENDPOINT` | Opcional. Si queda vacío se usa el endpoint S3 de tu `R2_ACCOUNT_ID`. |
+| `R2_PREFIX` | Prefijo de objetos; por defecto `mi-tienda-ya-2`. |
 
 Para generar cada secreto, ejecutá el siguiente comando y copiá su salida en la variable correspondiente. Ejecutalo nuevamente para obtener la segunda clave:
 
@@ -71,6 +79,23 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
 Guardá estas claves junto con el respaldo de los datos. Cambiar `ENCRYPTION_KEY` sin migrar los datos cifrados impide recuperar los secretos ya almacenados.
+
+### Configurar Cloudflare R2
+
+Creá **dos buckets** dentro de tu cuenta R2:
+
+1. Un bucket de assets, por ejemplo `mi-tienda-ya-assets`. Conectale un Custom Domain como `https://media.tu-dominio.com` y escribilo en `R2_PUBLIC_URL`.
+2. Un bucket privado de comprobantes, por ejemplo `mi-tienda-ya-receipts`. **No le conectes un dominio público.**
+
+Creá credenciales S3 con permiso de lectura y escritura sólo sobre esos buckets y completá `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ASSETS_BUCKET_NAME` y `R2_RECEIPTS_BUCKET_NAME`. En una instalación nueva no necesitás `UPLOAD_DIR`.
+
+Si actualizás desde una versión anterior que tenía archivos locales, después de configurar R2 y con la aplicación detenida ejecutá:
+
+```bash
+npm run migrate:r2
+```
+
+El script sube primero cada archivo, actualiza sus referencias en MongoDB y sólo después elimina la copia local. Conservá un respaldo de MongoDB y de `UPLOAD_DIR` hasta revisar la migración.
 
 ### Elegir la URL correcta
 
@@ -90,7 +115,7 @@ Guardá estas claves junto con el respaldo de los datos. Cambiar `ENCRYPTION_KEY
 npm run dev
 ```
 
-Abrí [http://localhost:5173](http://localhost:5173). El comando inicia la API y Vite; el servidor de desarrollo deriva `/api` y `/uploads` a Express.
+Abrí [http://localhost:5173](http://localhost:5173). El comando inicia la API y Vite; el servidor de desarrollo deriva `/api` a Express. La ruta `/uploads/images` queda sólo como compatibilidad temporal para archivos locales anteriores a v1.8.0.
 
 ### Compilación y ejecución en un proceso
 
@@ -101,7 +126,7 @@ npm run build
 npm start
 ```
 
-Abrí [http://localhost:5000](http://localhost:5000). Express sirve la API y `client/dist`. Aunque el ZIP contiene una compilación, el comando de build permite regenerarla después de editar el cliente.
+Abrí [http://localhost:5000](http://localhost:5000). Express sirve la API y `client/dist`. Esta entrega no incluye un `dist` anterior: generá el cliente con `npm run build` después de instalar dependencias.
 
 ## 3. Configurar la primera tienda
 
@@ -168,13 +193,13 @@ Los datos bancarios y la URL digital de la demostración son ejemplos identifica
 
 **Mercado Pago.** Cada tienda configura sus credenciales y secreto de Webhook desde Cobros y entrega. La API crea preferencias Checkout Pro y verifica los pagos consultando al proveedor. La URL de retorno del navegador no basta para marcar un pedido como pagado. Se necesitan cuenta, credenciales y un endpoint público HTTPS; la [guía de integraciones](docs/INTEGRACIONES.md) indica la configuración concreta.
 
-**Transferencias y efectivo.** Se pueden limitar a determinadas formas de entrega. Un comprobante bancario adjunto queda disponible para el vendedor y el administrador; adjuntarlo no confirma el pago. El vendedor verifica el cobro y cambia el estado manualmente.
+**Transferencias y efectivo.** Se pueden limitar a determinadas formas de entrega. Un comprobante bancario adjunto queda disponible para el vendedor y el administrador; adjuntarlo no confirma el pago. Los comprobantes se almacenan en el bucket privado `R2_RECEIPTS_BUCKET_NAME` y se descargan únicamente a través de la API autenticada. El vendedor verifica el cobro y cambia el estado manualmente.
 
 **WhatsApp.** La conexión de administración utiliza `whatsapp-web.js`, `LocalAuth`, un `WHATSAPP_CLIENT_ID` exclusivo y consultas periódicas del estado del QR. El navegador se inicia cuando se pulsa Conectar. El botón flotante de cada tienda abre un enlace `wa.me` con el mensaje elegido y funciona de manera independiente de esa sesión.
 
 **PWA.** Incluye manifiesto, iconos, service worker, recursos estáticos cacheables y pantalla sin conexión. El catálogo actualizado, la administración, los pedidos y los pagos requieren Internet. No se guardan compras para ejecutarlas después sin conexión.
 
-**Datos persistentes.** Conservá MongoDB, `UPLOAD_DIR`, `WHATSAPP_DATA_PATH` y las claves de entorno. Si las rutas de archivos se dejan vacías, se utilizan `api/data/uploads` y `api/data/whatsapp`. Las bajas lógicas preservan los datos históricos; los pedidos guardan una copia de los datos comprados.
+**Datos persistentes.** Conservá MongoDB, los dos buckets R2, `WHATSAPP_DATA_PATH` y las claves de entorno. Desde v1.8.0, las nuevas imágenes, fondos y comprobantes no dependen del disco local. `UPLOAD_DIR` se conserva exclusivamente para ejecutar `npm run migrate:r2` sobre archivos de versiones anteriores. Las bajas de imágenes/productos limpian R2 de forma sincrónica y una cola de recuperación en MongoDB reintenta borrados que fallen por una interrupción temporal del proveedor.
 
 ## 7. Producción con un proceso PM2
 
@@ -211,6 +236,7 @@ También se incluyen `Dockerfile` y `compose.yaml`, con MongoDB autenticado, dat
 | `npm test` | Ejecutar pruebas de API y de lógica del cliente: carrito, categorías, apariencia y protocolo de la vista previa. |
 | `npm run check` | Comprobar sintaxis de los archivos JavaScript incluidos por el script. |
 | `npm run seed:demo` | Agregar de forma optativa Feria Estudio, con la API detenida y MongoDB en ejecución. |
+| `npm run migrate:r2` | Migrar imágenes y comprobantes locales de versiones anteriores a Cloudflare R2. |
 
 | Ubicación | Contenido |
 | --- | --- |

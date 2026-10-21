@@ -264,14 +264,16 @@ test('comprobantes validan contenido real, se guardan privados y requieren acces
   const first = await fixture(), other = await fixture();
   const service = new CommerceService();
   const { order, accessToken } = await service.createOrder(first.store, { ...first.input, paymentId: 'transfer' });
-  const receipt = new ReceiptService();
+  const objects = new Map();
+  const storage = { assertConfigured() {}, objectKey({storeId,kind,extension}) { return `test/${storeId}/${kind}/receipt.${extension}`; }, async put(key, body, options) { objects.set(key, { body: Buffer.from(body), contentType: options.contentType }); }, async get(key) { const value=objects.get(key); if(!value) throw new Error('missing'); return value; }, async delete(key) { objects.delete(key); } };
+  const receipt = new ReceiptService({ storage, cleanup: { async schedule() {} } });
   await assert.rejects(receipt.store(await Order.findById(order._id), { buffer: Buffer.from('<svg onload="alert(1)"></svg>'), mimetype: 'image/png' }), /válido/);
   const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#ffffff' } }).png().toBuffer();
   const uploaded = await receipt.store(await Order.findById(order._id), { buffer: png, mimetype: 'application/octet-stream' });
   assert.equal(uploaded.receipt.mimeType, 'image/jpeg');
   assert.equal('path' in uploaded.receipt, false);
   const file = await receipt.file(first.store._id, String(order._id));
-  assert.equal((await fs.stat(file.path)).isFile(), true);
+  assert.equal(file.body.length > 0, true);
   await assert.rejects(receipt.file(other.store._id, String(order._id)), e => e.status === 404);
   const app = createApp();
   const token = crypto.randomBytes(32).toString('hex');
@@ -280,7 +282,7 @@ test('comprobantes validan contenido real, se guardan privados y requieren acces
   assert.equal(forbidden.status, 404);
   const publicView = await request(app).get(`/api/public/orders/${order._id}?token=${accessToken}`);
   assert.equal(publicView.status, 200);
-  assert.equal(JSON.stringify(publicView.body).includes(file.path), false);
-  const staticLeak = await request(app).get(`/uploads/receipts/${path.basename(file.path)}`);
+  assert.equal(JSON.stringify(publicView.body).includes('objectKey'), false);
+  const staticLeak = await request(app).get('/uploads/receipts/receipt-test.pdf');
   assert.notEqual(staticLeak.status, 200);
 });

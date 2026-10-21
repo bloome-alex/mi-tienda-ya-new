@@ -49,7 +49,7 @@ TRUST_PROXY=0
 npm run dev
 ```
 
-Abrí `http://localhost:5173`. El comando inicia Vue/Vite y la API, y Vite deriva `/api` y `/uploads` al puerto 5000. Los enlaces de correo se generan con `APP_URL`, por lo que deben apuntar al puerto del frontend.
+Abrí `http://localhost:5173`. El comando inicia Vue/Vite y la API, y Vite deriva `/api` al puerto 5000. `/uploads/images` queda como compatibilidad temporal para archivos locales anteriores a v1.8.0. Los enlaces de correo se generan con `APP_URL`, por lo que deben apuntar al puerto del frontend.
 
 ### Compilación y ejecución local con un proceso
 
@@ -71,6 +71,22 @@ Abrí `http://localhost:5000`. Express sirve tanto la aplicación como la API.
 5. Configurá SMTP antes de solicitar un acceso para vendedores.
 
 El administrador inicial se crea sólo si la base no tiene uno. Después del cambio, modificar `ROOT_PASSWORD` no restablece la contraseña almacenada. Conservá configuradas las variables iniciales para la validación de arranque y guardá de forma segura la contraseña vigente.
+
+## Cloudflare R2 antes de producción
+
+Creá dos buckets: uno para assets públicos y otro para comprobantes privados. El dominio indicado en `R2_PUBLIC_URL` debe estar conectado sólo al bucket de assets. El bucket de comprobantes debe permanecer sin acceso público.
+
+```dotenv
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_ASSETS_BUCKET_NAME=mi-tienda-ya-assets
+R2_RECEIPTS_BUCKET_NAME=mi-tienda-ya-receipts
+R2_PUBLIC_URL=https://media.tu-dominio.com
+R2_PREFIX=mi-tienda-ya-2
+```
+
+Si actualizás una instalación con archivos locales, detené la aplicación, respaldá MongoDB y `UPLOAD_DIR` y ejecutá `npm run migrate:r2` antes de volver a publicar.
 
 ## 2. Producción con PM2
 
@@ -171,7 +187,7 @@ sudo certbot --nginx -d tiendas.tu-dominio.com
 
 El certificado y su renovación quedan bajo tu instalación de Certbot. La configuración final debe atender HTTPS y redirigir HTTP a HTTPS. `APP_URL` debe coincidir exactamente con el dominio público, sin rutas ni barra final.
 
-El mismo proxy sirve todas las rutas, incluyendo `/api`, `/uploads`, `/t/...` y `/pedido/...`. No hay un servidor Vite separado en producción. La PWA, las cookies seguras y los webhooks de Mercado Pago requieren HTTPS en este despliegue.
+El mismo proxy sirve las rutas de aplicación, incluyendo `/api`, `/t/...` y `/pedido/...`; las imágenes nuevas se sirven desde `R2_PUBLIC_URL`. `/uploads/images` sólo conserva compatibilidad con archivos locales anteriores. No hay un servidor Vite separado en producción. La PWA, las cookies seguras y los webhooks de Mercado Pago requieren HTTPS en este despliegue.
 
 ## 4. Docker Compose
 
@@ -261,7 +277,8 @@ Un valor en `.env` por sí solo no modifica el proceso `npm ci`: en ese comando 
 Conservá y respaldá juntos:
 
 - MongoDB, usando una estrategia de respaldo adecuada al servidor elegido.
-- La carpeta de imágenes y comprobantes `UPLOAD_DIR`.
+- Los buckets `R2_ASSETS_BUCKET_NAME` y `R2_RECEIPTS_BUCKET_NAME`.
+- `UPLOAD_DIR` sólo mientras exista contenido local pendiente de migrar.
 - La sesión `WHATSAPP_DATA_PATH`, si deseás restaurar el emparejamiento.
 - El archivo `.env`, especialmente `ENCRYPTION_KEY` y `SESSION_SECRET`.
 

@@ -189,7 +189,8 @@ El administrador puede utilizar estas mismas rutas sobre cualquier tienda. El ve
 | PUT | `/stores/:storeId/contact` | Guardar `{contact}` de esa tienda. |
 | PUT | `/stores/:storeId/payments` | Guardar `{payments,deliveries,mercadopago?}`. |
 | GET | `/me/plan` | `{user,plan,entitlement,contact}` para la cuenta conectada. |
-| POST | `/stores/:storeId/uploads` | Multipart `files` y `purpose` opcional; devuelve `[{url,name,width,height,purpose}]`. Fondos: un archivo por solicitud. |
+| POST | `/stores/:storeId/uploads` | Multipart `files` y `purpose` opcional; sube a R2 y devuelve `[{url,name,objectKey,width,height,purpose}]`. Fondos: un archivo por solicitud. |
+| DELETE | `/stores/:storeId/uploads` | Elimina de R2 uploads de esa tienda que ya no estén referenciados por un producto o por el diseño. |
 | GET | `/stores/:storeId/dashboard` | Métricas de productos, stock, ventas, últimos pedidos y productos más vendidos. |
 
 Crear una tienda como administrador requiere `{ownerId,name,slug,description?,active?}`. `slug` admite minúsculas, números y guiones, entre 3 y 80 caracteres. El vendedor puede cambiar los datos de una tienda existente, pero sólo el administrador reasigna `ownerId`. Las altas y activaciones adquieren posiciones de cuota mediante índices únicos de MongoDB; solicitudes concurrentes no pueden ocupar la misma posición. Los errores `STORE_LIMIT`/`PRODUCT_LIMIT` indican falta de capacidad, y `QUOTA_BUSY` indica que se debe recargar y reintentar tras actividad concurrente.
@@ -307,7 +308,8 @@ Una respuesta 201 conserva el formato de array:
 ```json
 {
   "data": [{
-    "url": "/uploads/images/11111111-1111-4111-8111-111111111111.webp",
+    "url": "https://media.tu-dominio.com/mi-tienda-ya-2/stores/ID/images/11111111-1111-4111-8111-111111111111.webp",
+    "objectKey": "mi-tienda-ya-2/stores/ID/images/11111111-1111-4111-8111-111111111111.webp",
     "name": "11111111-1111-4111-8111-111111111111.webp",
     "width": 1600,
     "height": 900,
@@ -318,7 +320,7 @@ Una respuesta 201 conserva el formato de array:
 
 El ejemplo ilustra la estructura; cada archivo real recibe su propio nombre. La carga registra tienda, propósito, dimensiones y hash de contenido en `UploadedImage`. Después se asigna la URL devuelta al campo correspondiente de `design.wallpaper` y se guarda el diseño.
 
-Los fondos sólo pueden usar archivos subidos desde esta aplicación **para esa misma tienda y con ese propósito**. Una URL remota, una imagen genérica cargada con `purpose=image` o el fondo de otra tienda no sirven como fondo, aunque coincidan sus dimensiones. Al guardar, la API vuelve a comprobar existencia, archivo local, tamaño, dimensiones contra su propio registro y hash; no compara las medidas con las recomendaciones. Revalida todos los campos de fondo no vacíos, incluso los que no están activos en ese momento. No descarga imágenes externas para validar fondos.
+Los fondos sólo pueden usar archivos subidos desde esta aplicación **para esa misma tienda y con ese propósito**. Una URL remota, una imagen genérica cargada con `purpose=image` o el fondo de otra tienda no sirven como fondo, aunque coincidan sus dimensiones. Al guardar, la API vuelve a comprobar existencia en R2, tamaño, dimensiones contra su propio registro y hash; no compara las medidas con las recomendaciones. Revalida todos los campos de fondo no vacíos, incluso los que no están activos en ese momento. No descarga imágenes externas para validar fondos.
 
 Con `wallpaper.enabled: true`, `mode: responsive` exige las dos imágenes de escritorio y celular; `mode: shared` exige la compartida, sin obligar a que sea cuadrada. El ajuste `cover` puede recortar los extremos según la pantalla; `contain` prioriza mostrar la imagen completa.
 
@@ -416,7 +418,7 @@ El stock inicial se acepta al crear. En PUT, el stock existente se conserva; una
 
 Los PUT parciales de productos conservan los campos no enviados. Desde v1.1.0 se normalizan los atributos de variantes almacenados como Map de Mongoose antes de validar una edición parcial: modificar descripción o precio no exige reenviar el objeto de atributos ni borra color/talle.
 
-Las imágenes admiten URLs HTTP/HTTPS, rutas de imágenes cargadas y assets de demostración propios. Los uploads reales validan el contenido JPG/PNG/WebP y lo convierten a WebP; no basta con cambiar la extensión de un archivo.
+Las imágenes nuevas editables deben subirse desde la propia tienda: el backend verifica que la URL pertenezca a un `UploadedImage` de esa tienda almacenado en R2. Los assets de demostración propios siguen disponibles. Los uploads reales validan el contenido JPG/PNG/WebP y normalmente lo convierten a WebP; no basta con cambiar la extensión de un archivo.
 
 ### Marcar destacados y filtrar productos
 

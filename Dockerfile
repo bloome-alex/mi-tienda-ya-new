@@ -36,6 +36,8 @@ COPY --from=build --chown=node:node /app/client/src/services/design.js ./client/
 COPY --from=build --chown=node:node /app/client/src/services/storeCopy.js ./client/src/services/storeCopy.js
 COPY --from=build --chown=node:node /app/client/src/services/audit.js ./client/src/services/audit.js
 COPY --from=build --chown=node:node /app/client/dist ./client/dist
+# uploads sólo se conserva para migrar archivos locales de versiones anteriores;
+# las cargas nuevas van a Cloudflare R2.
 RUN mkdir -p /app/api/data/uploads/images /app/api/data/uploads/receipts /app/api/data/whatsapp \
     && chown -R node:node /app/api/data
 

@@ -1,6 +1,6 @@
 {
   "name": "mi-tienda-ya-2",
-  "version": "1.7.0",
+  "version": "1.8.1",
   "private": true,
   "description": "Plataforma de tiendas online PWA con Vue, Express y MongoDB",
   "type": "module",
@@ -17,7 +17,8 @@
     "start": "node api/src/index.js",
     "test": "npm run test --workspace api && npm run test --workspace client",
     "check": "node scripts/check.mjs",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "migrate:r2": "node scripts/migrate-r2.mjs"
   },
   "devDependencies": {
     "mongodb-memory-server": "11.3.0",

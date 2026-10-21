@@ -19,7 +19,17 @@ export const config = {
   sessionDays: number('SESSION_DAYS', 7),
   bcryptRounds: number('BCRYPT_ROUNDS', 12),
   trustProxy: process.env.TRUST_PROXY === '1' ? 1 : false,
-  uploadDir: path.resolve(process.env.UPLOAD_DIR || path.join(projectRoot, 'api/data/uploads')),
+  uploadDir: path.resolve(process.env.UPLOAD_DIR || path.join(projectRoot, 'api/data/uploads')), // legado: sólo migración de archivos locales previos a v1.8
+  r2: {
+    accountId: process.env.R2_ACCOUNT_ID || '',
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    assetsBucket: process.env.R2_ASSETS_BUCKET_NAME || process.env.R2_BUCKET_NAME || '',
+    receiptsBucket: process.env.R2_RECEIPTS_BUCKET_NAME || '',
+    publicUrl: (process.env.R2_PUBLIC_URL || '').replace(/\/$/, ''),
+    endpoint: (process.env.R2_ENDPOINT || '').replace(/\/$/, ''),
+    prefix: process.env.R2_PREFIX || 'mi-tienda-ya-2',
+  },
   whatsappClientId: process.env.WHATSAPP_CLIENT_ID || 'mi-tienda-ya-2',
   whatsappDataPath: path.resolve(process.env.WHATSAPP_DATA_PATH || path.join(projectRoot, 'api/data/whatsapp')),
   whatsappExecutablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -36,4 +46,9 @@ export function validateConfig() {
   if (!Number.isInteger(config.sessionDays) || config.sessionDays < 1 || config.sessionDays > 90) throw new Error('SESSION_DAYS debe estar entre 1 y 90.');
   if (config.rootUser.length > 100) throw new Error('ROOT_USER no puede superar 100 caracteres.');
   if (config.isProduction && !config.appUrl.startsWith('https://')) throw new Error('APP_URL debe usar HTTPS en producción.');
+  if (config.isProduction) {
+    const missingR2 = [['R2_ACCOUNT_ID', config.r2.accountId], ['R2_ACCESS_KEY_ID', config.r2.accessKeyId], ['R2_SECRET_ACCESS_KEY', config.r2.secretAccessKey], ['R2_ASSETS_BUCKET_NAME', config.r2.assetsBucket], ['R2_RECEIPTS_BUCKET_NAME', config.r2.receiptsBucket], ['R2_PUBLIC_URL', config.r2.publicUrl]].filter(([,value]) => !value).map(([name]) => name);
+    if (missingR2.length) throw new Error('Configurá Cloudflare R2 antes de iniciar en producción: ' + missingR2.join(', ') + '.');
+    if (!config.r2.publicUrl.startsWith('https://')) throw new Error('R2_PUBLIC_URL debe usar HTTPS en producción.');
+  }
 }

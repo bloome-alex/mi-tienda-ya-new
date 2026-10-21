@@ -45,7 +45,9 @@ router.post('/stores/:storeId/orders/:id/resend-digital', requireStoreAccess, as
 router.get('/stores/:storeId/orders/:id/receipt', requireStoreAccess, asyncHandler(async (req, res) => {
   const file = await receipts.file(req.store._id, req.params.id);
   res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
-  res.type(file.mimeType).download(file.path, file.name);
+  res.type(file.mimeType).attachment(file.name);
+  if (file.body) return res.send(file.body);
+  res.download(file.path, file.name);
 }));
 
 router.get('/public/stores/:slug', asyncHandler(async (req, res) => ok(res, await catalog.catalog(req.params.slug, req.query))));

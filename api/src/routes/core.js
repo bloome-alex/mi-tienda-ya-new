@@ -14,6 +14,7 @@ import { whatsappService } from '../services/WhatsAppService.js';
 import { quotaService } from '../services/QuotaService.js';
 import { categoryService, safeCategory } from '../services/CategoryService.js';
 import { imageService } from '../services/ImageService.js';
+import { assetService } from '../services/AssetService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -173,8 +174,11 @@ router.put('/stores/:storeId/design', requireStoreAccess, asyncHandler(async (re
   const { design } = z.object({ design: z.record(z.string(), z.unknown()) }).parse(req.body);
   const validated = validateDesign(design);
   await imageService.validateWallpapers(req.store._id, validated);
+  await imageService.validateDesignAssets(req.store._id, validated);
   const before = normalizeDesign(req.store.design);
   req.store.design = validated; req.store.markModified('design'); await req.store.save();
+  await assetService.markDesignAttached(req.store._id, validated);
+  await assetService.cleanupDesignImages(req.store._id, before, validated);
   await audit(req, 'store.design.updated', 'store', req.store._id, { changes: AuditService.changes({ design: before }, { design: validated }) });
   ok(res, safeStore(req.store));
 }));
@@ -234,7 +238,8 @@ router.get('/stores/:storeId/products', requireStoreAccess, asyncHandler(async (
 router.get('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(async (req, res) => { const item = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl -reservations'); if (!item) throw new AppError('Producto no encontrado.', 404); ok(res, item); }));
 router.post('/stores/:storeId/products', requireStoreAccess, asyncHandler(async (req, res) => {
   const body = productSchema.parse(req.body); await validateProduct(body, req.store._id);
-  const item = await quotaService.createProduct(req.store._id, body); await audit(req, 'product.created', 'product', item._id, { changes: AuditService.changes({}, item, Object.keys(productSchema.shape)) }); ok(res, item, 201);
+  await assetService.assertOwned(req.store._id, body.images);
+  const item = await quotaService.createProduct(req.store._id, body); await assetService.markAttached(req.store._id, item.images); await audit(req, 'product.created', 'product', item._id, { changes: AuditService.changes({}, item, Object.keys(productSchema.shape)) }); ok(res, item, 201);
 }));
 router.put('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(async (req, res) => {
   const patch = parsePatch(productSchema, req.body);
@@ -248,15 +253,19 @@ router.put('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(asy
   }
   const current = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl'); if (!current) throw new AppError('Producto no encontrado.', 404);
   const merged = productSchema.parse({ ...current.toObject({ flattenMaps: true }), ...patch }); await validateProduct(merged, req.store._id, current._id);
+  await assetService.assertOwned(req.store._id, merged.images);
   delete merged.stock; merged.variants = merged.variants.map(variant => ({ ...variant, stock: current.variants.find(existing => existing.id === variant.id)?.stock || 0 }));
   if (current.reservations.length && (merged.type !== current.type || merged.madeToOrder !== current.madeToOrder || JSON.stringify(merged.variants.map(v => v.id)) !== JSON.stringify(current.variants.map(v => v.id)))) throw new AppError('Hay pedidos pendientes. Resolvelos antes de cambiar el tipo o la estructura de variantes.', 409, 'RESERVATIONS_PENDING');
   const item = await Product.findOneAndUpdate({ _id: current._id, storeId: req.store._id, stockVersion: current.stockVersion }, { $set: merged, $inc: { stockVersion: 1 } }, { returnDocument: 'after', runValidators: true }).select('+digitalUrl -reservations');
   if (!item) throw new AppError('El stock cambió mientras editabas. Recargá el producto e intentá nuevamente.', 409, 'STOCK_CONFLICT');
+  await assetService.markAttached(req.store._id, item.images);
+  await assetService.cleanupProductImages(current, item.images);
   await audit(req, 'product.updated', 'product', item._id, { changes: AuditService.changes(current, item, Object.keys(productSchema.shape)) }); ok(res, item);
 }));
 router.delete('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(async (req, res) => {
   const before = await Product.findOneAndUpdate({ _id: req.params.id, storeId: req.store._id }, { $set: { active: false, archived: true }, $inc: { stockVersion: 1 } }, { returnDocument: 'before' });
   if (!before) throw new AppError('Producto no encontrado.', 404);
+  await assetService.cleanupProductImages(before, []);
   await audit(req, 'product.archived', 'product', before._id, { changes: AuditService.changes(before, { active: false, archived: true }, ['active', 'archived']) }); ok(res, await Product.findById(before._id).select('-reservations'));
 }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { files: 5, fileSize: 5 * 1024 * 1024 }, fileFilter(_req, file, cb) { if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) return cb(new AppError('Solo imágenes JPG, PNG o WebP.', 422)); cb(null, true); } });
@@ -265,6 +274,11 @@ router.post('/stores/:storeId/uploads', requireStoreAccess, upload.array('files'
   const result = await imageService.upload({ files: req.files, purpose, storeId: req.store._id, actorId: req.user._id });
   await audit(req, purpose.startsWith('wallpaper-') ? 'wallpaper.uploaded' : 'image.uploaded', 'store', req.store._id, { count: result.length, purpose, images: result.map(({ width, height }) => ({ width, height })) });
   ok(res, result, 201);
+}));
+router.delete('/stores/:storeId/uploads', requireStoreAccess, asyncHandler(async (req, res) => {
+  const { urls } = z.object({ urls: z.array(z.string().max(2048)).max(50) }).parse(req.body);
+  const result = await assetService.deleteUnclaimed(req.store._id, urls);
+  ok(res, result);
 }));
 
 router.get('/admin/dashboard', requireAdmin, asyncHandler(async (_req, res) => {

@@ -73,7 +73,8 @@ const orderSchema = new Schema({
   digitalDeliveryError: String,
   digitalDeliveredAt: Date,
   receipt: {
-    path: { type: String, select: false },
+    objectKey: { type: String, select: false },
+    path: { type: String, select: false }, // legado anterior a R2
     name: String,
     mimeType: String,
     uploadedAt: Date,

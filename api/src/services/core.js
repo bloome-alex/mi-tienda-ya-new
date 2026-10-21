@@ -1,11 +1,12 @@
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
-import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, Session, MagicLink } from '../models/index.js';
+import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Session, MagicLink } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import { randomToken, hashToken } from '../utils/crypto.js';
 import { escapeHtml } from '../utils/http.js';
 import { AuditService, auditService } from './AuditService.js';
+import { databaseIndexService } from './DatabaseIndexService.js';
 export { AuditService, auditService };
 
 export const defaultHome = {
@@ -121,7 +122,8 @@ export class AuthService {
 }
 export const authService = new AuthService();
 export async function bootstrap() {
-  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), Session.init(), MagicLink.init()]);
+  await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
+  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }
     catch (error) { if (error.code !== 11000) throw error; }

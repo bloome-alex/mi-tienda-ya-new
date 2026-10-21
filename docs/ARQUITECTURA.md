@@ -250,27 +250,27 @@ Las recomendaciones se calculan dentro de cada tienda. Priorizan productos prese
 
 El carrito se mantiene en el navegador por tienda. El precio que pueda mostrar ese estado local no es autoridad de cobro: la API recalcula la orden y rechaza productos o cantidades que ya no estén disponibles.
 
-## Archivos, PWA y despliegue
+## Archivos, R2, PWA y despliegue
 
-Las imágenes se reciben por `POST /stores/:storeId/uploads`, en multipart `files` y con `purpose`. Una carga genérica (`image`, valor predeterminado) acepta de una a cinco imágenes y las reduce dentro de 2000 × 2000 px sin ampliarlas. Los fondos admiten un archivo por solicitud, dimensiones enteras positivas y hasta 25.000.000 de píxeles después de aplicar la orientación. No hay un mínimo de resolución ni una proporción obligatoria. Las siguientes medidas son recomendaciones de composición:
+Los archivos subidos por los usuarios se almacenan en **Cloudflare R2**. `R2StorageService` implementa las operaciones S3 firmadas y `AssetService` encapsula el ciclo de vida de imágenes para que las rutas de producto/diseño no manipulen directamente el proveedor. MongoDB conserva claves, URLs, hashes y metadatos.
 
-| Propósito | Resolución recomendada |
-| --- | --- |
-| `wallpaper-desktop` | 1920 × 1080 px. |
-| `wallpaper-mobile` | 1080 × 1920 px. |
-| `wallpaper-shared` | 1920 × 1920 px. |
+Se usan dos buckets: `R2_ASSETS_BUCKET_NAME`, público mediante `R2_PUBLIC_URL`, y `R2_RECEIPTS_BUCKET_NAME`, estrictamente privado. Esta separación impide que un Custom Domain de imágenes exponga comprobantes bancarios.
 
-El límite es de 5 MiB por archivo de entrada y por resultado procesado. `ImageService` usa Sharp para comprobar que el contenido sea una imagen estática JPG, PNG o WebP y aplicar orientación. Los fondos conservan sus dimensiones reales y normalmente se convierten a WebP. Cuando un eje supera los 16.383 píxeles admitidos por ese codificador, se guarda PNG para aceptar panoramas válidos dentro del límite de 25 megapíxeles. El editor comprueba también tipo, peso y dimensiones antes de enviar, pero la validación del servidor es independiente.
+Las imágenes se reciben por `POST /stores/:storeId/uploads`, en multipart `files` y con `purpose`. Una carga genérica (`image`, valor predeterminado) acepta de una a cinco imágenes y las reduce dentro de 2000 × 2000 px sin ampliarlas. Los fondos admiten un archivo por solicitud, dimensiones enteras positivas y hasta 25.000.000 de píxeles después de aplicar la orientación. No hay un mínimo de resolución ni una proporción obligatoria. Las medidas recomendadas siguen siendo 1920 × 1080 para escritorio, 1080 × 1920 para celular y 1920 × 1920 para una imagen compartida.
 
-Cada archivo recibe un nombre propio y un registro `UploadedImage` con tienda, usuario que lo subió, propósito, dimensiones, tamaño y hash de contenido. Al guardar un diseño se revalidan todos sus fondos no vacíos, incluso los deshabilitados: el archivo debe pertenecer a esa tienda y propósito, existir como archivo local, mantener las dimensiones de su propio registro y coincidir con el hash guardado. No se lo compara con la resolución recomendada. El servidor no descarga fondos remotos ni admite reutilizar como fondo una carga genérica sin ese propósito.
+El límite es de 5 MiB por archivo de entrada y por resultado procesado. `ImageService` usa Sharp para comprobar que el contenido sea una imagen estática JPG, PNG o WebP, aplicar orientación y eliminar metadatos no necesarios. Cada archivo recibe una key R2 propia y un registro `UploadedImage` con tienda, usuario, propósito, dimensiones, tamaño y hash. Los diseños sólo pueden guardar imágenes administradas por la misma tienda.
 
-Para activar `responsive` se necesitan imágenes de escritorio y celular; para activar `shared`, la imagen compartida, sin exigir que sea cuadrada. La presentación `cover` puede recortar según la pantalla, por lo que una imagen compartida no garantiza mostrar todos sus bordes. Las imágenes cargadas sirven como archivos estáticos públicos; el acceso privado se reserva para los comprobantes. Los SVG de demostración incluidos son assets propios y no pasan por el cargador de usuarios.
+Cuando una edición deja de utilizar una imagen, `AssetService` comprueba primero que no siga referenciada por otro producto o por el diseño. Si ya no se usa, la solicitud espera el `DELETE` de R2 y después elimina sus metadatos. Al archivar un producto se aplica el mismo proceso a todas sus imágenes. Un upload todavía no asociado se intenta limpiar al abandonar el formulario y el worker elimina huérfanos de más de 24 horas.
 
-Los comprobantes tienen validación de contenido y límite de 8 MiB. Se guardan fuera de la ruta estática pública. El endpoint de descarga exige una sesión autorizada para la tienda. El comprador sólo puede adjuntar un comprobante si conoce el token privado de su pedido.
+MongoDB y R2 no ofrecen una transacción distribuida común. Si el proveedor falla durante un borrado posterior a una escritura válida, `StorageCleanupService` persiste la tarea en MongoDB y el worker vuelve a intentarla con backoff. Antes de borrar en un reintento vuelve a comprobar que el objeto no haya sido referenciado nuevamente.
+
+Los comprobantes admiten JPEG, PNG, WebP o PDF de hasta 8 MiB. Se escriben en el bucket privado y nunca usan `R2_PUBLIC_URL`. La descarga exige una sesión autorizada y el backend obtiene el objeto mediante las credenciales S3. Reemplazar un comprobante intenta borrar sincrónicamente el anterior y usa la misma cola de recuperación ante fallos temporales.
+
+`UPLOAD_DIR` existe únicamente para migrar instalaciones anteriores mediante `npm run migrate:r2`; las cargas nuevas no dependen del disco local. La ruta `/uploads/images` se conserva de forma temporal para referencias antiguas que todavía no hayan sido migradas.
 
 El manifiesto, los iconos y el service worker proporcionan la base PWA. El service worker usa un caché versionado, elimina cachés de versiones anteriores y excluye `/api/` y `/uploads/`. Guarda assets de interfaz e iconos; ante una navegación sin conexión muestra la página offline. Los pedidos, los pagos y el acceso a la API requieren conexión; no se encolan compras para ejecutarlas sin conexión. Antes de publicar, se necesita HTTPS para instalación PWA y para las integraciones externas.
 
-MongoDB, la carpeta de imágenes/comprobantes, la carpeta de autenticación de WhatsApp y el archivo de entorno deben conservarse entre despliegues. Una copia sólo del código no es un respaldo de los datos. La configuración PM2 entregada está pensada para una instancia en modo fork: una misma sesión de WhatsApp no debe abrirse desde varios navegadores que compitan por el mismo perfil.
+MongoDB, los buckets R2, la carpeta de autenticación de WhatsApp y el archivo de entorno deben conservarse entre despliegues. Una copia sólo del código no es un respaldo de los datos. La configuración PM2 entregada está pensada para una instancia en modo fork: una misma sesión de WhatsApp no debe abrirse desde varios navegadores que compitan por el mismo perfil.
 
 ## Demostración optativa
 

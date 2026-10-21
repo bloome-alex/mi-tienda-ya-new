@@ -78,7 +78,7 @@ Cada medio de pago puede restringirse a una o varias entregas mediante `delivery
 
 La transferencia admite titular, banco, CBU/CVU, alias, CUIT e instrucciones. Estos datos se muestran en el pedido luego del checkout. El comprador puede adjuntar una imagen o un PDF de hasta 8 MB desde su enlace privado de seguimiento.
 
-El comprobante **no confirma que ingresó dinero**. El vendedor debe revisar la cuenta bancaria y marcar el pedido como pagado. Las imágenes se validan, se recodifican y se eliminan sus metadatos; los PDF se validan por su firma y terminación. Los archivos se guardan fuera de las rutas públicas y sólo el dueño de la tienda o el administrador pueden descargarlos desde la API autenticada. No se incluye un antivirus de archivos.
+El comprobante **no confirma que ingresó dinero**. El vendedor debe revisar la cuenta bancaria y marcar el pedido como pagado. Las imágenes se validan, se recodifican y se eliminan sus metadatos; los PDF se validan por su firma y terminación. Los archivos se guardan en `R2_RECEIPTS_BUCKET_NAME`, que debe permanecer privado, y sólo el dueño de la tienda o el administrador pueden descargarlos desde la API autenticada. No se incluye un antivirus de archivos.
 
 Los pedidos de transferencia y efectivo no vencen automáticamente. El vendedor decide cuándo cancelarlos y liberar la reserva. Esta política evita descartar una transferencia que todavía debe conciliarse.
 
@@ -132,5 +132,39 @@ La conexión administrativa se mantiene separada de los botones `wa.me` de cada 
 - [Mercado Pago: notificaciones de Checkout Pro](https://www.mercadopago.com.ar/developers/en/docs/checkout-pro-preferences/payment-notifications).
 - [whatsapp-web.js: autenticación y múltiples sesiones](https://wwebjs.dev/guide/creating-your-bot/authentication.html).
 - [whatsapp-web.js: LocalAuth](https://docs.wwebjs.dev/LocalAuth.html).
+- [Cloudflare R2: S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/).
+- [Cloudflare R2: public buckets and custom domains](https://developers.cloudflare.com/r2/buckets/public-buckets/).
 
 Estas integraciones requieren credenciales y cuentas propias. Las pruebas automatizadas del proyecto comprueban la lógica con servicios controlados; no sustituyen una compra de prueba con tus credenciales, un envío SMTP real ni el emparejamiento de tu cuenta de WhatsApp.
+
+## Cloudflare R2
+
+Desde v1.8.0 todos los archivos subidos por las tiendas se almacenan en R2. La integración usa directamente la API compatible con S3 mediante AWS Signature Version 4 y no necesita un SDK adicional.
+
+### Variables
+
+```dotenv
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_ASSETS_BUCKET_NAME=mi-tienda-ya-assets
+R2_RECEIPTS_BUCKET_NAME=mi-tienda-ya-receipts
+R2_PUBLIC_URL=https://media.tu-dominio.com
+# Opcional:
+R2_ENDPOINT=
+R2_PREFIX=mi-tienda-ya-2
+```
+
+El endpoint predeterminado es `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`.
+
+### Separación pública/privada
+
+`R2_ASSETS_BUCKET_NAME` puede publicarse con un Custom Domain y contiene sólo imágenes que la tienda necesita renderizar. `R2_RECEIPTS_BUCKET_NAME` debe permanecer privado y no debe tener `r2.dev` ni Custom Domain habilitados. Los comprobantes se leen desde el backend después de validar permisos.
+
+Las credenciales deben tener acceso de lectura y escritura a ambos buckets, pero no necesitan permisos sobre otros buckets de la cuenta.
+
+### Limpieza
+
+La aplicación intenta eliminar de R2 de forma sincrónica cualquier objeto que deje de utilizarse al editar un producto o el diseño. El mismo criterio se aplica al archivar un producto o reemplazar un comprobante. Si R2 responde con un error temporal, se registra una tarea `StorageCleanup` en MongoDB; el worker reintenta y elimina la tarea cuando el objeto ya no está referenciado.
+
+Los uploads que se crean pero nunca se guardan en un producto/diseño quedan marcados como no asociados. El cliente intenta borrarlos al cancelar o abandonar el formulario y el worker realiza una segunda limpieza de seguridad para uploads sin referencia de más de 24 horas.

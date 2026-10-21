@@ -73,7 +73,6 @@ export function validateDesign(input) {
         if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || /[\s\\]/.test(value)) fail(field, 'El enlace de la red debe usar HTTP o HTTPS y no puede incluir credenciales.');
       }
       if (field === 'navbar.links.*.sectionId' && value && !/^[a-zA-Z0-9_-]{1,100}$/.test(value)) fail(field, 'Elegí una sección válida de la tienda para el enlace.');
-      if (field.startsWith('wallpaper.') && imageKeys.has(key) && value && !/^\/uploads\/images\/[a-zA-Z0-9_.-]+$/.test(value)) fail(field, 'Los fondos deben subirse desde esta aplicación.');
       if (field === 'terms.updatedAt' && value) {
         const parsed = new Date(value + 'T00:00:00.000Z');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(+parsed) || parsed.toISOString().slice(0, 10) !== value) fail(field, 'La fecha debe ser una fecha real con formato AAAA-MM-DD.');

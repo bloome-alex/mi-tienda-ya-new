@@ -1,36 +1,48 @@
-# Verificación de mi-tienda-ya-2 · v1.6.0
+# Verificación de mi-tienda-ya-2 · v1.8.0
 
-Esta iteración corrige la continuidad del hover entre las categorías de cabecera y su submenú, y separa la cantidad de columnas de las grillas para escritorio y celular. La base de datos continúa siendo MongoDB y la lógica de negocio mantiene su organización mediante Programación Orientada a Objetos.
+Esta iteración migra el almacenamiento de archivos de la tienda a Cloudflare R2 y agrega limpieza sincronizada de objetos. La base de datos continúa siendo MongoDB y la lógica nueva se encapsula en servicios orientados a objetos (`R2StorageService`, `ImageService`, `AssetService` y `StorageCleanupService`).
 
 ## Pruebas ejecutadas
 
-Se ejecutaron **45 pruebas de lógica y contrato que no requieren instalar Vue**, todas aprobadas. Incluyen categorías multinivel, checkout, copy, normalización del diseño, navegación segura de la vista previa y las regresiones específicas de v1.4.0, v1.5.0 y v1.6.0.
+Se ejecutaron **55 pruebas de lógica y contrato sin dependencias externas**, todas aprobadas. Incluyen las regresiones de categorías, checkout, textos, diseñador, navegación y las pruebas nuevas de R2.
 
-Las pruebas nuevas verifican que:
+Las pruebas específicas de v1.8.0 verifican:
 
-- el submenú de categorías no se cierre al cruzar desde la fila principal hacia el panel;
-- la cabecera conserve la expansión multinivel por hover y foco;
-- Destacados tenga columnas independientes para escritorio y celular;
-- Catálogo tenga columnas independientes para escritorio y celular;
-- las secciones personalizadas tengan columnas independientes para escritorio y celular;
-- la grilla de fotos del producto tenga columnas independientes para escritorio y celular;
-- la configuración antigua `shop.columns` se migre por normalización a las nuevas densidades de escritorio sin modificar los documentos de MongoDB.
+- construcción de requests S3 firmadas con AWS Signature Version 4, región `auto` y encoding seguro de object keys;
+- recolección de todas las imágenes anidadas del diseño sin confundirlas con enlaces sociales/botones;
+- limpieza de uploads temporales en formularios y llamadas de sincronización al editar/eliminar productos o diseño;
+- separación entre `R2_ASSETS_BUCKET_NAME` y `R2_RECEIPTS_BUCKET_NAME`, evitando que los comprobantes utilicen el bucket público.
 
-También se comprobó con `node --check` la sintaxis de los servicios JavaScript modificados y de los bloques `<script setup>` de los componentes Vue afectados.
+Además, `node scripts/check.mjs` comprobó sintaxis válida en **30 archivos JavaScript**, incluyendo los nuevos servicios R2, el migrador y las rutas modificadas.
 
-## Dependencias y build
+## Pruebas que requieren dependencias
 
-El ZIP no incluye `node_modules`. Se intentó instalar las dependencias declaradas por `package-lock.json`, pero la instalación no terminó dentro del límite del entorno de preparación. Por eso no se afirma una recompilación local de Vite para v1.6.0.
+Se intentó completar `npm ci`, pero la instalación no finalizó dentro del límite del entorno de preparación y dejó paquetes incompletos. Esa instalación parcial se eliminó antes de armar el ZIP.
 
-Para evitar entregar un `client/dist` viejo mezclado con código nuevo, el paquete no incluye esa carpeta. En el entorno de instalación ejecutá:
+Por ese motivo no se afirma en esta entrega:
+
+- compilación de Vite en este entorno;
+- ejecución de pruebas que importan Vue/`@vue/compiler-sfc`;
+- pruebas integradas con `mongodb-memory-server`;
+- operaciones reales contra una cuenta Cloudflare R2.
+
+El ZIP no contiene `node_modules` ni un `client/dist` de una versión anterior. En tu entorno ejecutá:
 
 ```bash
 npm ci
 npm run build
+npm test
+npm start
 ```
 
-Luego podés ejecutar `npm test`, `npm run check` y `npm start`. `mongodb-memory-server` puede descargar MongoDB la primera vez que corre la suite de API.
+## Verificación recomendada con tus buckets
 
-## Compatibilidad
+Después de completar las variables R2, comprobá en un entorno de prueba:
 
-No hay migración de MongoDB. Los nuevos campos de columnas se agregan por normalización al leer el diseño. Las tiendas existentes conservan su cantidad de columnas de escritorio del catálogo anterior y pueden ajustar por separado la densidad en celular desde Diseño.
+1. subir una foto de producto y confirmar que aparece en el bucket de assets;
+2. reemplazarla, guardar el producto y verificar que el objeto anterior desaparece;
+3. eliminar/archivar un producto y verificar la limpieza de sus imágenes no compartidas;
+4. cambiar logo/fondo/imagen de una sección y verificar la misma limpieza;
+5. cargar un comprobante y confirmar que existe sólo en el bucket privado;
+6. reemplazar el comprobante y confirmar que el anterior se elimina;
+7. ejecutar `npm run migrate:r2` sobre una copia de una instalación anterior antes de aplicarlo a producción.
