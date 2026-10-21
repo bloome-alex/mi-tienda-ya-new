@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="Guía digital de plantas representada como libro y tableta">
+<title>Guía digital de plantas representada como libro y tableta</title>
+<defs>
+<linearGradient id="glass" x1="0" x2="1"><stop stop-color="#987145"/><stop offset=".18" stop-color="#bb955f"/><stop offset=".5" stop-color="#b78b53"/><stop offset=".85" stop-color="#795a37"/><stop offset="1" stop-color="#a88150"/></linearGradient>
+<linearGradient id="ceramic" x1="0" x2="1"><stop stop-color="#b86e52"/><stop offset=".45" stop-color="#d59973"/><stop offset="1" stop-color="#b87555"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf7"/><stop offset="1" stop-color="#e8dfc8"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#49735a"/><stop offset="1" stop-color="#294e3d"/></linearGradient>
+<filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#413b2b" flood-opacity=".15"/></filter>
+<filter id="soft" x="-40%" y="-40%" width="180%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+
+<rect width="800" height="800" fill="#e7e9dd"/><circle cx="684" cy="141" r="247" fill="#d6dcc8"/><path d="M0 624c311-72 523-11 800-47v223H0Z" fill="#e0dfcf"/>
+<ellipse cx="401" cy="680" rx="237" ry="37" fill="#4c624b" opacity=".17" filter="url(#soft)"/>
+<g transform="rotate(8 531 384)" filter="url(#shadow)"><rect x="367" y="129" width="293" height="491" rx="23" fill="#37533f"/><rect x="382" y="145" width="263" height="451" rx="10" fill="#f2efdf"/><rect x="402" y="167" width="224" height="192" rx="5" fill="#d7ddc9"/><path d="M515 334v-96m0 49c-41-1-61-30-49-53 41-1 55 22 49 53Zm0-20c46-8 66-40 49-61-41 0-56 34-49 61Z" stroke="#54764d" stroke-width="4" fill="#88a074"/><path d="m466 320 12 32h73l12-32Z" fill="#c58c68"/><path d="M411 393h203M411 417h192M411 442h202M411 467h156M411 513h203M411 537h170" stroke="#bdc6ac" stroke-width="7" stroke-linecap="round"/><circle cx="514" cy="607" r="4" fill="#adb99a"/></g>
+<g transform="rotate(-8 322 420)" filter="url(#shadow)"><path d="M148 192h296c22 0 27 9 27 27v429H171c-17 0-23-13-23-27Z" fill="#ab7855"/><rect x="157" y="199" width="302" height="436" rx="7" fill="#e7b985"/><path d="M183 199v436" stroke="#c79969" stroke-width="3"/><path d="M214 536c45-87 97-140 128-233" fill="none" stroke="#456c46" stroke-width="4"/><path d="M244 481c-32-72-17-115 20-133 41 45 31 91-20 133Zm48-75c50-29 91-22 111 14-38 36-82 23-111-14Zm23-55c-29-54-11-92 20-106 30 35 24 72-20 106Z" fill="#739359"/><path d="M330 308c51-22 84-11 95 20-43 29-74 12-95-20Z" fill="#4e774d"/>
+<text x="319" y="554" text-anchor="middle" font-family="Georgia,serif" font-size="26" fill="#2e4c35">Tu rincón verde</text><text x="319" y="588" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#677451" letter-spacing="3">GUÍA DIGITAL</text><text x="319" y="235" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#775d40" letter-spacing="2">CASA BOTÁNICA</text></g>
+<circle cx="641" cy="622" r="59" fill="#477053"/><path d="M641 589v42m-17-18 17 19 17-19M615 645h53" fill="none" stroke="#f3eddb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+</svg>

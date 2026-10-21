@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="Vela artesanal Bosque, en vaso ámbar con etiqueta botánica">
+<title>Vela artesanal Bosque, en vaso ámbar con etiqueta botánica</title>
+<defs>
+<linearGradient id="glass" x1="0" x2="1"><stop stop-color="#987145"/><stop offset=".18" stop-color="#bb955f"/><stop offset=".5" stop-color="#b78b53"/><stop offset=".85" stop-color="#795a37"/><stop offset="1" stop-color="#a88150"/></linearGradient>
+<linearGradient id="ceramic" x1="0" x2="1"><stop stop-color="#b86e52"/><stop offset=".45" stop-color="#d59973"/><stop offset="1" stop-color="#b87555"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf7"/><stop offset="1" stop-color="#e8dfc8"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#49735a"/><stop offset="1" stop-color="#294e3d"/></linearGradient>
+<filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#413b2b" flood-opacity=".15"/></filter>
+<filter id="soft" x="-40%" y="-40%" width="180%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+
+<rect width="800" height="800" fill="#f0e9db"/><circle cx="680" cy="155" r="235" fill="#e3e6d7"/>
+<path d="M0 619C227 559 498 695 800 587V800H0Z" fill="#e6ddc9"/>
+<ellipse cx="395" cy="642" rx="214" ry="35" fill="#9c947f" opacity=".22" filter="url(#soft)"/>
+<g transform="translate(40 -7)" filter="url(#shadow)"><ellipse cx="564" cy="557" rx="97" ry="32" fill="#6b492d"/><path d="M467 536v23c0 42 194 42 194 0v-23Z" fill="#8b6240"/><ellipse cx="564" cy="536" rx="97" ry="32" fill="#b29469"/><ellipse cx="564" cy="536" rx="85" ry="23" fill="none" stroke="#715132" stroke-width="2"/></g>
+<g filter="url(#shadow)"><path d="M222 291H518V578C518 645 222 645 222 578Z" fill="url(#glass)"/><ellipse cx="370" cy="292" rx="148" ry="48" fill="#765934"/><ellipse cx="370" cy="291" rx="133" ry="36" fill="#e3d4ae"/><ellipse cx="370" cy="289" rx="116" ry="29" fill="#f4e8c9"/><path d="M370 290v-28" stroke="#4e3a24" stroke-width="5" stroke-linecap="round"/><path d="M371 262c-17-12-5-29 0-35 5 10 17 24 0 35Z" fill="#e0a153"/><path d="M247 333v196" stroke="#e1bd83" stroke-width="12" opacity=".32" stroke-linecap="round"/>
+<rect x="266" y="387" width="209" height="162" rx="4" fill="#f6f0dc"/>
+<path d="M370 426v37m0-17c-32-1-33-21-33-21 24-3 33 13 33 21Zm0-6c27-4 28-21 28-21-22 0-28 21-28 21Z" fill="none" stroke="#657255" stroke-width="2"/>
+<text x="370" y="493" text-anchor="middle" font-family="Georgia,serif" font-size="28" fill="#445640" letter-spacing="4">BOSQUE</text><text x="370" y="523" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" letter-spacing="3" fill="#7c7e64">CASA BOTÁNICA</text></g>
+<g fill="#6f8465"><path d="M105 647c-10-119 2-189 69-250-28 101-3 183-69 250Z"/><path d="M111 606c-68-63-70-113-48-164 42 55 77 97 48 164Z"/><path d="M106 648c62-68 111-91 162-76-34 57-88 87-162 76Z"/></g><path d="M88 706c9-90 25-173 71-279" fill="none" stroke="#465f49" stroke-width="4"/>
+
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="Maceta de terracota con planta de hojas verdes">
+<title>Maceta de terracota con planta de hojas verdes</title>
+<defs>
+<linearGradient id="glass" x1="0" x2="1"><stop stop-color="#987145"/><stop offset=".18" stop-color="#bb955f"/><stop offset=".5" stop-color="#b78b53"/><stop offset=".85" stop-color="#795a37"/><stop offset="1" stop-color="#a88150"/></linearGradient>
+<linearGradient id="ceramic" x1="0" x2="1"><stop stop-color="#b86e52"/><stop offset=".45" stop-color="#d59973"/><stop offset="1" stop-color="#b87555"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf7"/><stop offset="1" stop-color="#e8dfc8"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#49735a"/><stop offset="1" stop-color="#294e3d"/></linearGradient>
+<filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#413b2b" flood-opacity=".15"/></filter>
+<filter id="soft" x="-40%" y="-40%" width="180%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+
+<rect width="800" height="800" fill="#eee7db"/><rect y="583" width="800" height="217" fill="#e3ddce"/><path d="m153 642 380-56 139 111-369 51Z" fill="#c6c8b4"/><path d="m172 653 346-49m-304 86 347-53m-268 92 326-43" stroke="#eeecdc" stroke-width="3" opacity=".7"/>
+<ellipse cx="411" cy="630" rx="174" ry="41" fill="#574635" opacity=".14" filter="url(#soft)"/>
+<g stroke="#526b45" stroke-width="9" fill="none" stroke-linecap="round"><path d="M395 457c-3-159 21-242-38-351"/><path d="M398 442c86-153 58-222 120-305"/><path d="M388 422c-112-36-153-96-169-162"/><path d="M405 435c75-38 126-83 163-131"/></g>
+<g fill="#567a4e"><path d="M356 178c-108-2-160-69-136-111 100-17 144 45 136 111Z"/><path d="M394 259c-100-5-167-70-134-116 98-18 145 44 134 116Z"/><path d="M436 321c7-103 78-167 128-133 1 102-51 133-128 133Z"/><path d="M337 348c-103 40-185-11-181-74 72-54 161-10 181 74Z"/></g>
+<g fill="#7b9967"><path d="M380 206c19-100 75-154 120-116 7 81-45 118-120 116Z"/><path d="M499 219c-8-103 35-174 87-154 32 85-10 143-87 154Z"/><path d="M481 393c43-95 124-125 159-72-22 79-77 98-159 72Z"/></g>
+<g stroke="#bbca9f" stroke-width="2" fill="none" opacity=".65"><path d="M230 77c76 37 105 56 126 101M273 154c66 29 107 59 121 105M552 201c-46 60-75 93-116 120M168 281c70 16 119 40 169 67M492 101c-35 39-73 74-112 105M579 82c-20 59-52 101-80 137M628 329c-57 26-98 48-147 64"/></g>
+<g filter="url(#shadow)"><path d="m263 450 35 164c11 56 214 56 225 0l35-164Z" fill="url(#ceramic)"/><ellipse cx="410" cy="449" rx="150" ry="47" fill="#da9f77"/><ellipse cx="410" cy="449" rx="126" ry="31" fill="#785f44"/><ellipse cx="410" cy="449" rx="114" ry="23" fill="#66513b"/><path d="M286 514c74 28 163 28 248 0" fill="none" stroke="#e0a882" stroke-width="4"/><path d="M302 590c65 20 151 20 217 0" fill="none" stroke="#aa684a" stroke-width="3" opacity=".5"/></g>
+<path d="M395 450v-49m5 39 17-49" stroke="#61774e" stroke-width="10" stroke-linecap="round"/>
+
+</svg>

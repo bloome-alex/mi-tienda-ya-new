@@ -1,0 +1,7 @@
+<script setup>
+import { ref,watch } from 'vue';
+const props=defineProps({src:String,name:{type:String,default:'Producto'},type:{type:String,default:'physical'}});
+const failed=ref(false);watch(()=>props.src,()=>{failed.value=false;});
+</script>
+<template><img v-if="src&&!failed" :src="src" :alt="name" loading="lazy" @error="failed=true" /><div v-else class="product-placeholder" role="img" :aria-label="name+' · sin imagen'"><svg viewBox="0 0 180 180" aria-hidden="true"><circle cx="90" cy="90" r="65" fill="currentColor" opacity=".06"/><g v-if="type==='digital'" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="56" y="49" width="69" height="86" rx="8"/><path d="M73 74h35M73 87h35M73 100h20"/><path d="m94 117 8 8 17-19"/></g><g v-else fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"><path d="m90 49 43 22v48l-43 23-43-23V71z"/><path d="m47 71 43 23 43-23M90 94v48M68 60l44 23v15"/></g></svg><span>{{type==='digital'?'CREACIÓN DIGITAL':'HECHO PARA VOS'}}</span></div></template>
+<style scoped>.product-placeholder{width:100%;height:100%;min-height:100px;background:linear-gradient(135deg,var(--surface-alt),var(--surface-strong));color:var(--muted);display:flex;align-items:center;justify-content:center;flex-direction:column}.product-placeholder svg{width:62%;max-width:230px;min-width:65px}.product-placeholder span{font-size:.5rem;letter-spacing:.19em;margin-top:-10px;margin-bottom:25px;color:var(--muted)}img{width:100%;height:100%;object-fit:cover}</style>

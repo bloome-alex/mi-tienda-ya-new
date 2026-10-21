@@ -1,0 +1,57 @@
+<script setup>
+import { computed } from 'vue';
+const props=defineProps({name:{type:String,default:'grid'},size:{type:[String,Number],default:20}});
+const paths={
+ sun:'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+ moon:'M21 13a9 9 0 0 1-10-10A9 9 0 1 0 21 13Z',
+ monitor:'M3 3h18v13H3zM8 21h8M12 16v5',
+ grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+ home:'m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8',
+ store:'M3 10v11h18V10M2 10l2-7h16l2 7M2 10c0 4 5 4 5 0 0 4 5 4 5 0 0 4 5 4 5 0 0 4 5 4 5 0M9 21v-7h6v7',
+ package:'m12 3 9 5-9 5-9-5 9-5Zm-9 5v10l9 5 9-5V8M12 13v10M7.5 5.5l9 5',
+ users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+ tag:'m21 13-8 8-10-10V3h8l10 10ZM7 7h.01',
+ stock:'M4 3h16v18H4zM4 9h16M4 15h16M9 6h6M9 12h6M9 18h6',
+ cart:'M2 3h3l3 12h11l3-8H6M9 20h.01M18 20h.01',
+ receipt:'M4 3h16v19l-4-2-4 2-4-2-4 2V3ZM8 7h8M8 11h8M8 15h4',
+ settings:'M9 3h6l1 4 4 1v6l-4 2-1 5H9l-1-5-4-2V8l4-1 1-4ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+ palette:'M21 12a9 9 0 1 0-9 9h2a2 2 0 0 0 2-2c0-1-1-2-1-3s1-2 2-2h2a2 2 0 0 0 2-2ZM7 9h.01M10 6h.01M15 7h.01M6 13h.01',
+ mail:'M3 5h18v14H3V5Zm0 0 9 7 9-7',
+ phone:'M22 16.9v3a2 2 0 0 1-2.2 2 20 20 0 0 1-8.7-3.1 20 20 0 0 1-6-6 20 20 0 0 1-3.1-8.8A2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.6 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 1.8-.6l3 .5a2 2 0 0 1 2.3 2.5',
+ credit:'M2 5h20v14H2zM2 10h20M6 15h3',
+ crown:'M2 5l5 5 5-7 5 7 5-5-3 15H5L2 5ZM5 20h14',
+ shield:'m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6l9-4Zm-4 10 3 3 5-6',
+ menu:'M3 6h18M3 12h18M3 18h18',
+ close:'m6 6 12 12M6 18 18 6',
+ plus:'M12 5v14M5 12h14',
+ check:'m5 12 4 4L19 6',
+ edit:'m16 3 5 5-12 12-6 1 1-6L16 3ZM14 5l5 5',
+ trash:'M3 6h18M8 6V3h8v3M5 6l1 15h12l1-15M9 10v7M15 10v7',
+ arrow:'M5 12h14m-6-6 6 6-6 6',
+ back:'M19 12H5m6-6-6 6 6 6',
+ external:'M14 3h7v7M10 14 21 3M21 14v7H3V3h7',
+ logout:'M9 21H3V3h6M9 12h12m-5-5 5 5-5 5',
+ search:'M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm6-2 6 6',
+ chart:'M3 3v18h18M7 16l5-6 4 3 5-8',
+ eye:'M2 12S6 5 12 5s10 7 10 7-4 7-10 7-10-7-10-7Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+ download:'M12 3v12m-5-5 5 5 5-5M3 16v5h18v-5',
+ upload:'M12 16V4m-5 5 5-5 5 5M3 16v5h18v-5',
+ image:'M3 3h18v18H3zM3 16l5-5 5 5 3-3 5 5M16 7h.01',
+ info:'M12 8h.01M12 12v5M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+ warning:'m12 3 10 18H2L12 3ZM12 9v5M12 17h.01',
+ refresh:'M20 7a9 9 0 1 0 1 10M20 2v6h-6',
+ heart:'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8',
+ truck:'M1 3h14v13H1zM15 8h4l4 5v3h-8M8 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0M21 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
+ sparkles:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z',
+ chevron:'m9 5 7 7-7 7',
+ clock:'M12 6v6l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+ whatsapp:'M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5A9 9 0 1 1 21 11.5ZM8 8c0 5 3 8 8 8l1-3-3-1-1 1-2-2 1-1-1-3-3 1',
+ globe:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18',
+ filter:'M3 4h18l-7 8v8l-4-2v-6L3 4',
+ star:'m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6',
+ link:'m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0M16 8l2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0'
+};
+const aliases={'arrow-right':'arrow','arrow-left':'back','chevron-down':'chevron','chevron-right':'chevron','credit-card':'credit','external-link':'external','dashboard':'grid','log-out':'logout','copy':'receipt'};
+const path=computed(()=>paths[props.name] || paths[aliases[props.name]] || paths.grid);
+</script>
+<template><svg :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path :d="path"/></svg></template>

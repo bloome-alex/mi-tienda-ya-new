@@ -1,0 +1,10 @@
+node_modules/
+client/dist/
+.env
+.env.*
+!.env.example
+api/data/
+coverage/
+*.log
+.DS_Store
+test-results/

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="Bolsa de tela natural con ilustración botánica">
+<title>Bolsa de tela natural con ilustración botánica</title>
+<defs>
+<linearGradient id="glass" x1="0" x2="1"><stop stop-color="#987145"/><stop offset=".18" stop-color="#bb955f"/><stop offset=".5" stop-color="#b78b53"/><stop offset=".85" stop-color="#795a37"/><stop offset="1" stop-color="#a88150"/></linearGradient>
+<linearGradient id="ceramic" x1="0" x2="1"><stop stop-color="#b86e52"/><stop offset=".45" stop-color="#d59973"/><stop offset="1" stop-color="#b87555"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf7"/><stop offset="1" stop-color="#e8dfc8"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#49735a"/><stop offset="1" stop-color="#294e3d"/></linearGradient>
+<filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#413b2b" flood-opacity=".15"/></filter>
+<filter id="soft" x="-40%" y="-40%" width="180%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+
+<rect width="800" height="800" fill="#e8e8dc"/><path d="M0 660C287 576 513 650 800 571V800H0Z" fill="#d9dbc8"/><ellipse cx="406" cy="688" rx="221" ry="37" fill="#73816a" opacity=".19" filter="url(#soft)"/>
+<g filter="url(#shadow)"><path d="M259 331c-47-274 114-290 111-11" fill="none" stroke="#cebc96" stroke-width="24"/><path d="M452 329c-17-277 158-273 105 2" fill="none" stroke="#c6b58e" stroke-width="24"/><path d="M264 332c-47-264 103-280 101-11M457 329c-17-265 145-260 95 3" fill="none" stroke="#e8dcc0" stroke-width="8"/>
+<path d="m210 302 24 347c7 43 46 62 68 60l281-6c30 0 55-29 61-62l-22-339Z" fill="#c9b999"/><path d="m210 302 398 11-13 343c-1 24-24 41-44 41l-284-4c-34 0-43-21-42-49Z" fill="url(#paper)"/><path d="M225 322h367M244 640c61 28 257 31 334 4" fill="none" stroke="#d8cdb1" stroke-width="3"/>
+<path d="m258 307 3 64m274-61-2 61" stroke="#cebd97" stroke-width="25"/><path d="m255 310 4 61m274-59-1 59" stroke="#eee4ca" stroke-width="8"/>
+<path d="M399 556c-24-61-17-110 3-172" fill="none" stroke="#6c815e" stroke-width="4"/><path d="M394 512c-64-6-78-33-71-63 57 1 75 26 71 63Zm-3-58c41-39 77-42 94-14-28 41-59 42-94 14Zm9-42c-43-10-54-34-42-64 43 10 52 31 42 64Z" fill="#89a078"/>
+<text x="400" y="599" text-anchor="middle" font-family="Georgia,serif" font-size="27" fill="#496247" letter-spacing="1">casa botánica</text><text x="400" y="628" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#899079" letter-spacing="3">LLEVÁ UN POCO DE CALMA</text></g>
+<path d="M98 677c35-92 63-136 118-165" stroke="#6c805c" stroke-width="5" fill="none"/><path d="M129 614c-42-62-23-105 6-126 32 41 31 86-6 126Zm34-51c18-67 54-86 86-72-9 56-42 76-86 72Z" fill="#91a17a"/>
+
+</svg>

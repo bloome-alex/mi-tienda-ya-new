@@ -1,0 +1,49 @@
+<script setup>
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useStorefront } from '../services/storefront.js';
+import { StoreCopy } from '../services/storeCopy.js';
+import { CategoryTree } from '../services/categories.js';
+import { StoreNavigationService } from '../services/storeNavigation.js';
+import Icon from './Icon.vue';
+import StoreThemeToggle from './StoreThemeToggle.vue';
+import StoreCategoryNavigation from './StoreCategoryNavigation.vue';
+const emit=defineEmits(['height']);
+const sf=useStorefront(),route=useRoute(),router=useRouter(),copy=new StoreCopy(()=>sf.design.value);
+const header=ref(null),menuButton=ref(null),menu=ref(false);
+const design=computed(()=>sf.design.value),settings=computed(()=>design.value.navbar);
+const title=computed(()=>StoreNavigationService.title(settings.value,sf.store.value?.name));
+const tree=computed(()=>new CategoryTree(sf.categories.value));
+const selectedCategory=computed(()=>typeof(route.query.categoryId??route.query.category)==='string'?(route.query.categoryId??route.query.category):'');
+const categoryLabels=computed(()=>({all:copy.text('allCategories'),title:copy.text('categoryLabel'),open:copy.text('categoryButton'),close:copy.text('categoryClose'),viewAll:copy.text('clearCategory')}));
+const showCategories=computed(()=>design.value.shop.showCatalog&&design.value.shop.showCategories&&design.value.shop.categoryNavigation==='navbar'&&tree.value.roots().length);
+const links=computed(()=>settings.value.links.map(item=>({item,to:StoreNavigationService.destination(item,{base:sf.link(),design:design.value,store:sf.store.value,products:sf.featuredProducts.value,isPreview:sf.isPreview.value})})).filter(link=>link.to));
+const styles=computed(()=>{
+ const n=settings.value,square=['square','circle'].includes(n.logoShape);
+ return {'--navbar-height':n.height+'px','--navbar-mobile-height':n.mobileHeight+'px','--navbar-px':n.paddingX+'px','--navbar-logo-width':(square?Math.min(n.logoWidth,n.logoHeight):n.logoWidth)+'px','--navbar-logo-height':(square?Math.min(n.logoWidth,n.logoHeight):n.logoHeight)+'px','--navbar-mobile-logo-width':(square?Math.min(n.mobileLogoWidth,n.mobileLogoHeight):n.mobileLogoWidth)+'px','--navbar-mobile-logo-height':(square?Math.min(n.mobileLogoWidth,n.mobileLogoHeight):n.mobileLogoHeight)+'px','--navbar-logo-radius':n.logoShape==='circle'?'50%':n.logoShape==='rounded'?n.logoRadius+'px':'0px','--navbar-logo-fit':n.logoFit,'--navbar-links-justify':n.linksAlign==='left'?'flex-start':n.linksAlign==='right'?'flex-end':'center'};
+});
+let observer;
+function measure(){emit('height',settings.value.sticky?Math.ceil(header.value?.getBoundingClientRect().height||0):0);}
+function closeMenu(focus=false){menu.value=false;if(focus)nextTick(()=>menuButton.value?.focus());}
+function focusOut(event){if(menu.value&&!header.value?.contains(event.relatedTarget))closeMenu();}
+function outside(event){if(menu.value&&!header.value?.contains(event.target))closeMenu();}
+function selectCategory(id){closeMenu();const base=sf.link(),query={...base.query};if(id)query.categoryId=id;router.push({...base,query,hash:'#catalogo'});}
+function current(to){return route.path===to.path&&(to.hash?route.hash===to.hash:!route.hash);}
+watch(()=>route.fullPath,()=>closeMenu());
+watch(settings,()=>nextTick(measure),{deep:true});
+onMounted(()=>{measure();if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(measure);observer.observe(header.value);}window.addEventListener('resize',measure);document.addEventListener('pointerdown',outside);});
+onUnmounted(()=>{observer?.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('pointerdown',outside);});
+</script>
+<template>
+ <header ref="header" class="store-navbar" :class="{'navbar-sticky':settings.sticky,'navbar-menu-open':menu}" :style="styles" @keydown.esc.prevent="closeMenu(true)" @focusout="focusOut">
+  <div class="store-navbar-main">
+   <RouterLink v-if="design.brand.logo||title" :to="sf.link()" class="store-navbar-brand" :class="{'brand-with-title':!!title}" :aria-label="sf.store.value.name"><img v-if="design.brand.logo" :src="design.brand.logo" alt="" :class="'logo-shape-'+settings.logoShape"/><span v-if="title">{{title}}</span></RouterLink><span v-else class="store-navbar-brand-space" aria-hidden="true"></span>
+   <nav v-if="links.length" class="store-navbar-links" :class="{open:menu}" aria-label="Navegación de la tienda"><RouterLink v-for="{item,to} in links" :key="item.id" :to="to" :class="{selected:current(to)}" :aria-current="current(to)?'page':undefined" @click="closeMenu()">{{item.label}}</RouterLink></nav><span v-else></span>
+   <div class="store-navbar-actions"><StoreThemeToggle v-if="design.brand.allowThemeToggle" :mode="sf.colorMode.value" @toggle="sf.storeTheme.toggle(design)"/><RouterLink :to="sf.link('/carrito')" class="store-navbar-cart" :title="copy.text('viewCart')||'Ver carrito'" :aria-label="(copy.text('viewCart')||'Ver carrito')+(sf.cart.value.count?' · '+sf.cart.value.count:'')"><Icon name="cart" :size="22"/><span v-if="sf.cart.value.count">{{sf.cart.value.count}}</span></RouterLink><button v-if="links.length" ref="menuButton" type="button" class="store-navbar-menu" :aria-label="menu?'Cerrar menú':'Abrir menú'" :aria-expanded="menu" @click="menu=!menu"><Icon :name="menu?'close':'menu'" :size="21"/></button></div>
+  </div>
+  <div v-if="showCategories" class="store-navbar-categories"><StoreCategoryNavigation :tree="tree" :selected="selectedCategory" mode="navbar" :labels="categoryLabels" @select="selectCategory"/></div>
+ </header>
+</template>
+<style scoped>
+.store-navbar{position:relative;z-index:35;flex:none;background:var(--store-surface);color:var(--store-text);border-bottom:1px solid var(--store-line)}.store-navbar.navbar-sticky{position:sticky;top:0}.store-navbar-main{height:var(--navbar-height,82px);box-sizing:border-box;max-width:100%;padding:8px min(var(--navbar-px,32px),7vw);display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr) auto;align-items:center;gap:clamp(14px,3vw,45px)}.store-navbar-brand{min-width:0;max-width:min(40vw,540px);display:flex;align-items:center;gap:14px;color:var(--store-text);text-decoration:none;overflow:hidden}.store-navbar-brand img{display:block;flex:none;width:var(--navbar-logo-width);height:min(var(--navbar-logo-height),calc(var(--navbar-height) - 16px));max-width:100%;object-fit:var(--navbar-logo-fit,contain);border-radius:var(--navbar-logo-radius,0);object-position:center}.store-navbar-brand img.logo-shape-circle,.store-navbar-brand img.logo-shape-square{width:min(var(--navbar-logo-width),calc(var(--navbar-height) - 16px));height:auto;aspect-ratio:1}.store-navbar-brand span{font-family:var(--store-font);font-size:clamp(1rem,1.6vw,1.5rem);font-weight:700;line-height:1.2;letter-spacing:-.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.store-navbar-brand.brand-with-title img{max-width:60%}.store-navbar-brand-space{width:0}.store-navbar-links{display:flex;justify-content:var(--navbar-links-justify);align-items:center;gap:8px 23px;min-width:0;flex-wrap:wrap;max-height:100%;overflow:auto;scrollbar-width:thin}.store-navbar-links>a{color:var(--store-muted);font-size:.76rem;text-decoration:none;line-height:1.45;padding:7px 0;white-space:nowrap}.store-navbar-links>a.selected{color:var(--store-text);font-weight:700}.store-navbar-links>a:hover{color:var(--store-primary)}.store-navbar-actions{display:flex;align-items:center;gap:13px;flex:none;direction:ltr}.store-navbar-cart,.store-navbar-menu{display:grid;place-items:center;width:38px;height:38px;position:relative;border:0;background:transparent;color:var(--store-text);border-radius:50%;flex:none}.store-navbar-cart span{position:absolute;top:-3px;right:-4px;min-width:19px;height:19px;padding:0 4px;border:2px solid var(--store-surface);box-sizing:content-box;border-radius:100px;background:var(--store-primary);color:var(--store-on-primary);font-size:.6rem;display:grid;place-items:center;font-weight:700}.store-navbar-menu{display:none}.store-navbar-categories{padding:0 min(var(--navbar-px,32px),7vw);border-top:1px solid var(--store-line)}.store-navbar :is(a,button):focus-visible{outline:2px solid var(--store-primary);outline-offset:3px}.store-navbar-menu:hover,.store-navbar-cart:hover{background:var(--store-surface-alt)}@media(max-width:900px){.store-navbar-main{height:var(--navbar-mobile-height,72px);gap:16px;padding-inline:min(var(--navbar-px,32px),5vw);grid-template-columns:minmax(0,1fr) auto}.store-navbar-main>span:empty:not(.store-navbar-brand-space){display:none}.store-navbar-brand{max-width:100%;gap:9px}.store-navbar-brand img{width:var(--navbar-mobile-logo-width);height:min(var(--navbar-mobile-logo-height),calc(var(--navbar-mobile-height) - 16px));max-width:100%}.store-navbar-brand img.logo-shape-circle,.store-navbar-brand img.logo-shape-square{width:min(var(--navbar-mobile-logo-width),calc(var(--navbar-mobile-height) - 16px));height:auto;aspect-ratio:1}.store-navbar-brand span{font-size:1.14rem}.store-navbar-links{display:none;position:absolute;top:100%;left:0;right:0;max-height:min(65dvh,480px);overflow:auto;background:var(--store-surface);border-bottom:1px solid var(--store-line);box-shadow:0 14px 22px #0000000c;padding:15px 5vw;z-index:20}.store-navbar-links.open{display:flex;flex-direction:column;align-items:stretch;gap:0}.store-navbar-links>a{font-size:.86rem;padding:15px 12px;border-radius:7px;white-space:normal;overflow-wrap:anywhere}.store-navbar-links>a:hover{background:var(--store-surface-alt)}.store-navbar-menu{display:grid}.store-navbar-actions{gap:7px}.store-navbar-categories{padding-inline:min(var(--navbar-px,32px),5vw)}}@media(max-width:380px){.store-navbar-actions{gap:3px}.store-navbar-cart,.store-navbar-menu{width:33px;height:33px}.store-navbar-brand span{font-size:1rem}.store-navbar-main{gap:10px}}
+</style>

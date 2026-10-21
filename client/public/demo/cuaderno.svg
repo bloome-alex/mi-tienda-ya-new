@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="Cuaderno Jardín con tapa verde y dibujo de hojas">
+<title>Cuaderno Jardín con tapa verde y dibujo de hojas</title>
+<defs>
+<linearGradient id="glass" x1="0" x2="1"><stop stop-color="#987145"/><stop offset=".18" stop-color="#bb955f"/><stop offset=".5" stop-color="#b78b53"/><stop offset=".85" stop-color="#795a37"/><stop offset="1" stop-color="#a88150"/></linearGradient>
+<linearGradient id="ceramic" x1="0" x2="1"><stop stop-color="#b86e52"/><stop offset=".45" stop-color="#d59973"/><stop offset="1" stop-color="#b87555"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf7"/><stop offset="1" stop-color="#e8dfc8"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#49735a"/><stop offset="1" stop-color="#294e3d"/></linearGradient>
+<filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#413b2b" flood-opacity=".15"/></filter>
+<filter id="soft" x="-40%" y="-40%" width="180%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+
+<rect width="800" height="800" fill="#e8e9dd"/><path d="M0 0h274l380 800H0Z" fill="#f2efe5"/><ellipse cx="412" cy="670" rx="208" ry="30" fill="#56614e" opacity=".12" filter="url(#soft)"/>
+<g transform="rotate(-10 400 400)" filter="url(#shadow)"><rect x="228" y="132" width="367" height="538" rx="12" fill="#ded4b9"/><rect x="230" y="129" width="357" height="532" rx="9" fill="#f7f1de"/><path d="M255 642h318M255 648h318M255 654h318" stroke="#d3c6a5" stroke-width="2"/><rect x="205" y="112" width="369" height="530" rx="11" fill="url(#green)"/><path d="M232 113v529" stroke="#2b4f3e" stroke-width="3"/>
+<path d="M501 113v530" stroke="#bfa16b" stroke-width="12"/>
+<path d="M399 519c-60-103-23-204 40-276" stroke="#adc2a0" stroke-width="3" fill="none"/><path d="M396 461c-94-8-115-44-123-91 65-5 113 18 123 91Zm-12-76c-71-51-81-103-70-141 68 18 84 73 70 141Zm26-62c41-55 90-68 129-54-26 55-70 76-129 54Zm-22 91c62-33 109-28 138-4-42 48-91 39-138 4Zm35-147c-28-54-19-100 13-132 26 48 22 93-13 132Z" fill="#8da885" opacity=".92"/>
+<rect x="285" y="495" width="195" height="83" rx="2" fill="#f2ecd8"/><text x="382" y="529" text-anchor="middle" font-family="Georgia,serif" font-size="23" fill="#33533b" letter-spacing="3">JARDÍN</text><text x="382" y="553" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#637157" letter-spacing="2">IDEAS QUE FLORECEN</text>
+<g stroke="#c5b693" stroke-width="6" fill="none"><path d="M192 160c-23-13-23 23 4 16h25M192 220c-23-13-23 23 4 16h25M192 280c-23-13-23 23 4 16h25M192 340c-23-13-23 23 4 16h25M192 400c-23-13-23 23 4 16h25M192 460c-23-13-23 23 4 16h25M192 520c-23-13-23 23 4 16h25M192 580c-23-13-23 23 4 16h25"/></g></g>
+<g transform="rotate(16 637 478)"><rect x="627" y="254" width="17" height="354" rx="8" fill="#c39365"/><path d="M627 587h17l-8 43Z" fill="#dfc299"/><path d="m632 614 4 16 4-16Z" fill="#394c3a"/><rect x="627" y="266" width="17" height="33" fill="#61745d"/></g>
+
+</svg>

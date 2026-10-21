@@ -1,0 +1,2 @@
+<script setup>import PlatformLayout from '../../layouts/PlatformLayout.vue';</script>
+<template><PlatformLayout><div class="empty-state" style="padding-top:120px"><div class="eyebrow">404 · ACÁ NO HAY UNA PÁGINA</div><h1 style="margin-top:20px">Busquemos otro camino.</h1><p>El enlace puede haber cambiado o la página ya no está disponible.</p><RouterLink class="btn btn-primary" to="/">Volver al inicio</RouterLink></div></PlatformLayout></template>
