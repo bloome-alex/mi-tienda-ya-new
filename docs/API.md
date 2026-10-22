@@ -607,6 +607,6 @@ Ejemplos de configuración:
 { "mode": "custom", "customDomain": "tienda.mi-marca.com" }
 ```
 
-En modo `custom`, la respuesta incluye el TXT de verificación y el destino CNAME/ALIAS. `POST .../verify` consulta DNS y marca el dominio como verificado cuando el TXT contiene el token exacto.
+En modo `custom`, la respuesta incluye el TXT de verificación y el destino CNAME/ALIAS. `POST .../verify` consulta DNS y, cuando el TXT contiene el token exacto, ejecuta el aprovisionamiento automático de Nginx/Certbot. El dominio sólo queda `verified` después de que `nginx -t`, la emisión SSL y la recarga final terminan correctamente. Si falla infraestructura, permanece `pending` y se puede reintentar.
 
 `GET /api/public/host-store` resuelve la tienda correspondiente al hostname de la petición y se utiliza como endpoint auxiliar de diagnóstico/integración. La tienda compilada normalmente recibe esta resolución directamente en el HTML servido por Express.

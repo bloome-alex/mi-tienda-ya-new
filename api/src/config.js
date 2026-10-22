@@ -26,6 +26,13 @@ export const config = {
     verificationPrefix: (process.env.STOREFRONT_VERIFICATION_PREFIX || '_mitiendaya-verification').trim().toLowerCase(),
     reservedSubdomains: (process.env.STOREFRONT_RESERVED_SUBDOMAINS || 'www,app,api,admin,root,mail,static,assets,media,cdn,stores').split(',').map(value => value.trim().toLowerCase()).filter(Boolean),
   },
+  domainProvisioning: {
+    enabled: process.env.DOMAIN_PROVISIONING_ENABLED === 'true',
+    provisionerBin: process.env.DOMAIN_PROVISIONER_BIN || '/usr/local/sbin/mitiendaya-domain-provision',
+    useSudo: process.env.DOMAIN_PROVISIONING_USE_SUDO !== 'false',
+    sudoBin: process.env.DOMAIN_PROVISIONER_SUDO_BIN || '/usr/bin/sudo',
+    timeoutMs: number('DOMAIN_PROVISIONING_TIMEOUT_MS', 180000),
+  },
   r2: {
     accountId: process.env.R2_ACCOUNT_ID || '',
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
@@ -54,6 +61,8 @@ export function validateConfig() {
   if (config.isProduction && !config.appUrl.startsWith('https://')) throw new Error('APP_URL debe usar HTTPS en producción.');
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(config.storefront.baseDomain)) throw new Error('STOREFRONT_BASE_DOMAIN debe ser un dominio válido.');
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(config.storefront.cnameTarget)) throw new Error('STOREFRONT_CNAME_TARGET debe ser un dominio válido.');
+  if (!Number.isInteger(config.domainProvisioning.timeoutMs) || config.domainProvisioning.timeoutMs < 30000 || config.domainProvisioning.timeoutMs > 600000) throw new Error('DOMAIN_PROVISIONING_TIMEOUT_MS debe estar entre 30000 y 600000 ms.');
+  if (config.isProduction && config.domainProvisioning.enabled && !config.domainProvisioning.provisionerBin.startsWith('/')) throw new Error('DOMAIN_PROVISIONER_BIN debe ser una ruta absoluta en producción.');
   if (config.isProduction) {
     const missingR2 = [['R2_ACCOUNT_ID', config.r2.accountId], ['R2_ACCESS_KEY_ID', config.r2.accessKeyId], ['R2_SECRET_ACCESS_KEY', config.r2.secretAccessKey], ['R2_ASSETS_BUCKET_NAME', config.r2.assetsBucket], ['R2_RECEIPTS_BUCKET_NAME', config.r2.receiptsBucket], ['R2_PUBLIC_URL', config.r2.publicUrl]].filter(([,value]) => !value).map(([name]) => name);
     if (missingR2.length) throw new Error('Configurá Cloudflare R2 antes de iniciar en producción: ' + missingR2.join(', ') + '.');

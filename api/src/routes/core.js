@@ -163,6 +163,7 @@ router.put('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => {
 router.delete('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => {
   const before = await Store.findByIdAndUpdate(req.params.id, { $set: { active: false, archived: true }, $inc: { __v: 1 } }, { returnDocument: 'before' });
   if (!before) throw new AppError('Tienda no encontrada.', 404);
+  await domainService.deprovisionStore(before);
   await audit(req, 'store.archived', 'store', before._id, { changes: AuditService.changes(before, { active: false, archived: true }, ['active', 'archived']) }, before._id); ok(res, safeStore(await Store.findById(before._id)));
 }));
 router.get('/stores', requireAuth, asyncHandler(async (req, res) => {

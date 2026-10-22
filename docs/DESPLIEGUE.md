@@ -331,10 +331,67 @@ El vendedor guarda su hostname en **Tu tienda → Dominio**. La aplicación mues
 1. TXT de propiedad: `_mitiendaya-verification.<dominio>` con el token generado.
 2. CNAME/ALIAS hacia `STOREFRONT_CNAME_TARGET`.
 
-La API verifica el TXT. El enrutamiento y TLS siguen siendo responsabilidad de la infraestructura frontal. Si el dominio es apex (`marca.com`) y el proveedor no acepta CNAME en la raíz, usá ALIAS/ANAME, CNAME flattening o la alternativa equivalente de ese proveedor.
+La API verifica el TXT. Desde v1.11.0, cuando `DOMAIN_PROVISIONING_ENABLED=true`, esa misma verificación llama al helper privilegiado que crea el virtual host Nginx y emite el certificado con Certbot. Si el dominio es apex (`marca.com`) y el proveedor no acepta CNAME en la raíz, usá ALIAS/ANAME, CNAME flattening o la alternativa equivalente de ese proveedor.
 
-Para aceptar dominios arbitrarios en producción necesitás un proxy/CDN capaz de aprovisionar certificados para esos hostnames. Un certificado emitido sólo para `APP_URL` o para `*.STOREFRONT_BASE_DOMAIN` no cubre `marca.com`.
+El dominio sólo pasa a estado activo después de que Nginx y Certbot terminan correctamente. Si el aprovisionamiento automático está deshabilitado, la aplicación informa la configuración faltante en lugar de marcar el dominio como verificado.
 
 ### Cambio futuro del dominio base
 
 `mitiendaya.com.ar` es solamente el valor inicial. Para migrarlo, cambiá `STOREFRONT_BASE_DOMAIN`, `STOREFRONT_CNAME_TARGET`, DNS wildcard y certificados. Las tiendas configuradas en modo subdominio calcularán su URL usando el nuevo dominio base; los dominios propios no cambian.
+
+## Aprovisionamiento automático de dominios propios (v1.11.0)
+
+La versión 1.11.0 puede crear automáticamente la configuración Nginx y el certificado Let's Encrypt de cada dominio propio después de validar su TXT.
+
+### 1. Instalar el helper privilegiado
+
+La aplicación **no debe ejecutarse como root**. Instalá una vez el helper root-owned que es la única operación autorizada por sudoers:
+
+```bash
+sudo apt update
+sudo apt install -y nginx certbot
+sudo APP_USER=miusuario \
+  CERTBOT_EMAIL=admin@mitiendaya.com.ar \
+  PROXY_PASS=http://127.0.0.1:5000 \
+  bash scripts/server/install-domain-provisioner.sh
+```
+
+`APP_USER` debe ser exactamente el usuario Linux que ejecuta Node/PM2. `PROXY_PASS` debe apuntar al puerto local de la API/SPA, normalmente `http://127.0.0.1:5000`.
+
+El instalador crea:
+
+- `/usr/local/sbin/mitiendaya-domain-provision` (`root:root`, ejecutable);
+- `/etc/mi-tienda-ya/domain-provisioner.conf` (`root:root`, `0600`);
+- `/etc/sudoers.d/mi-tienda-ya-domain-provisioner`;
+- un deploy hook de Certbot que ejecuta `nginx -t` y recarga Nginx después de una renovación.
+
+### 2. Habilitarlo en la aplicación
+
+```dotenv
+DOMAIN_PROVISIONING_ENABLED=true
+DOMAIN_PROVISIONER_BIN=/usr/local/sbin/mitiendaya-domain-provision
+DOMAIN_PROVISIONING_USE_SUDO=true
+DOMAIN_PROVISIONER_SUDO_BIN=/usr/bin/sudo
+DOMAIN_PROVISIONING_TIMEOUT_MS=180000
+```
+
+Después reiniciá Node/PM2 con las variables actualizadas.
+
+### 3. Puertos y DNS
+
+Los puertos TCP 80 y 443 deben llegar a este Nginx. El dominio del vendedor debe tener el TXT de verificación y apuntar mediante CNAME/ALIAS a `STOREFRONT_CNAME_TARGET`. El challenge de Let's Encrypt usa HTTP-01 por webroot; si un firewall, proxy o CDN bloquea `/.well-known/acme-challenge/`, Certbot no podrá emitir el certificado.
+
+### 4. Qué sucede al verificar
+
+La API valida el TXT. Recién entonces instala un bloque HTTP temporal para el challenge, valida Nginx, emite el certificado, instala el bloque HTTPS y vuelve a validar/reload. `domain.status` sólo pasa a `verified` al final. Ante un error se conserva el fallback `/t/<slug>` y el botón permite reintentar.
+
+### 5. Renovación
+
+Certbot conserva sus renewal files. El hook instalado recarga Nginx cuando una renovación termina correctamente. En Debian/Ubuntu verificá el timer:
+
+```bash
+sudo systemctl enable --now certbot.timer
+sudo systemctl status certbot.timer
+```
+
+No agregues un `certbot renew` por tienda: un único timer renueva todos los certificados administrados por Certbot.

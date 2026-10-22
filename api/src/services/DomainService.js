@@ -4,6 +4,7 @@ import { domainToASCII } from 'node:url';
 import { Store } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
+import { domainProvisioningService } from './DomainProvisioningService.js';
 
 const SUBDOMAIN = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
 const HOSTNAME = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])$/;
@@ -16,11 +17,12 @@ function stripPort(host) {
 }
 
 export class DomainService {
-  constructor({ storeModel = Store, resolver = dns, storefront = config.storefront, appUrl = config.appUrl } = {}) {
+  constructor({ storeModel = Store, resolver = dns, storefront = config.storefront, appUrl = config.appUrl, provisioner = domainProvisioningService } = {}) {
     this.storeModel = storeModel;
     this.resolver = resolver;
     this.storefront = storefront;
     this.appUrl = appUrl;
+    this.provisioner = provisioner;
     this.cache = new Map();
   }
 
@@ -74,7 +76,11 @@ export class DomainService {
       subdomain: domain.subdomain || '',
       customDomain: domain.customDomain || '',
       status: domain.status || 'unconfigured',
+      dnsVerifiedAt: domain.dnsVerifiedAt || null,
       verifiedAt: domain.verifiedAt || null,
+      provisionedAt: domain.provisionedAt || null,
+      provisioningError: domain.provisioningError || '',
+      provisioningEnabled: typeof this.provisioner?.enabled === 'function' ? this.provisioner.enabled() : true,
       publicUrl: this.publicUrl(store),
       baseDomain: this.baseDomain(),
       cnameTarget: this.storefront.cnameTarget,
@@ -95,12 +101,13 @@ export class DomainService {
     const mode = input?.mode;
     if (!['path', 'subdomain', 'custom'].includes(mode)) throw new AppError('Elegí una modalidad de dominio válida.', 422, 'INVALID_DOMAIN_MODE');
     const previous = this.publicDomain(store);
+    const previousCustomDomain = store.domain?.mode === 'custom' ? store.domain?.customDomain : '';
     if (mode === 'path') {
-      store.domain = { mode: 'path', subdomain: null, customDomain: null, status: 'unconfigured', verificationToken: '', verifiedAt: null };
+      store.domain = { mode: 'path', subdomain: null, customDomain: null, status: 'unconfigured', verificationToken: '', dnsVerifiedAt: null, verifiedAt: null, provisionedAt: null, provisioningError: '' };
     } else if (mode === 'subdomain') {
       const subdomain = this.normalizeSubdomain(input.subdomain);
       await this.ensureUnique('domain.subdomain', subdomain, store._id);
-      store.domain = { mode: 'subdomain', subdomain, customDomain: null, status: 'verified', verificationToken: '', verifiedAt: new Date() };
+      store.domain = { mode: 'subdomain', subdomain, customDomain: null, status: 'verified', verificationToken: '', dnsVerifiedAt: null, verifiedAt: new Date(), provisionedAt: null, provisioningError: '' };
     } else {
       const customDomain = this.normalizeCustomDomain(input.customDomain);
       await this.ensureUnique('domain.customDomain', customDomain, store._id);
@@ -109,16 +116,29 @@ export class DomainService {
         mode: 'custom', subdomain: null, customDomain,
         status: same ? (store.domain?.status || 'pending') : 'pending',
         verificationToken: same && store.domain?.verificationToken ? store.domain.verificationToken : randomBytes(24).toString('hex'),
+        dnsVerifiedAt: same ? store.domain?.dnsVerifiedAt || null : null,
         verifiedAt: same ? store.domain?.verifiedAt || null : null,
+        provisionedAt: same ? store.domain?.provisionedAt || null : null,
+        provisioningError: same ? store.domain?.provisioningError || '' : '',
       };
     }
     await store.save();
+    const currentCustomDomain = store.domain?.mode === 'custom' ? store.domain?.customDomain : '';
+    if (previousCustomDomain && previousCustomDomain !== currentCustomDomain) await this.provisioner.deprovision({ storeId: store._id });
     this.cache.clear();
     return { before: previous, after: this.publicDomain(store) };
   }
 
+  async deprovisionStore(store) {
+    if (store?.domain?.mode !== 'custom' || !store?.domain?.customDomain) return false;
+    const removed = await this.provisioner.deprovision({ storeId: store._id });
+    this.cache.clear();
+    return removed;
+  }
+
   async verify(store) {
     if (store.domain?.mode !== 'custom' || !store.domain?.customDomain || !store.domain?.verificationToken) throw new AppError('Configurá primero un dominio propio.', 422, 'CUSTOM_DOMAIN_NOT_CONFIGURED');
+    if (store.domain.status === 'verified' && store.domain.provisionedAt) return this.publicDomain(store);
     const name = this.verificationName(store.domain.customDomain);
     let records;
     try { records = await this.resolver.resolveTxt(name); }
@@ -128,8 +148,31 @@ export class DomainService {
     }
     const values = records.map(parts => parts.join(''));
     if (!values.includes(store.domain.verificationToken)) throw new AppError('El registro TXT existe pero no coincide con el valor de verificación de esta tienda.', 422, 'DOMAIN_TOKEN_MISMATCH');
-    store.domain.status = 'verified'; store.domain.verifiedAt = new Date();
+
+    store.domain.dnsVerifiedAt = new Date();
+    store.domain.provisioningError = '';
     await store.save();
+    try {
+      await this.provisioner.provision({ storeId: store._id, domain: store.domain.customDomain });
+    } catch (error) {
+      store.domain.status = 'pending';
+      store.domain.verifiedAt = null;
+      store.domain.provisionedAt = null;
+      store.domain.provisioningError = error.message;
+      await store.save();
+      throw error;
+    }
+
+    const now = new Date();
+    store.domain.status = 'verified';
+    store.domain.verifiedAt = now;
+    store.domain.provisionedAt = now;
+    store.domain.provisioningError = '';
+    try { await store.save(); }
+    catch (error) {
+      await this.provisioner.deprovision({ storeId: store._id });
+      throw error;
+    }
     this.cache.clear();
     return this.publicDomain(store);
   }

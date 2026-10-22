@@ -63,3 +63,13 @@ Se agregaron pruebas contractuales para comprobar:
 En este entorno pasaron 11/11 pruebas específicas de v1.10.0 y la comprobación sintáctica de 32 archivos JavaScript. Una regresión más amplia ejecutó 75 casos: 72 pasaron y tres archivos de pruebas no pudieron cargar porque `npm ci` no completó la instalación de Vue. El intento offline confirmó que faltaba al menos `zod` en la caché. Por esa misma razón no se certifica aquí una compilación Vite; el paquete se entrega sin `node_modules` parciales ni `client/dist` heredado.
 
 La verificación real de DNS/TLS necesita el dominio, proveedor DNS y proxy/CDN de la instalación: no se modifica DNS externo desde las pruebas locales.
+
+## Verificación v1.11.0 · Nginx y SSL automático por dominio propio
+
+Se agregaron pruebas contractuales para las variables `DOMAIN_PROVISIONING_*`, el uso de `execFile` sin shell, el orden TXT → aprovisionamiento → `verified`, la limpieza al cambiar/archivar una tienda, el helper ACME y la instalación restringida por sudoers. También se actualizó la prueba del panel para comprobar “Verificar y activar dominio”.
+
+En la regresión ejecutable sin instalar dependencias externas pasaron **44/44 casos**, incluidos **7 casos nuevos de v1.11.0**. `node --check` pasó sobre todos los JavaScript de `api/src` y `scripts`, `bash -n` pasó en ambos scripts de servidor y todos los JSON/lockfiles se parsearon correctamente.
+
+Además se simuló el helper con binarios falsos de Nginx, systemctl y Certbot. La simulación confirmó: creación del sitio HTTP, `nginx -t`, reload, llamada `certbot certonly --webroot`, escritura del bloque `443 ssl`, segundo reload y eliminación posterior de sitio/certificado.
+
+`npm ci --ignore-scripts` volvió a superar el límite de ejecución del entorno y dejó una instalación parcial; se detuvo el proceso y se eliminó `node_modules` antes de empaquetar. Por esa razón el ZIP no incluye `node_modules` ni `client/dist` y la compilación Vite debe ejecutarse en el servidor con `npm ci && npm run build`.

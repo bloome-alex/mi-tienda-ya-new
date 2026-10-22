@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_FILE="/etc/mi-tienda-ya/domain-provisioner.conf"
+if [[ ! -r "$CONFIG_FILE" ]]; then
+  echo "No se encuentra $CONFIG_FILE" >&2
+  exit 70
+fi
+# El archivo es instalado como root:root 0600 por install-domain-provisioner.sh.
+# shellcheck source=/dev/null
+source "$CONFIG_FILE"
+
+ACTION="${1:-}"
+STORE_ID="${2:-}"
+DOMAIN="${3:-}"
+
+if [[ ! "$STORE_ID" =~ ^[a-fA-F0-9]{24}$ ]]; then
+  echo "STORE_ID invalido" >&2
+  exit 64
+fi
+if [[ "$ACTION" != "provision" && "$ACTION" != "remove" ]]; then
+  echo "Accion invalida" >&2
+  exit 64
+fi
+if [[ "$ACTION" == "provision" && ! "$DOMAIN" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])$ ]]; then
+  echo "Dominio invalido" >&2
+  exit 64
+fi
+
+: "${NGINX_SITES_AVAILABLE:=/etc/nginx/sites-available}"
+: "${NGINX_SITES_ENABLED:=/etc/nginx/sites-enabled}"
+: "${NGINX_BIN:=/usr/sbin/nginx}"
+: "${SYSTEMCTL_BIN:=/usr/bin/systemctl}"
+: "${CERTBOT_BIN:=/usr/bin/certbot}"
+: "${ACME_WEBROOT:=/var/lib/letsencrypt}"
+: "${PROXY_PASS:=http://127.0.0.1:5000}"
+: "${CERTBOT_EMAIL:=}"
+
+if [[ ! "$PROXY_PASS" =~ ^https?://[A-Za-z0-9._:-]+$ ]]; then
+  echo "PROXY_PASS invalido en $CONFIG_FILE" >&2
+  exit 78
+fi
+if [[ ! "$CERTBOT_EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$ ]]; then
+  echo "CERTBOT_EMAIL invalido en $CONFIG_FILE" >&2
+  exit 78
+fi
+
+SITE_NAME="mi-tienda-ya-${STORE_ID}.conf"
+SITE_FILE="${NGINX_SITES_AVAILABLE%/}/${SITE_NAME}"
+SITE_LINK="${NGINX_SITES_ENABLED%/}/${SITE_NAME}"
+CERT_NAME="mi-tienda-ya-${STORE_ID}"
+TMP_FILE="$(mktemp)"
+cleanup_tmp() { rm -f "$TMP_FILE"; }
+trap cleanup_tmp EXIT
+
+reload_nginx() {
+  "$NGINX_BIN" -t
+  "$SYSTEMCTL_BIN" reload nginx
+}
+
+remove_site() {
+  rm -f "$SITE_LINK" "$SITE_FILE"
+  "$CERTBOT_BIN" delete --non-interactive --cert-name "$CERT_NAME" >/dev/null 2>&1 || true
+  reload_nginx
+}
+
+if [[ "$ACTION" == "remove" ]]; then
+  remove_site
+  echo "removed"
+  exit 0
+fi
+
+mkdir -p "$NGINX_SITES_AVAILABLE" "$NGINX_SITES_ENABLED" "$ACME_WEBROOT/.well-known/acme-challenge"
+
+# Fase HTTP: deja accesible el challenge ACME antes de pedir el certificado.
+cat > "$TMP_FILE" <<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root ${ACME_WEBROOT};
+        default_type text/plain;
+        try_files \$uri =404;
+    }
+
+    location / {
+        proxy_pass ${PROXY_PASS};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINX
+install -m 0644 "$TMP_FILE" "$SITE_FILE"
+ln -sfn "$SITE_FILE" "$SITE_LINK"
+
+if ! reload_nginx; then
+  rm -f "$SITE_LINK" "$SITE_FILE"
+  reload_nginx || true
+  exit 1
+fi
+
+# Si la tienda ya tuvo otro dominio, el cert-name pertenece exclusivamente a esta tienda.
+# Se elimina antes de emitir el nuevo para evitar que Certbot intente conservar SANs anteriores.
+"$CERTBOT_BIN" delete --non-interactive --cert-name "$CERT_NAME" >/dev/null 2>&1 || true
+
+rollback() {
+  "$CERTBOT_BIN" delete --non-interactive --cert-name "$CERT_NAME" >/dev/null 2>&1 || true
+  rm -f "$SITE_LINK" "$SITE_FILE"
+  reload_nginx || true
+}
+trap 'rollback; cleanup_tmp' ERR
+
+"$CERTBOT_BIN" certonly \
+  --non-interactive \
+  --agree-tos \
+  --email "$CERTBOT_EMAIL" \
+  --webroot \
+  --webroot-path "$ACME_WEBROOT" \
+  --cert-name "$CERT_NAME" \
+  -d "$DOMAIN"
+
+cat > "$TMP_FILE" <<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root ${ACME_WEBROOT};
+        default_type text/plain;
+        try_files \$uri =404;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name ${DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${CERT_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CERT_NAME}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location / {
+        proxy_pass ${PROXY_PASS};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINX
+install -m 0644 "$TMP_FILE" "$SITE_FILE"
+reload_nginx
+trap - ERR
+
+echo "provisioned:${DOMAIN}"
