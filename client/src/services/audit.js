@@ -16,7 +16,7 @@ const values = {
   catalog: 'Catálogo', contact: 'Contacto', terms: 'Términos', star: 'Estrella', heart: 'Corazón', truck: 'Camión', shield: 'Protección', store: 'Tienda', package: 'Paquete', check: 'Confirmación', gift: 'Regalo', mail: 'Correo',
   ltr: 'De izquierda a derecha', rtl: 'De derecha a izquierda', auto: 'Automática', inherit: 'Heredada',
   natural: 'Proporción libre', rounded: 'Bordes redondeados', circle: 'Circular', chips: 'Categorías por niveles', navbar: 'Submenús en la cabecera', drawer: 'Panel desplegable', select: 'Selector compacto', sidebar: 'Panel lateral fijo',
-  home: 'Inicio', featured: 'Destacados', social: 'Redes sociales', section: 'Sección personalizada', icons: 'Iconos', labels: 'Iconos y nombres',
+  home: 'Inicio', featured: 'Destacados', social: 'Redes sociales', section: 'Sección personalizada', path: 'Enlace clásico', subdomain: 'Subdominio', custom: 'Dominio propio', verified: 'Verificado', unconfigured: 'Sin configurar', icons: 'Iconos', labels: 'Iconos y nombres',
   instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube', x: 'X', linkedin: 'LinkedIn', pinterest: 'Pinterest', threads: 'Threads', twitch: 'Twitch', whatsapp: 'WhatsApp', website: 'Sitio web',
 };
 export const auditLabels = {
@@ -24,7 +24,7 @@ export const auditLabels = {
   name: 'Nombre', email: 'Correo', phone: 'Teléfono', whatsapp: 'WhatsApp', message: 'Mensaje inicial', showWhatsapp: 'Botón de WhatsApp', showContactForm: 'Formulario de contacto',
   active: 'Activo', archived: 'Archivado', featured: 'Destacado', price: 'Precio', previousPrice: 'Precio anterior', durationDays: 'Duración en días', features: 'Funcionalidades',
   maxStores: 'Máximo de tiendas', maxProducts: 'Máximo de productos', sortOrder: 'Orden', icon: 'Icono', role: 'Rol', planId: 'Plan', planExpiresAt: 'Vencimiento del plan',
-  trialDays: 'Días de prueba', magicLinkMinutes: 'Duración del enlace de acceso', slug: 'Dirección de la tienda', description: 'Descripción', ownerId: 'Vendedor asignado',
+  trialDays: 'Días de prueba', magicLinkMinutes: 'Duración del enlace de acceso', slug: 'Dirección de la tienda', description: 'Descripción', ownerId: 'Vendedor asignado', domain: 'Dominio', subdomain: 'Subdominio', customDomain: 'Dominio propio', publicUrl: 'URL pública', verifiedAt: 'Fecha de verificación', verification: 'Verificación DNS', baseDomain: 'Dominio base', cnameTarget: 'Destino DNS',
   parentId: 'Categoría principal', categoryId: 'Categoría', type: 'Tipo', stock: 'Stock', variants: 'Variantes', images: 'Imágenes', madeToOrder: 'Hecho a pedido', relatedProductIds: 'Productos relacionados',
   payments: 'Medios de pago', deliveries: 'Formas de entrega', deliveryIds: 'Entregas compatibles', instructions: 'Instrucciones', bank: 'Datos bancarios', holder: 'Titular', cbu: 'CBU', alias: 'Alias', cuit: 'CUIT',
   mercadopago: 'Mercado Pago', sandbox: 'Modo de prueba', hasAccessToken: 'Credencial de pago configurada', hasWebhookSecret: 'Firma de notificaciones configurada', integrations: 'Integraciones',

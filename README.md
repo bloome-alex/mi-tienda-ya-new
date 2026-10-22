@@ -1,6 +1,6 @@
-# mi-tienda-ya-2 · v1.9.0
+# mi-tienda-ya-2 · v1.10.0
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.9.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.10.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
@@ -25,7 +25,7 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
 
-La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
+La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
 ## 1. Preparar el entorno
 
@@ -60,7 +60,7 @@ Completá el archivo `.env`; contiene comentarios para cada opción.
 | `ROOT_PASSWORD` | Contraseña inicial propia: al menos 12 caracteres y como máximo 72 bytes. Se cambiará en el primer acceso. |
 | `ENCRYPTION_KEY` | Clave aleatoria de exactamente 64 caracteres hexadecimales. Protege credenciales de cobro y tokens persistidos que deben poder recuperarse. |
 | `SESSION_SECRET` | Secreto aleatorio independiente recomendado. Si queda vacío, se utiliza `ENCRYPTION_KEY`. |
-| `APP_URL` | Origen público de la aplicación, sin rutas ni barra final. Debe coincidir con la dirección que abre el usuario; también se usa en enlaces de correo y retornos de pago. |
+| `APP_URL` | Origen estable de la plataforma, sin rutas ni barra final. Se usa para el panel, enlaces administrativos y webhooks; la tienda usa su dominio configurado cuando corresponde. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Servidor de correo. Habitualmente, puerto 587 con `false` para STARTTLS o 465 con `true`. |
 | `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Credenciales y remitente autorizado por tu proveedor de correo. |
 | `WHATSAPP_CLIENT_ID` | Identificador exclusivo de esta instalación, por ejemplo `mi-tienda-ya-2-produccion`. |
@@ -71,6 +71,10 @@ Completá el archivo `.env`; contiene comentarios para cada opción.
 | `R2_PUBLIC_URL` | Custom Domain o URL pública conectada exclusivamente al bucket de assets. |
 | `R2_ENDPOINT` | Opcional. Si queda vacío se usa el endpoint S3 de tu `R2_ACCOUNT_ID`. |
 | `R2_PREFIX` | Prefijo de objetos; por defecto `mi-tienda-ya-2`. |
+| `STOREFRONT_BASE_DOMAIN` | Dominio base de los subdominios administrados, por ejemplo `mitiendaya.com.ar`. Se puede cambiar sin modificar código. |
+| `STOREFRONT_CNAME_TARGET` | Host estable al que deben apuntar los dominios propios, por ejemplo `stores.mitiendaya.com.ar`. |
+| `STOREFRONT_VERIFICATION_PREFIX` | Prefijo del TXT de propiedad; por defecto `_mitiendaya-verification`. |
+| `STOREFRONT_RESERVED_SUBDOMAINS` | Lista separada por comas de nombres que ninguna tienda puede reservar. |
 
 Para generar cada secreto, ejecutá el siguiente comando y copiá su salida en la variable correspondiente. Ejecutalo nuevamente para obtener la segunda clave:
 
@@ -96,6 +100,16 @@ npm run migrate:r2
 ```
 
 El script sube primero cada archivo, actualiza sus referencias en MongoDB y sólo después elimina la copia local. Conservá un respaldo de MongoDB y de `UPLOAD_DIR` hasta revisar la migración.
+
+### Dominios de las tiendas
+
+Cada tienda puede elegir desde **Tu tienda → Dominio** entre tres direcciones:
+
+- **URL clásica**: `APP_URL/t/slug`. Siempre queda disponible como respaldo.
+- **Subdominio administrado**: por ejemplo `mi-marca.mitiendaya.com.ar`. Requiere que `*.STOREFRONT_BASE_DOMAIN` llegue al mismo proxy/CDN que la aplicación y tenga HTTPS válido.
+- **Dominio propio**: por ejemplo `tienda.marca.com`. La aplicación entrega un TXT de verificación y el destino `STOREFRONT_CNAME_TARGET`. Una vez verificado el TXT, usa ese hostname como URL pública.
+
+`STOREFRONT_BASE_DOMAIN` no está hardcodeado: si más adelante la plataforma cambia de `mitiendaya.com.ar`, actualizá la variable y la infraestructura DNS/TLS. Para dominios propios, el proxy/CDN debe aceptar el hostname externo, preservar el encabezado `Host` y disponer de certificado HTTPS para ese dominio; la verificación TXT de la aplicación demuestra propiedad pero no emite certificados por sí sola.
 
 ### Elegir la URL correcta
 

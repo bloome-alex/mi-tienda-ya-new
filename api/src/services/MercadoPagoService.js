@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { decryptSecret } from '../utils/crypto.js';
+import { domainService } from './DomainService.js';
 
 function failure(message, status = 400, code = 'PAYMENT_ERROR') {
   return Object.assign(new Error(message), { status, statusCode: status, code });
@@ -35,8 +36,9 @@ export class MercadoPagoService {
   }
 
   async createPreference(store, order, token) {
-    const baseUrl = String(config.appUrl || '').replace(/\/$/, '');
-    if (!baseUrl.startsWith('https://')) throw failure('Mercado Pago requiere APP_URL con HTTPS y acceso público para recibir pagos.', 422, 'HTTPS_REQUIRED');
+    const baseUrl = domainService.publicUrl(store).replace(/\/$/, '');
+    const webhookBaseUrl = String(config.appUrl || '').replace(/\/$/, '');
+    if (!baseUrl.startsWith('https://') || !webhookBaseUrl.startsWith('https://')) throw failure('Mercado Pago requiere APP_URL con HTTPS y acceso público para recibir pagos.', 422, 'HTTPS_REQUIRED');
     const { sandbox } = this.credentials(store);
     const returnUrl = `${baseUrl}/pedido/${order._id}?token=${encodeURIComponent(token)}`;
     const items = order.items.map(item => ({
@@ -54,7 +56,7 @@ export class MercadoPagoService {
       metadata: { store_id: String(store._id), order_id: String(order._id) },
       back_urls: { success: returnUrl, pending: returnUrl, failure: returnUrl },
       auto_return: 'approved',
-      notification_url: `${baseUrl}/api/webhooks/mercadopago/${store._id}?source_news=webhooks`,
+      notification_url: `${webhookBaseUrl}/api/webhooks/mercadopago/${store._id}?source_news=webhooks`,
       binary_mode: true,
       payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }] },
       expires: true,

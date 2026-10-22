@@ -15,6 +15,7 @@ import { quotaService } from '../services/QuotaService.js';
 import { categoryService, safeCategory } from '../services/CategoryService.js';
 import { imageService } from '../services/ImageService.js';
 import { assetService } from '../services/AssetService.js';
+import { domainService } from '../services/DomainService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -169,6 +170,19 @@ router.get('/stores', requireAuth, asyncHandler(async (req, res) => {
   const items = await Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret').sort({ createdAt: 1 }); ok(res, items.map(safeStore));
 }));
 router.get('/stores/:storeId', requireStoreAccess, (req, res) => ok(res, safeStore(req.store)));
+router.get('/stores/:storeId/domain', requireStoreAccess, (req, res) => ok(res, domainService.publicDomain(req.store)));
+router.put('/stores/:storeId/domain', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = z.object({ mode: z.enum(['path', 'subdomain', 'custom']), subdomain: text(63).optional(), customDomain: text(253).optional() }).parse(req.body);
+  const { before, after } = await domainService.configure(req.store, body);
+  await audit(req, 'store.domain.updated', 'store', req.store._id, { changes: AuditService.changes({ domain: before }, { domain: after }, ['domain']) });
+  ok(res, after);
+}));
+router.post('/stores/:storeId/domain/verify', requireStoreAccess, asyncHandler(async (req, res) => {
+  const before = domainService.publicDomain(req.store);
+  const after = await domainService.verify(req.store);
+  await audit(req, 'store.domain.verified', 'store', req.store._id, { changes: AuditService.changes({ domain: before }, { domain: after }, ['domain']) });
+  ok(res, after);
+}));
 router.put('/stores/:storeId', requireStoreAccess, asyncHandler(async (req, res) => { const body = parsePatch(storeSchema.omit({ ownerId: true }), req.body); ok(res, await updateStore(req, req.store, body)); }));
 router.put('/stores/:storeId/design', requireStoreAccess, asyncHandler(async (req, res) => {
   const { design } = z.object({ design: z.record(z.string(), z.unknown()) }).parse(req.body);

@@ -582,3 +582,31 @@ La vista previa valida datos, entrega, pago y aceptación antes de mostrar su av
 ## Comprobaciones y evolución
 
 Los esquemas y reglas efectivas están en `api/src/models`, `routes` y `services`. Las pruebas en `api/test` cubren los flujos de seguridad y comercio. La referencia describe la versión entregada; una integración externa nueva debe respetar los mismos controles de dueño, CSRF, idempotencia, validación de precios y protección de enlaces privados.
+
+## Dominio público de una tienda (v1.10.0)
+
+Rutas autenticadas con acceso a la tienda:
+
+```text
+GET  /api/stores/:storeId/domain
+PUT  /api/stores/:storeId/domain
+POST /api/stores/:storeId/domain/verify
+```
+
+Ejemplos de configuración:
+
+```json
+{ "mode": "path" }
+```
+
+```json
+{ "mode": "subdomain", "subdomain": "mi-marca" }
+```
+
+```json
+{ "mode": "custom", "customDomain": "tienda.mi-marca.com" }
+```
+
+En modo `custom`, la respuesta incluye el TXT de verificación y el destino CNAME/ALIAS. `POST .../verify` consulta DNS y marca el dominio como verificado cuando el TXT contiene el token exacto.
+
+`GET /api/public/host-store` resuelve la tienda correspondiente al hostname de la petición y se utiliza como endpoint auxiliar de diagnóstico/integración. La tienda compilada normalmente recibe esta resolución directamente en el HTML servido por Express.

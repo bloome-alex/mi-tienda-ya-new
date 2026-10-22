@@ -38,6 +38,10 @@ services:
       PORT: "5000"
       APP_URL: ${APP_URL:?Completá APP_URL con una URL pública HTTPS}
       TRUST_PROXY: "1"
+      STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-mitiendaya.com.ar}
+      STOREFRONT_CNAME_TARGET: ${STOREFRONT_CNAME_TARGET:-stores.mitiendaya.com.ar}
+      STOREFRONT_VERIFICATION_PREFIX: ${STOREFRONT_VERIFICATION_PREFIX:-_mitiendaya-verification}
+      STOREFRONT_RESERVED_SUBDOMAINS: ${STOREFRONT_RESERVED_SUBDOMAINS:-www,app,api,admin,root,mail,static,assets,media,cdn,stores}
       ROOT_USER: ${ROOT_USER:?Completá ROOT_USER en .env}
       ROOT_PASSWORD: ${ROOT_PASSWORD:?Completá ROOT_PASSWORD en .env}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Generá ENCRYPTION_KEY en .env}

@@ -9,7 +9,7 @@ export const auditActions = Object.freeze({
   'plan.created': 'Plan creado', 'plan.updated': 'Plan actualizado', 'plan.archived': 'Plan desactivado',
   'user.created': 'Vendedor creado', 'user.updated': 'Vendedor actualizado', 'user.disabled': 'Vendedor desactivado', 'user.plan.assigned': 'Plan del vendedor actualizado',
   'settings.updated': 'Configuración de la plataforma actualizada', 'store.created': 'Tienda creada', 'store.updated': 'Tienda actualizada', 'store.archived': 'Tienda archivada',
-  'store.design.updated': 'Diseño de tienda actualizado', 'store.contact.updated': 'Contacto de tienda actualizado', 'store.payments.updated': 'Cobros y entregas actualizados',
+  'store.design.updated': 'Diseño de tienda actualizado', 'store.contact.updated': 'Contacto de tienda actualizado', 'store.payments.updated': 'Cobros y entregas actualizados', 'store.domain.updated': 'Dominio de tienda actualizado', 'store.domain.verified': 'Dominio propio verificado',
   'category.created': 'Categoría creada', 'category.updated': 'Categoría actualizada', 'category.archived': 'Categoría archivada',
   'product.created': 'Producto creado', 'product.updated': 'Producto actualizado', 'product.featured.updated': 'Producto destacado actualizado', 'product.archived': 'Producto archivado',
   'image.uploaded': 'Imágenes subidas', 'wallpaper.uploaded': 'Fondo de tienda subido', 'stock.adjusted': 'Stock ajustado',

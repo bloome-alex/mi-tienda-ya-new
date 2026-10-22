@@ -46,3 +46,20 @@ Después de completar las variables R2, comprobá en un entorno de prueba:
 5. cargar un comprobante y confirmar que existe sólo en el bucket privado;
 6. reemplazar el comprobante y confirmar que el anterior se elimina;
 7. ejecutar `npm run migrate:r2` sobre una copia de una instalación anterior antes de aplicarlo a producción.
+
+## Verificación v1.10.0 · dominios por tienda
+
+Se agregaron pruebas contractuales para comprobar:
+
+- esquema e índices únicos de subdominio y dominio propio;
+- variables `STOREFRONT_*` y nombres reservados;
+- normalización, unicidad y verificación TXT dentro de `DomainService`;
+- resolución de tienda por `Host` y aceptación CORS sólo para hostnames asociados;
+- rutas de configuración/verificación por tienda;
+- retorno de Mercado Pago al dominio de la tienda conservando `APP_URL` para Webhooks;
+- rutas limpias del storefront cuando Express inyecta el slug por hostname;
+- enlaces del panel que priorizan `publicUrl`.
+
+En este entorno pasaron 11/11 pruebas específicas de v1.10.0 y la comprobación sintáctica de 32 archivos JavaScript. Una regresión más amplia ejecutó 75 casos: 72 pasaron y tres archivos de pruebas no pudieron cargar porque `npm ci` no completó la instalación de Vue. El intento offline confirmó que faltaba al menos `zod` en la caché. Por esa misma razón no se certifica aquí una compilación Vite; el paquete se entrega sin `node_modules` parciales ni `client/dist` heredado.
+
+La verificación real de DNS/TLS necesita el dominio, proveedor DNS y proxy/CDN de la instalación: no se modifica DNS externo desde las pruebas locales.

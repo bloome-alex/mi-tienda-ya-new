@@ -1,4 +1,4 @@
-# Funcionalidades y alcance de la versión 1.3
+# Funcionalidades y alcance de la versión 1.10
 
 Esta matriz describe lo implementado en **mi-tienda-ya-2** y sus límites concretos. «Implementado» se refiere al código y al flujo disponible; el alcance de las pruebas y de la revisión visual se detalla al final.
 
@@ -55,6 +55,7 @@ La home admite hasta 12 beneficios —título, ícono y descripción—, 20 expe
 | Función o campo solicitado | Implementación | Alcance y límites |
 | --- | --- | --- |
 | Resumen | Indicadores de productos, pedidos, unidades vendidas, ingresos, stock bajo y evolución de ventas de la tienda seleccionada. | Los pedidos internos todavía en creación no se presentan como ventas completadas. |
+| Dominio por tienda | URL clásica `/t/slug`, subdominio administrado bajo `STOREFRONT_BASE_DOMAIN` o dominio propio con verificación TXT. Los enlaces públicos y retornos de pago usan la dirección elegida. | Subdominios requieren DNS wildcard/TLS de la plataforma. Dominios propios requieren DNS hacia `STOREFRONT_CNAME_TARGET` y un proxy/CDN que aprovisione HTTPS para el hostname externo. La URL clásica permanece como respaldo. |
 | ABM de categorías y subcategorías | Niveles anidados sin un máximo fijo: tabla con nivel y ruta, búsqueda, acciones y formularios en páginas propias. Cualquier fila permite crear una subcategoría; el selector de contenedora muestra rutas completas y excluye el propio subárbol. | Se puede mover una rama con sus hijos, conservando productos y asignaciones. Se rechazan ciclos, autorreferencias y padres ajenos o archivados. Para quitar una categoría hay que resolver primero sus hijos, incluso los ocultos. Quitar una hoja conserva sus productos sin categoría. |
 | Producto físico o digital | Selector de tipo y lógica de compra correspondiente. | Los digitales no consumen unidades de inventario; el enlace de entrega permanece privado. |
 | Hasta cinco fotos | Carga, vista previa y eliminación desde el formulario. | JPG, PNG y WebP; hasta 5 MiB por imagen. El servidor valida contenido y dimensiones, convierte a WebP y limita el tamaño de salida. No admite SVG subido por usuarios. |

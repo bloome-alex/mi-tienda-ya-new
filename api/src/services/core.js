@@ -7,6 +7,7 @@ import { randomToken, hashToken } from '../utils/crypto.js';
 import { escapeHtml } from '../utils/http.js';
 import { AuditService, auditService } from './AuditService.js';
 import { databaseIndexService } from './DatabaseIndexService.js';
+import { domainService } from './DomainService.js';
 export { AuditService, auditService };
 
 export const defaultHome = {
@@ -56,9 +57,11 @@ export function safeStore(store) {
   delete data.ownerSlot; delete data.publicationSlot;
   const mp = data.integrations?.mercadopago || {};
   data.integrations = { mercadopago: { sandbox: mp.sandbox ?? true, hasAccessToken: Boolean(mp.accessToken), hasWebhookSecret: Boolean(mp.webhookSecret) } };
+  data.domain = domainService.publicDomain(data);
+  data.publicUrl = data.domain.publicUrl;
   return data;
 }
-export function publicStore(store) { const data = safeStore(store); delete data.ownerId; delete data.integrations; delete data.archived; delete data.__v; return data; }
+export function publicStore(store) { const data = safeStore(store); delete data.ownerId; delete data.integrations; delete data.archived; delete data.__v; data.domain = { mode: data.domain.mode, publicUrl: data.publicUrl }; return data; }
 
 export class AuthService {
   async session(user, res) {

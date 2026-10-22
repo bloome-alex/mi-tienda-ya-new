@@ -3,6 +3,7 @@ import { computed, ref, reactive, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../../services/api.js';
 import { useStorefront } from '../../services/storefront.js';
+import { storefrontSlug } from '../../services/storeHost.js';
 import { StoreCopy } from '../../services/storeCopy.js';
 import { StoreTextLayout } from '../../services/storeNavigation.js';
 import { money } from '../../services/format.js';
@@ -13,6 +14,7 @@ import ProductImage from '../../components/ProductImage.vue';
 import Icon from '../../components/Icon.vue';
 
 const sf = useStorefront(), route = useRoute(), router = useRouter();
+const currentSlug = computed(() => storefrontSlug(route));
 const copy=new StoreCopy(()=>sf.design.value);
 const step = ref(1), formElement = ref(null), busy = ref(false), loading = ref(false), error = ref(''), refreshError = ref(''), accepted = ref(false), issues = ref([]);
 const customer = reactive({ name: '', email: '', phone: '', address: '', city: '', postalCode: '', notes: sf.cart.value.state.notes });
@@ -76,7 +78,7 @@ async function placeOrder() {
   try {
     const body = { customer: Object.fromEntries(Object.entries(customer).map(([key, value]) => [key, value.trim()])), deliveryId: deliveryId.value, paymentId: paymentId.value, termsAccepted: accepted.value, items: cart.value.state.items.map(item => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })) };
     body.idempotencyKey = cart.value.checkoutKey(JSON.stringify(body));
-    const result = await api.post(`/public/stores/${route.params.slug}/orders`, body);
+    const result = await api.post(`/public/stores/${currentSlug.value}/orders`, body);
     const tracking = { path: '/pedido/' + result.order._id, query: { token: result.accessToken } };
     try { sessionStorage.setItem('mty-last-order', JSON.stringify({ id: result.order._id, token: result.accessToken })); } catch {}
     cart.value.clear();

@@ -3,6 +3,7 @@ import { ref, computed, watch, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../../services/api.js';
 import { useStorefront } from '../../services/storefront.js';
+import { storefrontSlug } from '../../services/storeHost.js';
 import { CategoryTree } from '../../services/categories.js';
 import Icon from '../../components/Icon.vue';
 import ProductCard from '../../components/ProductCard.vue';
@@ -14,6 +15,7 @@ import { StoreCopy } from '../../services/storeCopy.js';
 import { StoreTextLayout } from '../../services/storeNavigation.js';
 import StoreCategoryNavigation from '../../components/StoreCategoryNavigation.vue';
 const sf = useStorefront(), route = useRoute(), router = useRouter();
+const currentSlug = computed(() => storefrontSlug(route));
 const categoryFromRoute = () => typeof (route.query.categoryId ?? route.query.category) === 'string' ? (route.query.categoryId ?? route.query.category) : '';
 const search = ref(''), category = ref(categoryFromRoute()), sort = ref('newest'), page = ref(1);
 const products = ref(sf.products.value), featuredProducts = ref([]), meta = ref(sf.catalogMeta.value), loading = ref(false), error = ref('');
@@ -50,7 +52,7 @@ async function load() {
     } else {
       const query = new URLSearchParams({search:search.value, sort:sort.value, page:String(page.value), limit:String(limit)});
       if (category.value) query.set('categoryId', category.value);
-      const data = await api.get(`/public/stores/${route.params.slug}?${query}`);
+      const data = await api.get(`/public/stores/${currentSlug.value}?${query}`);
       if (seq !== requestId) return;
       products.value = data.products;
       featuredProducts.value = data.featuredProducts || [];

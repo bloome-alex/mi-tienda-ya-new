@@ -14,7 +14,7 @@ const store=computed(()=>workspace.stores.find(s=>s._id===workspace.activeStoreI
 const initials=computed(()=>(auth.user?.name||auth.user?.email||'A').slice(0,2).toUpperCase());
 const adminLinks=[['Resumen','/app/dashboard','grid'],['Usuarios','/app/users','users'],['Tiendas','/app/stores','store'],['Configuración','/app/settings','settings'],['Auditoría','/app/audit','shield']];
 const sellerLinks=[['Resumen','/app/dashboard','grid'],['Productos','/app/products','package'],['Categorías','/app/categories','tag'],['Stock','/app/stock','stock'],['Pedidos','/app/orders','receipt']];
-const storeLinks=[['Diseño de la tienda','/app/design','palette'],['Cobros y entregas','/app/payments','credit'],['Contacto','/app/contact','phone']];
+const storeLinks=[['Diseño de la tienda','/app/design','palette'],['Dominio','/app/domain','globe'],['Cobros y entregas','/app/payments','credit'],['Contacto','/app/contact','phone']];
 watch(()=>route.fullPath,()=>{open.value=false;});
 onMounted(async()=>{try{await loadStores()}catch(e){notify.error(e.message)}finally{initializing.value=false}});
 async function exit(){
@@ -35,7 +35,7 @@ function handleTouch(e){const dx=e.changedTouches[0].clientX-touchStart;if(dx>80
  <header class="p-navbar">
   <div class="p-brand-area"><button class="p-icon-btn p-mobile-menu" @click="open=!open" :aria-expanded="open" aria-label="Abrir menú"><Icon name="menu"/></button><RouterLink to="/app/dashboard" class="p-brand"><span class="p-logo"><Icon name="store" :size="22"/></span><span>mi tienda<span class="p-brand-accent"> ya.</span><small>{{isAdmin?'Administración':'Panel de ventas'}}</small></span></RouterLink></div>
   <div class="p-navbar-store"><span class="p-navbar-store-icon"><Icon name="store" :size="18"/></span><div><label for="navbar-store-selector">{{isAdmin?'TIENDA A GESTIONAR':'ESTÁS TRABAJANDO EN'}}</label><select id="navbar-store-selector" :value="workspace.activeStoreId" @change="changeStore" :disabled="workspace.loading||switching||exiting||!workspace.stores.length" :aria-busy="switching"><option v-if="!workspace.stores.length" value="">{{workspace.loading?'Cargando tiendas…':'Sin tiendas asignadas'}}</option><option v-for="s in workspace.stores" :key="s._id" :value="s._id">{{s.name}}</option></select></div><span v-if="store" class="p-navbar-store-state" :class="{published:store.active}">{{store.active?'Publicada':'Borrador'}}</span></div>
-  <div class="p-navbar-right"><a v-if="store" :href="`/t/${store.slug}`" class="p-visit-store" target="_blank" rel="noopener"><Icon name="external" :size="16"/><span>Ver tienda</span></a><ThemeToggle/><span class="p-avatar">{{initials}}</span><div class="p-user-label"><strong>{{auth.user?.name||auth.user?.username||'Mi cuenta'}}</strong><small>{{isAdmin?'Administrador':'Vendedor'}}</small></div></div>
+  <div class="p-navbar-right"><a v-if="store" :href="store.publicUrl || `/t/${store.slug}`" class="p-visit-store" target="_blank" rel="noopener"><Icon name="external" :size="16"/><span>Ver tienda</span></a><ThemeToggle/><span class="p-avatar">{{initials}}</span><div class="p-user-label"><strong>{{auth.user?.name||auth.user?.username||'Mi cuenta'}}</strong><small>{{isAdmin?'Administrador':'Vendedor'}}</small></div></div>
  </header>
  <button v-if="open" class="p-sidebar-overlay" @click="open=false" aria-label="Cerrar menú"/>
  <aside class="p-sidebar" :class="{'p-sidebar-open':open}">

@@ -298,3 +298,43 @@ SMTP, WhatsApp y Mercado Pago requieren configuración y pruebas con tus cuentas
 - [Buenas prácticas de la imagen Node.js](https://github.com/nodejs/docker-node/blob/main/docs/BestPractices.md).
 - [Imagen oficial MongoDB y variables de inicialización](https://hub.docker.com/_/mongo).
 - [Entrypoint oficial MongoDB](https://github.com/docker-library/mongo/blob/master/docker-entrypoint.sh).
+
+## Dominios por tienda (v1.10.0)
+
+La aplicación puede servir una tienda por URL clásica, subdominio administrado o dominio propio. Configurá:
+
+```dotenv
+STOREFRONT_BASE_DOMAIN=mitiendaya.com.ar
+STOREFRONT_CNAME_TARGET=stores.mitiendaya.com.ar
+STOREFRONT_VERIFICATION_PREFIX=_mitiendaya-verification
+STOREFRONT_RESERVED_SUBDOMAINS=www,app,api,admin,root,mail,static,assets,media,cdn,stores
+```
+
+### Subdominios administrados
+
+Publicá un DNS wildcard para `*.mitiendaya.com.ar` (o el valor de `STOREFRONT_BASE_DOMAIN`) hacia tu proxy/CDN. Ese frontal debe entregar HTTPS válido para los subdominios y reenviar el `Host` original a Express.
+
+Ejemplo conceptual de Nginx detrás de una capa que ya resolvió/emitió TLS:
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+Con `TRUST_PROXY=1`, usá exactamente un proxy de confianza delante del proceso Node como ya se indica en esta guía.
+
+### Dominios propios
+
+El vendedor guarda su hostname en **Tu tienda → Dominio**. La aplicación muestra dos datos DNS:
+
+1. TXT de propiedad: `_mitiendaya-verification.<dominio>` con el token generado.
+2. CNAME/ALIAS hacia `STOREFRONT_CNAME_TARGET`.
+
+La API verifica el TXT. El enrutamiento y TLS siguen siendo responsabilidad de la infraestructura frontal. Si el dominio es apex (`marca.com`) y el proveedor no acepta CNAME en la raíz, usá ALIAS/ANAME, CNAME flattening o la alternativa equivalente de ese proveedor.
+
+Para aceptar dominios arbitrarios en producción necesitás un proxy/CDN capaz de aprovisionar certificados para esos hostnames. Un certificado emitido sólo para `APP_URL` o para `*.STOREFRONT_BASE_DOMAIN` no cubre `marca.com`.
+
+### Cambio futuro del dominio base
+
+`mitiendaya.com.ar` es solamente el valor inicial. Para migrarlo, cambiá `STOREFRONT_BASE_DOMAIN`, `STOREFRONT_CNAME_TARGET`, DNS wildcard y certificados. Las tiendas configuradas en modo subdominio calcularán su URL usando el nuevo dominio base; los dominios propios no cambian.

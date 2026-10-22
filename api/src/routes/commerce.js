@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
-import { asyncHandler, requireStoreAccess } from '../middleware/core.js';
+import { AppError, asyncHandler, requireStoreAccess } from '../middleware/core.js';
 import { ok } from '../utils/http.js';
 import { Product, Store } from '../models/index.js';
 import { StockMovement } from '../models/commerce.js';
 import { catalog, commerce, inventory, receipts, commerceWorker, safeOrder, safeProduct, safePublicStore, pagination } from '../services/commerce.js';
+import { domainService } from '../services/DomainService.js';
 
 const router = Router();
 const rateMessage = { error: { message: 'Demasiadas solicitudes. Esperá unos minutos y volvé a intentar.', code: 'RATE_LIMITED' } };
@@ -50,6 +51,11 @@ router.get('/stores/:storeId/orders/:id/receipt', requireStoreAccess, asyncHandl
   res.download(file.path, file.name);
 }));
 
+router.get('/public/host-store', asyncHandler(async (req, res) => {
+  const store = await domainService.resolveStoreByHost(req.hostname, { allowInactive: true });
+  if (!store) throw new AppError('Este dominio no está asociado a una tienda.', 404, 'STORE_HOST_NOT_FOUND');
+  ok(res, { slug: store.slug, publicUrl: domainService.publicUrl(store) });
+}));
 router.get('/public/stores/:slug', asyncHandler(async (req, res) => ok(res, await catalog.catalog(req.params.slug, req.query))));
 router.get('/public/stores/:slug/products/:id', asyncHandler(async (req, res) => ok(res, await catalog.product(req.params.slug, req.params.id))));
 router.post('/public/stores/:slug/recommendations', asyncHandler(async (req, res) => {
