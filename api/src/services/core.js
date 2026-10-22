@@ -123,6 +123,7 @@ export class AuthService {
 export const authService = new AuthService();
 export async function bootstrap() {
   await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
+  await databaseIndexService.reconcileCategoryUniquenessIndex();
   await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }

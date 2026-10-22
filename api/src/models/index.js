@@ -25,7 +25,7 @@ storeSchema.index({ ownerId: 1, ownerSlot: 1 }, { unique: true, partialFilterExp
 storeSchema.index({ ownerId: 1, publicationSlot: 1 }, { unique: true, partialFilterExpression: { active: true, archived: false, publicationSlot: { $type: 'number' } } });
 const categoryLinkSchema = new Schema({ childId: { ...ref('Category'), required: true }, token: { type: String, required: true } }, { _id: false });
 const categorySchema = new Schema({ storeId: { ...ref('Store'), required: true, index: true }, parentId: { ...ref('Category'), default: null }, name: { type: String, required: true, trim: true }, description: { type: String, default: '' }, active: { type: Boolean, default: true }, archived: { type: Boolean, default: false }, hierarchyLinks: { type: [categoryLinkSchema], default: [], select: false }, parentLinkToken: { type: String, select: false } }, options);
-categorySchema.index({ storeId: 1, name: 1 }, { unique: true, partialFilterExpression: { archived: false } });
+categorySchema.index({ storeId: 1, parentId: 1, name: 1 }, { unique: true, partialFilterExpression: { archived: false }, name: 'category_sibling_name_unique' });
 categorySchema.index({ storeId: 1, parentId: 1, archived: 1 });
 // A non-expiring exclusion token serializes topology changes per store. It is
 // reconciled only during the single-process bootstrap, before accepting traffic.
