@@ -4,19 +4,21 @@ import { useRoute, useRouter } from 'vue-router';
 import { auth, logout } from '../services/auth.js';
 import { workspace, loadStores, selectStore, ensureWorkspaceCanLeave } from '../services/workspace.js';
 import { notify } from '../services/notifications.js';
+import { api } from '../services/api.js';
+import { money, shortDate } from '../services/panel.js';
 import Icon from '../components/Icon.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
 import '../styles/panel.css';
-const route=useRoute(),router=useRouter();const open=ref(false),initializing=ref(true),switching=ref(false),exiting=ref(false);let touchStart=0;
+const route=useRoute(),router=useRouter();const open=ref(false),initializing=ref(true),switching=ref(false),exiting=ref(false),subscriptionAlert=ref(null);let touchStart=0;
 const isAdmin=computed(()=>auth.user?.role==='admin');
 const isDesign=computed(()=>route.matched.some(record=>record.path==='/app/design'));
 const store=computed(()=>workspace.stores.find(s=>s._id===workspace.activeStoreId));
 const initials=computed(()=>(auth.user?.name||auth.user?.email||'A').slice(0,2).toUpperCase());
 const adminLinks=[['Resumen','/app/dashboard','grid'],['Usuarios','/app/users','users'],['Tiendas','/app/stores','store'],['Configuración','/app/settings','settings'],['Auditoría','/app/audit','shield']];
 const sellerLinks=[['Resumen','/app/dashboard','grid'],['Productos','/app/products','package'],['Categorías','/app/categories','tag'],['Stock','/app/stock','stock'],['Pedidos','/app/orders','receipt']];
-const storeLinks=[['Diseño de la tienda','/app/design','palette'],['Dominio','/app/domain','globe'],['Cobros y entregas','/app/payments','credit'],['Contacto','/app/contact','phone']];
+const storeLinks=[['Diseño de la tienda','/app/design','palette'],['Dominio','/app/domain','globe'],['Aplicación PWA','/app/pwa','phone'],['Cobros y entregas','/app/payments','credit'],['Contacto','/app/contact','phone']];
 watch(()=>route.fullPath,()=>{open.value=false;});
-onMounted(async()=>{try{await loadStores()}catch(e){notify.error(e.message)}finally{initializing.value=false}});
+onMounted(async()=>{try{await loadStores();if(!isAdmin.value){const data=await api.get('/me/subscription');if(data.subscription?.periodsDue>0){subscriptionAlert.value=data.subscription;notify.error(`No se pudo acreditar el último pago de tu suscripción. Adeudás ${money(data.subscription.debtAmount)}.`)}}}catch(e){notify.error(e.message)}finally{initializing.value=false}});
 async function exit(){
  if(exiting.value||switching.value)return;
  exiting.value=true;
@@ -40,9 +42,9 @@ function handleTouch(e){const dx=e.changedTouches[0].clientX-touchStart;if(dx>80
  <button v-if="open" class="p-sidebar-overlay" @click="open=false" aria-label="Cerrar menú"/>
  <aside class="p-sidebar" :class="{'p-sidebar-open':open}">
 
-  <nav aria-label="Navegación principal"><p class="p-nav-label">{{isAdmin?'PLATAFORMA':'ADMINISTRAR'}}</p><RouterLink v-for="link in (isAdmin?adminLinks:sellerLinks)" :key="link[1]" :to="link[1]" class="p-nav-link"><Icon :name="link[2]"/><span>{{link[0]}}</span></RouterLink><template v-if="isAdmin&&store"><p class="p-nav-label">CONTENIDO DE {{store.name}}</p><RouterLink v-for="link in sellerLinks.slice(1)" :key="link[1]" :to="link[1]" class="p-nav-link"><Icon :name="link[2]"/><span>{{link[0]}}</span></RouterLink></template><template v-if="store"><p class="p-nav-label">TU TIENDA</p><RouterLink v-for="link in storeLinks" :key="link[1]" :to="link[1]" class="p-nav-link"><Icon :name="link[2]"/><span>{{link[0]}}</span></RouterLink></template><RouterLink v-if="!isAdmin" to="/app/plan" class="p-nav-link"><Icon name="crown"/><span>Tu plan</span></RouterLink></nav>
-  <div class="p-sidebar-bottom"><div v-if="!isAdmin" class="p-growth-card"><Icon name="sparkles" :size="22"/><strong>Tu próxima gran idea empieza acá.</strong><RouterLink to="/app/plan">Conocé tu plan <Icon name="arrow" :size="15"/></RouterLink></div><button class="p-nav-link p-logout" :disabled="exiting||switching" :aria-busy="exiting" @click="exit"><Icon name="logout"/><span>Cerrar sesión</span></button><small>mi-tienda-ya-2 · Hecho para emprender</small></div>
+  <nav aria-label="Navegación principal"><p class="p-nav-label">{{isAdmin?'PLATAFORMA':'ADMINISTRAR'}}</p><RouterLink v-for="link in (isAdmin?adminLinks:sellerLinks)" :key="link[1]" :to="link[1]" class="p-nav-link"><Icon :name="link[2]"/><span>{{link[0]}}</span></RouterLink><template v-if="isAdmin&&store"><p class="p-nav-label">CONTENIDO DE {{store.name}}</p><RouterLink v-for="link in sellerLinks.slice(1)" :key="link[1]" :to="link[1]" class="p-nav-link"><Icon :name="link[2]"/><span>{{link[0]}}</span></RouterLink></template><template v-if="store"><p class="p-nav-label">TU TIENDA</p><RouterLink v-for="link in storeLinks" :key="link[1]" :to="link[1]" class="p-nav-link"><Icon :name="link[2]"/><span>{{link[0]}}</span></RouterLink></template><RouterLink v-if="!isAdmin" to="/app/subscription" class="p-nav-link"><Icon name="crown"/><span>Mi suscripción</span></RouterLink></nav>
+  <div class="p-sidebar-bottom"><div v-if="!isAdmin" class="p-growth-card"><Icon name="sparkles" :size="22"/><strong>Tu próxima gran idea empieza acá.</strong><RouterLink to="/app/subscription">Gestioná tu suscripción <Icon name="arrow" :size="15"/></RouterLink></div><button class="p-nav-link p-logout" :disabled="exiting||switching" :aria-busy="exiting" @click="exit"><Icon name="logout"/><span>Cerrar sesión</span></button><small>mi-tienda-ya-2 · Hecho para emprender</small></div>
  </aside>
- <main id="main-content" class="p-main" :class="{'p-main-design':isDesign}"><div v-if="initializing" class="p-loading-page"><span class="p-spinner"/>Preparando tu espacio...</div><RouterView v-else :key="`${route.path}-${workspace.activeStoreId}`"/></main>
+ <main id="main-content" class="p-main" :class="{'p-main-design':isDesign}"><div v-if="subscriptionAlert && !isAdmin" class="p-info p-warning p-subscription-alert"><strong>No se pudo acreditar el último pago de tu suscripción.</strong> Adeudás {{money(subscriptionAlert.debtAmount)}} por {{subscriptionAlert.periodsDue}} {{subscriptionAlert.periodsDue===1?'período':'períodos'}}.<template v-if="subscriptionAlert.inGrace"> Tenés servicio hasta {{shortDate(subscriptionAlert.graceUntil)}} durante el período de cortesía.</template><template v-else-if="subscriptionAlert.graceExpired"> El período de cortesía finalizó.</template> <RouterLink to="/app/subscription">Ver Mi suscripción →</RouterLink></div><div v-if="initializing" class="p-loading-page"><span class="p-spinner"/>Preparando tu espacio...</div><RouterView v-else :key="`${route.path}-${workspace.activeStoreId}`"/></main>
 </div>
 </template>

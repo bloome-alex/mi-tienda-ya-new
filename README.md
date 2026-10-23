@@ -1,6 +1,6 @@
-# mi-tienda-ya-2 · v1.11.0
+# mi-tienda-ya-2 · v1.12.0
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.11.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.12.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
@@ -25,13 +25,13 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
 
-La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
+La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.12.0](docs/CAMBIOS-1.12.0.md), [cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
 ## 1. Preparar el entorno
 
 Requisitos:
 
-- **Node.js 24 recomendado**, con npm. El mínimo declarado por el proyecto es Node.js 22.12.
+- **Node.js 24 recomendado**, con npm. El mínimo compatible con las dependencias actuales es Node.js 22.18; se recomienda Node.js 24.11 o superior.
 - **MongoDB 8 recomendado**, accesible desde la API. Puede ser standalone; no requiere replica set.
 - Un servidor SMTP para enviar enlaces de acceso y correos de pedidos.
 - Chromium/Puppeteer cuando se utilice la conexión de WhatsApp. El resto de la aplicación puede iniciarse sin abrir ese navegador.
@@ -146,7 +146,7 @@ Abrí [http://localhost:5000](http://localhost:5000). Express sirve la API y `cl
 
 1. **Administrador.** Entrá a `/root/login` con `ROOT_USER` y `ROOT_PASSWORD`. Completá el cambio obligatorio de contraseña. Sólo existe un administrador; las demás cuentas son vendedores.
 2. **Reglas de la plataforma.** En Configuración → General, definí días de prueba y minutos de vigencia del enlace. En Contacto y Página de inicio, cargá los datos reales de soporte, portada, beneficios, testimonios y preguntas frecuentes.
-3. **Planes.** Creá los planes con nombre, ícono, precios, funcionalidades y límites. Su asignación y renovación se administran desde Usuarios. Los planes publicados son informativos: esta versión no realiza una suscripción automática para cobrarle al vendedor.
+3. **Planes y suscripciones.** Creá planes con nombre, ícono, precios, duración en días, funcionalidades y límites. El administrador puede asignarlos manualmente y, desde Configuración → Suscripciones, habilitar el cobro recurrente de vendedores con Mercado Pago, además de definir los días de cortesía por falta de pago.
 4. **Vendedor.** Con SMTP configurado, solicitá un enlace en `/login` usando un correo que controles. El primer acceso verificado inicia la prueba y genera una tienda inicial en borrador. El administrador también puede crear vendedores y asignarles un plan.
 5. **Tienda.** En Tiendas, el administrador puede crear y asignar tiendas a vendedores, dentro de sus límites. Elegí la tienda en el panel y completá su nombre, dirección pública y descripción. La tienda inicial permite empezar sin una asignación manual adicional.
 6. **Cobros, entrega y contacto.** Configurá primero las formas de entrega y después los medios de pago compatibles. Completá los datos bancarios reales o las credenciales de Mercado Pago. Indicá correo, teléfono, WhatsApp y mensaje inicial del negocio.
@@ -174,7 +174,7 @@ Todas las rutas son relativas a `APP_URL`.
 | `/app/dashboard` | Resumen correspondiente al rol. |
 | `/app/users`, `/app/stores`, `/app/settings`, `/app/audit` | Administración de la plataforma. |
 | `/app/products`, `/app/categories`, `/app/stock`, `/app/orders` | Gestión del catálogo, inventario y pedidos. |
-| `/app/payments`, `/app/contact`, `/app/plan`, `/app/design` | Cobros/entrega, contacto, plan y diseño. |
+| `/app/payments`, `/app/contact`, `/app/subscription`, `/app/domain`, `/app/pwa`, `/app/design` | Cobros/entrega, contacto, Mi suscripción, dominio, PWA por tienda y diseño. |
 | `/t/:slug` | Tienda pública. |
 | `/t/:slug/producto/:id` | Detalle de producto. |
 | `/t/:slug/carrito`, `/t/:slug/checkout` | Carrito y pasos de compra. |
@@ -205,13 +205,13 @@ Los datos bancarios y la URL digital de la demostración son ejemplos identifica
 
 **SMTP.** Envía los enlaces de acceso, notificaciones de pedidos, consultas del formulario y enlaces de productos digitales pagados. Los correos de pedidos tienen trabajos persistentes con reintentos. Una interrupción después de la aceptación del proveedor y antes de guardar el resultado puede repetir un mensaje; no se garantiza una única entrega física de correo en esa situación.
 
-**Mercado Pago.** Cada tienda configura sus credenciales y secreto de Webhook desde Cobros y entrega. La API crea preferencias Checkout Pro y verifica los pagos consultando al proveedor. La URL de retorno del navegador no basta para marcar un pedido como pagado. Se necesitan cuenta, credenciales y un endpoint público HTTPS; la [guía de integraciones](docs/INTEGRACIONES.md) indica la configuración concreta.
+**Mercado Pago.** Cada tienda conserva sus propias credenciales de Checkout Pro para cobrar pedidos. De forma separada, el administrador puede configurar las credenciales de la plataforma para cobrar suscripciones recurrentes a vendedores. La API valida Webhooks y sincroniza los estados con Mercado Pago; la [guía de integraciones](docs/INTEGRACIONES.md) detalla ambos flujos.
 
 **Transferencias y efectivo.** Se pueden limitar a determinadas formas de entrega. Un comprobante bancario adjunto queda disponible para el vendedor y el administrador; adjuntarlo no confirma el pago. Los comprobantes se almacenan en el bucket privado `R2_RECEIPTS_BUCKET_NAME` y se descargan únicamente a través de la API autenticada. El vendedor verifica el cobro y cambia el estado manualmente.
 
 **WhatsApp.** La conexión de administración utiliza `whatsapp-web.js`, `LocalAuth`, un `WHATSAPP_CLIENT_ID` exclusivo y consultas periódicas del estado del QR. El navegador se inicia cuando se pulsa Conectar. El botón flotante de cada tienda abre un enlace `wa.me` con el mensaje elegido y funciona de manera independiente de esa sesión.
 
-**PWA.** Incluye manifiesto, iconos, service worker, recursos estáticos cacheables y pantalla sin conexión. El catálogo actualizado, la administración, los pedidos y los pagos requieren Internet. No se guardan compras para ejecutarlas después sin conexión.
+**PWA.** La plataforma mantiene su PWA y cada tienda publica además un manifest dinámico con nombre, `id`, alcance e íconos propios configurados desde **Tu tienda → Aplicación PWA**. Los íconos se procesan a 192 y 512 px y se almacenan en R2. El catálogo actualizado, la administración, los pedidos y los pagos requieren Internet; no se guardan compras para ejecutarlas después sin conexión.
 
 **Datos persistentes.** Conservá MongoDB, los dos buckets R2, `WHATSAPP_DATA_PATH` y las claves de entorno. Desde v1.8.0, las nuevas imágenes, fondos y comprobantes no dependen del disco local. `UPLOAD_DIR` se conserva exclusivamente para ejecutar `npm run migrate:r2` sobre archivos de versiones anteriores. Las bajas de imágenes/productos limpian R2 de forma sincrónica y una cola de recuperación en MongoDB reintenta borrados que fallen por una interrupción temporal del proveedor.
 

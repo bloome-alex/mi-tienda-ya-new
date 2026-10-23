@@ -46,6 +46,8 @@ function reportPreviewLocation(type=PREVIEW_MESSAGE.location,navigationId){
  window.parent.postMessage({type,storeId:route.query.preview,...page,...(acknowledgement?{navigationId:acknowledgement}:{})},location.origin);
 }
 function link(suffix=''){return {path:storefrontPath(route,suffix),query:isPreview.value?{preview:route.query.preview}:{}};}
+function applyPwaMetadata(){if(isPreview.value||!store.value)return;const manifest=document.querySelector('link[rel="manifest"]');if(manifest)manifest.setAttribute('href',`/api/public/stores/${store.value.slug}/manifest.webmanifest`);const apple=document.querySelector('link[rel="apple-touch-icon"]');if(apple)apple.setAttribute('href',store.value.pwa?.icon192Url||'/icons/icon-192.png');}
+function resetPwaMetadata(){const manifest=document.querySelector('link[rel="manifest"]');if(manifest)manifest.setAttribute('href','/manifest.webmanifest');const apple=document.querySelector('link[rel="apple-touch-icon"]');if(apple)apple.setAttribute('href','/icons/icon-192.png');}
 async function all(path){const result=await api.list(path+'?limit=500');let data=result.data;for(let page=2;data.length<(result.meta?.total||0);page++){const next=await api.list(path+`?limit=500&page=${page}`);data=[...data,...next.data];if(!next.data.length)break;}return data;}
 async function load(){
  const seq=++requestId,slug=currentSlug.value,previewId=isPreview.value?route.query.preview:null;
@@ -64,7 +66,7 @@ async function load(){
    if(seq!==requestId)return;
    store.value=data.store;products.value=data.products;featuredProducts.value=data.featuredProducts||[];categories.value=data.categories;allCategories.value=data.categories;catalogMeta.value=data.meta;
   }
-  document.title=store.value.name+' · Mi Tienda Ya';
+  document.title=store.value.name+' · Mi Tienda Ya';applyPwaMetadata();
  }catch(e){if(seq===requestId)error.value=e.message;}finally{if(seq===requestId)loading.value=false;}
 }
 async function getProduct(id){if(isPreview.value){const p=products.value.find(x=>x._id===id);if(!p)throw Object.assign(new Error('Producto no disponible.'),{status:404});return p;}return(await api.get(`/public/stores/${currentSlug.value}/products/${id}`)).product;}
@@ -114,7 +116,7 @@ async function sendContact(){if(isPreview.value){notify.info('Esta es una vista 
 provide(storefrontKey,{store,products,featuredProducts,categories,allCategories,catalogMeta,design,cart,isPreview,link,getProduct,load,storeTheme,colorMode});
 watch([()=>currentSlug.value,()=>route.query.preview],load,{immediate:true});
 watch(()=>route.fullPath,()=>{menu.value=false;if(!loading.value){document.title=store.value?.name?(route.path.endsWith('/terminos')&&(design.value.terms.enabled||isPreview.value)?design.value.terms.title+' · '+store.value.name:store.value.name+' · Mi Tienda Ya'):'Mi Tienda Ya';reportPreviewLocation();}},{flush:'post'});
-onMounted(()=>window.addEventListener('message',receive));onUnmounted(()=>{requestId++;previewNavigationSequence++;window.removeEventListener('message',receive);storeTheme.dispose();});
+onMounted(()=>window.addEventListener('message',receive));onUnmounted(()=>{requestId++;previewNavigationSequence++;window.removeEventListener('message',receive);storeTheme.dispose();resetPwaMetadata();});
 </script>
 <template>
 <div v-if="loading" class="loading store-loading"><span class="spinner"></span>Preparando tu visita…</div>

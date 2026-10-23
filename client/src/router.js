@@ -54,7 +54,9 @@ const platformRoutes=[
     {path:'payments/deliveries/:id',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Editar forma de entrega'}},
     {path:'contact',component:()=>import('./views/seller/ContactView.vue'),meta:{title:'Contacto'}},
     {path:'domain',component:()=>import('./views/seller/DomainView.vue'),meta:{title:'Dominio'}},
-    {path:'plan',component:()=>import('./views/seller/PlanView.vue'),meta:{title:'Tu plan'}},
+    {path:'pwa',component:()=>import('./views/seller/StorePwaView.vue'),meta:{title:'Aplicación PWA'}},
+    {path:'plan',redirect:'/app/subscription'},
+    {path:'subscription',component:()=>import('./views/seller/SubscriptionView.vue'),meta:{title:'Mi suscripción'}},
     {path:'design',component:()=>import('./views/seller/DesignView.vue'),meta:{title:'Diseño de tu tienda'}}
   ]},
   {path:'/t/:slug',component:()=>import('./layouts/StoreLayout.vue'),children:storeChildren},

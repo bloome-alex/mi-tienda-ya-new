@@ -73,3 +73,21 @@ En la regresión ejecutable sin instalar dependencias externas pasaron **44/44 c
 Además se simuló el helper con binarios falsos de Nginx, systemctl y Certbot. La simulación confirmó: creación del sitio HTTP, `nginx -t`, reload, llamada `certbot certonly --webroot`, escritura del bloque `443 ssl`, segundo reload y eliminación posterior de sitio/certificado.
 
 `npm ci --ignore-scripts` volvió a superar el límite de ejecución del entorno y dejó una instalación parcial; se detuvo el proceso y se eliminó `node_modules` antes de empaquetar. Por esa razón el ZIP no incluye `node_modules` ni `client/dist` y la compilación Vite debe ejecutarse en el servidor con `npm ci && npm run build`.
+
+## Verificación v1.12.0 · suscripciones, cortesía, focus y PWA por tienda
+
+Se agregaron pruebas puras para `SubscriptionBillingPolicy` que cubren acumulación de períodos, deuda monetaria, duración propia del plan, cancelación sin nueva deuda y expiración exacta al alcanzar el último instante de cortesía.
+
+Las pruebas contractuales verifican configuración administrativa de Mercado Pago, endpoints de contratación/sincronización/cancelación/desvinculación, extensión idempotente de períodos, filtro de usuarios fuera de gracia, manifest dinámico por tienda y procesamiento/limpieza en R2 de los íconos PWA 192/512.
+
+En frontend se verifica la eliminación del focus azul fuerte, reemplazo de Tu plan por Mi suscripción, alerta de deuda al abrir el panel, filtro administrativo, configuración PWA en Tu tienda y el descarte del prompt de instalación por comercio.
+
+### Resultado final v1.12.0
+
+- **17/17 pruebas nuevas de v1.12.0 aprobadas** (política de deuda/cortesía, contratos de API y contratos de interfaz).
+- **38/38 pruebas de regresión v1.9.0–v1.12.0 aprobadas** en la ejecución sin dependencias externas.
+- La corrida amplia de tests del cliente alcanzó **63 casos aprobados**; 7 archivos de prueba no pudieron cargar porque este entorno no completó la instalación de Vue/`@vue/compiler-sfc`. No hubo fallos de aserción en esos siete archivos: fallaron al resolver módulos.
+- Se validó sintaxis de los JavaScript modificados, los `<script setup>` de las vistas Vue tocadas y el parseo de `package.json`/`package-lock.json`.
+- El lockfile actual contiene dependencias que requieren Node `^22.18.0 || >=24.11.0`; el proyecto declara ahora ese mismo mínimo y mantiene Node 24 como versión recomendada.
+
+El ZIP se entrega sin `node_modules` y sin un `client/dist` heredado. Para validación integral en el servidor se recomienda Node 24.11+ y ejecutar `npm ci && npm run build && npm test`.

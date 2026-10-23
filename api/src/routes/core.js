@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
-import { User, Plan, Store, Category, Product, Settings, AuditLog, Session } from '../models/index.js';
+import { User, Plan, Store, Category, Product, Settings, AuditLog, Subscription, Session } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError, asyncHandler, requireAuth, requireAdmin, requireStoreAccess } from '../middleware/core.js';
 import { ok, listResponse, pagination } from '../utils/http.js';
@@ -16,6 +16,7 @@ import { categoryService, safeCategory } from '../services/CategoryService.js';
 import { imageService } from '../services/ImageService.js';
 import { assetService } from '../services/AssetService.js';
 import { domainService } from '../services/DomainService.js';
+import { subscriptionService } from '../services/SubscriptionService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -40,6 +41,21 @@ router.get('/public/config', asyncHandler(async (_req, res) => {
   const settings = await SettingsService.get();
   const plans = await Plan.find({ active: true }).sort({ sortOrder: 1, price: 1 }).lean();
   ok(res, { trialDays: settings.trialDays, contact: settings.contact, home: settings.home, plans });
+}));
+router.get('/public/stores/:slug/manifest.webmanifest', asyncHandler(async (req, res) => {
+  const store = await Store.findOne({ slug: req.params.slug, archived: { $ne: true } }).lean();
+  if (!store) throw new AppError('Tienda no encontrada.', 404, 'STORE_NOT_FOUND');
+  const hosted = await domainService.resolveStoreByHost(req.hostname, { allowInactive: true });
+  const onOwnHost = hosted && String(hosted._id) === String(store._id);
+  const root = onOwnHost ? '/' : `/t/${store.slug}/`;
+  const name = String(store.pwa?.name || store.name || 'Tienda').trim().slice(0, 120);
+  const icon192 = store.pwa?.icon192Url || '/icons/icon-192.png';
+  const icon512 = store.pwa?.iconUrl || '/icons/icon-512.png';
+  res.set('Cache-Control', 'no-cache').type('application/manifest+json').send(JSON.stringify({
+    id: root, name, short_name: name.slice(0, 30), description: String(store.description || `Tienda online ${name}`).slice(0, 300), lang: 'es-AR',
+    start_url: root, scope: root, display: 'standalone', orientation: 'any', background_color: '#ffffff', theme_color: '#18181b',
+    icons: [{ src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' }, { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }],
+  }));
 }));
 router.get('/auth/me', asyncHandler(async (req, res) => ok(res, { user: req.user ? safeUser(req.user) : null, csrfToken: req.session?.csrfToken || null })));
 router.post('/auth/root/login', authLimiter, asyncHandler(async (req, res) => {
@@ -80,8 +96,24 @@ router.delete('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) =>
 }));
 
 const userSchema = z.object({ name: text(100).min(1), email, active: trueBoolean.default(true) });
-router.get('/admin/users', requireAdmin, asyncHandler((req, res) => listResponse(res, User, { role: 'vendedor', ...searchFilter(req.query, ['name', 'email']) }, req.query, { populate: { path: 'planId', select: 'name price durationDays maxStores maxProducts' } })));
-router.get('/admin/users/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await User.findOne({ _id: req.params.id, role: 'vendedor' }); if (!item) throw new AppError('Vendedor no encontrado.', 404); ok(res, { ...safeUser(item), entitlement: await EntitlementService.forUser(item) }); }));
+router.get('/admin/users', requireAdmin, asyncHandler(async (req, res) => {
+  const { page, limit } = pagination(req.query); const settings = await SettingsService.get();
+  const filter = { role: 'vendedor', ...searchFilter(req.query, ['name', 'email']) };
+  if (req.query.billingStatus === 'grace_expired') {
+    const threshold = new Date(Date.now() - Number(settings.subscriptionGraceDays || 0) * 86400000);
+    const ids = await Subscription.distinct('userId', { current: true, cancelAtPeriodEnd: { $ne: true }, status: { $in: ['authorized', 'payment_failed', 'paused'] }, currentPeriodEnd: { $lte: threshold } });
+    filter._id = { $in: ids };
+  }
+  const [items, total] = await Promise.all([
+    User.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).populate({ path: 'planId', select: 'name price durationDays maxStores maxProducts' }).lean(),
+    User.countDocuments(filter),
+  ]);
+  const subscriptions = await Subscription.find({ userId: { $in: items.map(item => item._id) }, current: true }).lean();
+  const byUser = new Map(subscriptions.map(item => [String(item.userId), item]));
+  const data = items.map(item => ({ ...item, subscription: subscriptionService.billingState({ user: item, subscription: byUser.get(String(item._id)), settings }) }));
+  ok(res, data, 200, { page, limit, total });
+}));
+router.get('/admin/users/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await User.findOne({ _id: req.params.id, role: 'vendedor' }); if (!item) throw new AppError('Vendedor no encontrado.', 404); ok(res, { ...safeUser(item), entitlement: await EntitlementService.forUser(item), subscription: await subscriptionService.summaryForUser(item) }); }));
 router.post('/admin/users', requireAdmin, asyncHandler(async (req, res) => {
   const body = userSchema.parse(req.body);
   // La prueba comienza con el primer acceso verificado, incluso si el admin creó la cuenta.
@@ -120,15 +152,41 @@ router.put('/admin/users/:id/plan', requireAdmin, asyncHandler(async (req, res) 
 
 const contactSchema = z.object({ email: maybeEmail.default(''), phone: text(40).default(''), whatsapp: text(40).default('') });
 const homeSchema = z.object({ eyebrow: text(150), title: text(240), subtitle: text(1000), ctaText: text(80), heroImage: url, benefits: z.array(z.object({ icon: text(60), title: text(150), description: text(1000) })).max(20), testimonials: z.array(z.object({ name: text(100), business: text(150), quote: text(1500) })).max(30), faq: z.array(z.object({ question: text(300), answer: text(2000) })).max(30) }).partial();
-router.get('/admin/settings', requireAdmin, asyncHandler(async (_req, res) => ok(res, await SettingsService.get())));
+async function adminSettingsPayload() {
+  let settings = await Settings.findOne({ key: 'global' }).select('+platformBilling.mercadopago.accessToken +platformBilling.mercadopago.webhookSecret');
+  if (!settings) { await SettingsService.get(); settings = await Settings.findOne({ key: 'global' }).select('+platformBilling.mercadopago.accessToken +platformBilling.mercadopago.webhookSecret'); }
+  const data = settings.toObject(); const mp = data.platformBilling?.mercadopago || {};
+  data.platformBilling = { enabled: Boolean(data.platformBilling?.enabled), mercadopago: { sandbox: mp.sandbox !== false, hasAccessToken: Boolean(mp.accessToken), hasWebhookSecret: Boolean(mp.webhookSecret) } };
+  data.subscriptionWebhookUrl = `${config.appUrl}/api/webhooks/platform/mercadopago`;
+  return { settings, data };
+}
+router.get('/admin/settings', requireAdmin, asyncHandler(async (_req, res) => { const { data } = await adminSettingsPayload(); ok(res, data); }));
 router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
-  const body = z.object({ trialDays: integer(365).optional(), magicLinkMinutes: integer(1440).refine(n => n >= 1).optional(), contact: contactSchema.partial().optional(), home: homeSchema.optional() }).parse(req.body);
-  const settings = await SettingsService.get(); const before = settings.toObject();
+  const billingSchema = z.object({ enabled: trueBoolean.optional(), mercadopago: z.object({ accessToken: text(1200).optional(), webhookSecret: text(1200).optional(), sandbox: trueBoolean.optional(), clearCredentials: trueBoolean.optional() }).optional() }).optional();
+  const body = z.object({ trialDays: integer(365).optional(), magicLinkMinutes: integer(1440).refine(n => n >= 1).optional(), subscriptionGraceDays: integer(3650).optional(), platformBilling: billingSchema, contact: contactSchema.partial().optional(), home: homeSchema.optional() }).parse(req.body);
+  const { settings } = await adminSettingsPayload(); const beforeSafe = (await adminSettingsPayload()).data;
   if (body.trialDays !== undefined) settings.trialDays = body.trialDays;
   if (body.magicLinkMinutes !== undefined) settings.magicLinkMinutes = body.magicLinkMinutes;
+  if (body.subscriptionGraceDays !== undefined) settings.subscriptionGraceDays = body.subscriptionGraceDays;
   if (body.contact) settings.contact = { ...settings.contact.toObject(), ...Object.fromEntries(Object.keys(req.body.contact).filter(key => Object.hasOwn(body.contact, key)).map(key => [key, body.contact[key]])) };
   if (body.home) { settings.home = { ...settings.home, ...body.home }; settings.markModified('home'); }
-  await settings.save(); await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(before, settings, Object.keys(body)) }); ok(res, settings);
+  let billingCredentialsUpdated = false;
+  if (body.platformBilling) {
+    settings.platformBilling ||= {}; settings.platformBilling.mercadopago ||= {};
+    if (body.platformBilling.enabled !== undefined) settings.platformBilling.enabled = body.platformBilling.enabled;
+    const mp = body.platformBilling.mercadopago;
+    if (mp) {
+      if (mp.clearCredentials) { settings.platformBilling.mercadopago.accessToken = ''; settings.platformBilling.mercadopago.webhookSecret = ''; settings.platformBilling.enabled = false; billingCredentialsUpdated = true; }
+      if (mp.accessToken) { settings.platformBilling.mercadopago.accessToken = encryptSecret(mp.accessToken); billingCredentialsUpdated = true; }
+      if (mp.webhookSecret) { settings.platformBilling.mercadopago.webhookSecret = encryptSecret(mp.webhookSecret); billingCredentialsUpdated = true; }
+      if (mp.sandbox !== undefined) settings.platformBilling.mercadopago.sandbox = mp.sandbox;
+    }
+    settings.markModified('platformBilling');
+  }
+  if (settings.platformBilling?.enabled && (!settings.platformBilling?.mercadopago?.accessToken || !settings.platformBilling?.mercadopago?.webhookSecret)) throw new AppError('Para habilitar suscripciones configurá el Access Token y la clave secreta de Webhooks de Mercado Pago.', 422, 'SUBSCRIPTIONS_NOT_CONFIGURED');
+  await settings.save(); const afterSafe = (await adminSettingsPayload()).data;
+  await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(beforeSafe, afterSafe, ['trialDays', 'magicLinkMinutes', 'subscriptionGraceDays', 'contact', 'home', 'platformBilling']), billingCredentialsUpdated });
+  ok(res, afterSafe);
 }));
 router.get('/admin/audit', requireAdmin, asyncHandler(async (req, res) => { const result = await AuditService.list(req.query); ok(res, result.data, 200, result.meta); }));
 router.get('/admin/audit/:id', requireAdmin, asyncHandler(async (req, res) => ok(res, await AuditService.get(req.params.id))));
@@ -184,6 +242,20 @@ router.post('/stores/:storeId/domain/verify', requireStoreAccess, asyncHandler(a
   await audit(req, 'store.domain.verified', 'store', req.store._id, { changes: AuditService.changes({ domain: before }, { domain: after }, ['domain']) });
   ok(res, after);
 }));
+const pwaSchema = z.object({ name: text(120).min(1), iconUrl: url.default(''), icon192Url: url.default('') });
+router.get('/stores/:storeId/pwa', requireStoreAccess, (req, res) => ok(res, { name: req.store.pwa?.name || req.store.name, iconUrl: req.store.pwa?.iconUrl || '', icon192Url: req.store.pwa?.icon192Url || '', manifestUrl: `/api/public/stores/${req.store.slug}/manifest.webmanifest` }));
+router.put('/stores/:storeId/pwa', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = pwaSchema.parse(req.body); const before = { name: req.store.pwa?.name || '', iconUrl: req.store.pwa?.iconUrl || '', icon192Url: req.store.pwa?.icon192Url || '' };
+  if (body.iconUrl || body.icon192Url) {
+    const [large, small] = await Promise.all([imageService.validatePwaIcon(req.store._id, body.iconUrl), imageService.validatePwaIcon(req.store._id, body.icon192Url)]);
+    if (!large || large.width !== 512 || large.height !== 512 || !small || small.width !== 192 || small.height !== 192) throw new AppError('Volvé a subir el ícono PWA para generar los tamaños 192 × 192 y 512 × 512.', 422, 'INVALID_PWA_ICON');
+  }
+  req.store.pwa = body; await req.store.save();
+  await assetService.markAttached(req.store._id, [body.iconUrl, body.icon192Url]);
+  await assetService.cleanupDifference(req.store._id, [before.iconUrl, before.icon192Url], [body.iconUrl, body.icon192Url]);
+  await audit(req, 'store.pwa.updated', 'store', req.store._id, { changes: AuditService.changes({ pwa: before }, { pwa: body }, ['pwa']) });
+  ok(res, { ...body, manifestUrl: `/api/public/stores/${req.store.slug}/manifest.webmanifest` });
+}));
 router.put('/stores/:storeId', requireStoreAccess, asyncHandler(async (req, res) => { const body = parsePatch(storeSchema.omit({ ownerId: true }), req.body); ok(res, await updateStore(req, req.store, body)); }));
 router.put('/stores/:storeId/design', requireStoreAccess, asyncHandler(async (req, res) => {
   const { design } = z.object({ design: z.record(z.string(), z.unknown()) }).parse(req.body);
@@ -220,7 +292,36 @@ router.put('/stores/:storeId/payments', requireStoreAccess, asyncHandler(async (
   if (body.payments.some(payment => payment.type === 'mercadopago' && payment.active) && (!req.store.integrations?.mercadopago?.accessToken || !req.store.integrations?.mercadopago?.webhookSecret)) throw new AppError('Configurá Access Token y secreto de Webhooks para habilitar Mercado Pago.', 422, 'MP_NOT_CONFIGURED');
   await req.store.save(); await audit(req, 'store.payments.updated', 'store', req.store._id, { changes: AuditService.changes(before, safeStore(req.store), ['payments', 'deliveries', 'integrations']), credentialsUpdated: Boolean(body.mercadopago?.clearCredentials || body.mercadopago?.accessToken || body.mercadopago?.webhookSecret) }); ok(res, safeStore(req.store));
 }));
-router.get('/me/plan', requireAuth, asyncHandler(async (req, res) => { const settings = await SettingsService.get(); const plan = req.user.planId ? await Plan.findById(req.user.planId) : null; ok(res, { user: safeUser(req.user), plan, entitlement: await EntitlementService.forUser(req.user), contact: settings.contact }); }));
+async function sellerSubscriptionPayload(user, { sync = false } = {}) {
+  if (user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
+  if (sync) await subscriptionService.syncCurrent(user._id);
+  const freshUser = await User.findById(user._id); const settings = await SettingsService.get();
+  const [plan, plans, summary, entitlement] = await Promise.all([
+    freshUser.planId ? Plan.findById(freshUser.planId) : null,
+    Plan.find({ active: true, price: { $gt: 0 } }).sort({ sortOrder: 1, price: 1 }).lean(),
+    subscriptionService.summaryForUser(freshUser, { settings }),
+    EntitlementService.forUser(freshUser),
+  ]);
+  const safeSettings = await adminSettingsPayload();
+  return { user: safeUser(freshUser), plan, plans, subscription: summary, entitlement, contact: settings.contact, subscriptionsEnabled: Boolean(safeSettings.data.platformBilling?.enabled && safeSettings.data.platformBilling?.mercadopago?.hasAccessToken && safeSettings.data.platformBilling?.mercadopago?.hasWebhookSecret), graceDays: settings.subscriptionGraceDays };
+}
+router.get('/me/plan', requireAuth, asyncHandler(async (req, res) => ok(res, await sellerSubscriptionPayload(req.user))));
+router.get('/me/subscription', requireAuth, asyncHandler(async (req, res) => ok(res, await sellerSubscriptionPayload(req.user))));
+router.post('/me/subscription/checkout', requireAuth, asyncHandler(async (req, res) => {
+  if (req.user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
+  const { planId, payerEmail } = z.object({ planId: objectId, payerEmail: email.optional() }).parse(req.body);
+  const result = await subscriptionService.createCheckout(req.user, planId, { payerEmail: payerEmail || req.user.email });
+  await audit(req, 'subscription.checkout.created', 'subscription', result.subscription._id, { planId });
+  ok(res, { checkoutUrl: result.checkoutUrl });
+}));
+router.post('/me/subscription/sync', requireAuth, asyncHandler(async (req, res) => { await subscriptionService.syncCurrent(req.user._id); ok(res, await sellerSubscriptionPayload(req.user)); }));
+router.post('/me/subscription/cancel', requireAuth, asyncHandler(async (req, res) => {
+  const item = await subscriptionService.cancelAtPeriodEnd(req.user._id); await audit(req, 'subscription.cancelled', 'subscription', item._id, { effectiveAt: item.currentPeriodEnd }); ok(res, await sellerSubscriptionPayload(req.user));
+}));
+router.post('/me/subscription/detach', requireAuth, asyncHandler(async (req, res) => {
+  const item = await subscriptionService.detach(req.user._id); await audit(req, 'subscription.detached', 'subscription', item._id); ok(res, await sellerSubscriptionPayload(req.user));
+}));
+router.post('/webhooks/platform/mercadopago', asyncHandler(async (req, res) => ok(res, await subscriptionService.webhook(req))));
 
 const categorySchema = z.object({ name: text(120).min(1), description: text(3000).default(''), parentId: objectId.nullable().default(null), active: trueBoolean.default(true) });
 router.get('/stores/:storeId/categories', requireStoreAccess, asyncHandler((req, res) => {

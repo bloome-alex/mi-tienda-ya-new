@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
-import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Session, MagicLink } from '../models/index.js';
+import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Subscription, SubscriptionCharge, Session, MagicLink } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import { randomToken, hashToken } from '../utils/crypto.js';
@@ -8,6 +8,7 @@ import { escapeHtml } from '../utils/http.js';
 import { AuditService, auditService } from './AuditService.js';
 import { databaseIndexService } from './DatabaseIndexService.js';
 import { domainService } from './DomainService.js';
+import { subscriptionService } from './SubscriptionService.js';
 export { AuditService, auditService };
 
 export const defaultHome = {
@@ -21,7 +22,7 @@ export const defaultHome = {
 };
 
 export class SettingsService {
-  async get() { return Settings.findOneAndUpdate({ key: 'global' }, { $setOnInsert: { key: 'global', trialDays: 15, magicLinkMinutes: 15, home: defaultHome, contact: { email: '', phone: '', whatsapp: '' } } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }); }
+  async get() { return Settings.findOneAndUpdate({ key: 'global' }, { $setOnInsert: { key: 'global', trialDays: 15, magicLinkMinutes: 15, subscriptionGraceDays: 7, platformBilling: { enabled: false, mercadopago: { sandbox: true } }, home: defaultHome, contact: { email: '', phone: '', whatsapp: '' } } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }); }
   static get() { return settingsService.get(); }
 }
 export class EntitlementService {
@@ -31,8 +32,15 @@ export class EntitlementService {
     if (user.role === 'admin') return { allowed: true, trial: false, expiresAt: null, maxStores: 1000, maxProducts: 0, reason: 'Administración' };
     const planId = user.planId?._id || user.planId;
     const plan = planId ? await Plan.findById(planId) : null;
-    if (plan && user.planExpiresAt && new Date(user.planExpiresAt) > new Date()) return { allowed: true, trial: false, expiresAt: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: plan.name };
-    if (user.trialEndsAt && new Date(user.trialEndsAt) > new Date()) return { allowed: true, trial: true, expiresAt: user.trialEndsAt, maxStores: 1, maxProducts: 0, reason: 'Período de prueba' };
+    const now = new Date();
+    if (plan && user.planExpiresAt && new Date(user.planExpiresAt) > now) return { allowed: true, trial: false, expiresAt: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
+    if (plan) {
+      const [settings, subscription] = await Promise.all([SettingsService.get(), subscriptionService.current(user._id)]);
+      const billing = subscriptionService.billingState({ user, subscription, settings, now });
+      if (billing.inGrace) return { allowed: true, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: 'Período de cortesía', billing };
+      if (billing.graceExpired) return { allowed: false, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: 'El período de cortesía finalizó.', billing };
+    }
+    if (user.trialEndsAt && new Date(user.trialEndsAt) > now) return { allowed: true, trial: true, expiresAt: user.trialEndsAt, maxStores: 1, maxProducts: 0, reason: 'Período de prueba' };
     return { allowed: false, trial: false, expiresAt: user.planExpiresAt || user.trialEndsAt || null, maxStores: plan?.maxStores || 1, maxProducts: plan?.maxProducts || 0, reason: plan ? 'Tu plan venció.' : 'Tu prueba finalizó. Elegí un plan para publicar.' };
   }
   static forUser(user) { return entitlementService.forUser(user); }
@@ -51,7 +59,7 @@ export const settingsService = new SettingsService();
 export const entitlementService = new EntitlementService();
 export const mailService = new MailService();
 
-export function safeUser(user) { const data = user?.toObject ? user.toObject() : { ...user }; delete data.passwordHash; return data; }
+export function safeUser(user) { const data = user?.toObject ? user.toObject() : { ...user }; delete data.passwordHash; delete data.subscriptionAppliedPaymentIds; return data; }
 export function safeStore(store) {
   const data = store?.toObject ? store.toObject() : JSON.parse(JSON.stringify(store));
   delete data.ownerSlot; delete data.publicationSlot;
@@ -127,7 +135,7 @@ export const authService = new AuthService();
 export async function bootstrap() {
   await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
   await databaseIndexService.reconcileCategoryUniquenessIndex();
-  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Session.init(), MagicLink.init()]);
+  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }
     catch (error) { if (error.code !== 11000) throw error; }

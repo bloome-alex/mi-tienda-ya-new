@@ -19,9 +19,10 @@ export class ImageService {
 
   async upload({ files, purpose = 'image', storeId, actorId }) {
     if (!files?.length) throw new AppError('Seleccioná al menos una imagen.', 422);
-    if (purpose !== 'image' && !specs[purpose]) throw invalid('El propósito de la imagen no es válido.');
+    const isPwaIcon = purpose === 'pwa-icon';
+    if (purpose !== 'image' && !specs[purpose] && !isPwaIcon) throw invalid('El propósito de la imagen no es válido.');
     const spec = specs[purpose];
-    if (spec && files.length !== 1) throw invalid('Subí un solo fondo por vez.');
+    if ((spec || isPwaIcon) && files.length !== 1) throw invalid(isPwaIcon ? 'Subí un solo ícono por vez.' : 'Subí un solo fondo por vez.');
     this.storage.assertConfigured({ publicAsset: true });
     const prepared = [];
     for (const file of files) {
@@ -31,6 +32,19 @@ export class ImageService {
       if (!meta || !['jpeg', 'png', 'webp'].includes(meta.format) || (meta.pages || 1) !== 1) throw new AppError('Usá una imagen estática JPG, PNG o WebP válida.', 422, 'INVALID_IMAGE');
       const oriented = dimensions(meta);
       if (!Number.isSafeInteger(oriented.width) || !Number.isSafeInteger(oriented.height) || oriented.width < 1 || oriented.height < 1 || oriented.width * oriented.height > 25000000) throw new AppError('La imagen debe tener dimensiones válidas y hasta 25 megapíxeles.', 422, 'INVALID_IMAGE');
+      if (isPwaIcon && (oriented.width !== oriented.height || oriented.width < 192 || oriented.height < 192)) throw new AppError('El ícono PWA debe ser cuadrado y tener al menos 192 × 192 px.', 422, 'INVALID_PWA_ICON');
+      if (isPwaIcon) {
+        for (const iconSize of [192, 512]) {
+          let output;
+          try { output = await processor.clone().rotate().resize(iconSize, iconSize, { fit: 'cover' }).png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true }); }
+          catch { throw new AppError('No se pudo procesar el ícono PWA. Revisá el archivo.', 422, 'INVALID_PWA_ICON'); }
+          if (output.info.width !== iconSize || output.info.height !== iconSize) throw new AppError(`No se pudo generar el ícono PWA de ${iconSize} × ${iconSize} px.`, 422, 'INVALID_PWA_ICON');
+          if (output.data.length > maxSize) throw new AppError('El ícono PWA procesado supera 5 MiB. Usá una imagen más liviana.', 413, 'FILE_TOO_LARGE');
+          const id = randomUUID(); const name = `${id}.png`; const objectKey = this.storage.objectKey({ storeId, kind: 'images', extension: 'png', id });
+          prepared.push({ name, objectKey, url: this.storage.publicUrl(objectKey), width: iconSize, height: iconSize, size: output.data.length, purpose, data: output.data, contentHash: digest(output.data), contentType: 'image/png' });
+        }
+        continue;
+      }
       let transform = processor.rotate();
       if (!spec) transform = transform.resize(2000, 2000, { fit: 'inside', withoutEnlargement: true });
       const outputFormat = spec && (oriented.width > 16383 || oriented.height > 16383) ? 'png' : 'webp';
@@ -79,5 +93,12 @@ export class ImageService {
   }
 
   async validateDesignAssets(storeId, design) { await this.assets.assertOwned(storeId, collectDesignImageUrls(design)); }
+
+  async validatePwaIcon(storeId, url) {
+    if (!url) return null;
+    const asset = await UploadedImage.findOne({ storeId, url, purpose: 'pwa-icon', storage: 'r2' }).lean();
+    if (!asset?.objectKey) throw new AppError('El ícono PWA debe subirse desde esta tienda.', 422, 'INVALID_PWA_ICON');
+    return asset;
+  }
 }
 export const imageService = new ImageService();

@@ -66,11 +66,30 @@ Un pedido de Mercado Pago no puede pasarse manualmente a pagado desde el panel; 
 
 ### Reservas y vencimiento
 
-`ORDER_RESERVATION_MINUTES`, con 60 minutos como valor inicial, determina cuánto dura la reserva de una preferencia de Mercado Pago. La integración utiliza modo binario y excluye tickets y cajeros para este flujo de reserva corta. No implementa pagos parciales, pagos divididos en dos medios, suscripciones ni un marketplace con comisiones.
+`ORDER_RESERVATION_MINUTES`, con 60 minutos como valor inicial, determina cuánto dura la reserva de una preferencia de Mercado Pago. La integración utiliza modo binario y excluye tickets y cajeros para este flujo de reserva corta. Este flujo de cobro de pedidos no implementa pagos parciales, pagos divididos en dos medios ni marketplace con comisiones. Las suscripciones de vendedores son una integración separada de plataforma descripta más abajo.
 
 Antes de cancelar una reserva vencida, el worker consulta los pagos del pedido. Si el proveedor no responde, mantiene la reserva y vuelve a consultar. Un pago aprobado después de una cancelación genera una incidencia visible para que el vendedor revise o reintegre el importe desde Mercado Pago; no reabre el pedido ni entrega productos de forma automática.
 
 La aplicación registra avisos de reembolso o contracargo cuando el proveedor los informa, pero no ofrece una API propia para ejecutar reintegros. Se gestionan desde Mercado Pago.
+
+
+## Suscripciones de vendedores con Mercado Pago
+
+Las suscripciones que cobra **Mi Tienda Ya a sus vendedores** son independientes del Checkout Pro que cada tienda usa para cobrar pedidos. El administrador configura una única cuenta cobradora desde **Configuración → Suscripciones**, guardando el Access Token y la clave secreta de Webhooks cifrados en MongoDB. No se exponen al frontend.
+
+El vendedor usa **Mi suscripción** para elegir un plan activo, indicar el email de la cuenta de Mercado Pago que utilizará como pagador y abrir el checkout de suscripción. La aplicación crea un `preapproval`, guarda su identificador y procesa los eventos `subscription_preapproval` y `subscription_authorized_payment`. Los cobros aprobados agregan exactamente los días definidos por `Plan.durationDays` sobre el calendario de esa suscripción.
+
+El administrador define `subscriptionGraceDays`. Si vence el período pagado y los cobros no se acreditan, la cuenta mantiene la edición del panel durante la mora y la tienda continúa publicada sólo hasta el fin de esa cortesía. La deuda se calcula por períodos vencidos y puede abarcar más de uno. Al alcanzar el límite de gracia, la habilitación pública se bloquea automáticamente; el usuario permanece activo para que Administración pueda filtrarlo en **Usuarios → Ver fuera de gracia**, contactarlo y decidir una baja manual.
+
+Cancelar desde **Mi suscripción** envía la cancelación al proveedor de inmediato para impedir futuros cargos y conserva el acceso hasta `planExpiresAt`. **Desvincular Mercado Pago** deja esa vinculación fuera de uso y permite iniciar posteriormente otra suscripción, incluso indicando otro email de pagador.
+
+Webhook de plataforma:
+
+```text
+https://TU-DOMINIO/api/webhooks/platform/mercadopago
+```
+
+La URL exacta también se muestra en Configuración → Suscripciones. Debe registrarse con los eventos de preapproval y pagos autorizados. Si la contratación automática se deshabilita desde Administración, no se crean nuevas suscripciones; las credenciales existentes siguen pudiendo usarse para sincronizar o cancelar vínculos ya creados.
 
 ## Transferencias y efectivo
 
@@ -130,6 +149,9 @@ La conexión administrativa se mantiene separada de los botones `wa.me` de cada 
 
 - [Mercado Pago: creación de preferencias](https://www.mercadopago.com.ar/developers/en/reference/online-payments/checkout-pro-preferences/create-preference/post).
 - [Mercado Pago: notificaciones de Checkout Pro](https://www.mercadopago.com.ar/developers/en/docs/checkout-pro-preferences/payment-notifications).
+- [Mercado Pago: Suscripciones](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/overview).
+- [Mercado Pago: crear suscripción (`/preapproval`)](https://www.mercadopago.com.ar/developers/es/reference/online-payments/subscriptions/create-preapproval/post).
+- [Mercado Pago: gestión y cancelación de suscripciones](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/subscription-management).
 - [whatsapp-web.js: autenticación y múltiples sesiones](https://wwebjs.dev/guide/creating-your-bot/authentication.html).
 - [whatsapp-web.js: LocalAuth](https://docs.wwebjs.dev/LocalAuth.html).
 - [Cloudflare R2: S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/).

@@ -11,6 +11,7 @@ import { AppError, asyncHandler, loadAuth, errorHandler } from './middleware/cor
 import coreRouter from './routes/core.js';
 import commerceRouter from './routes/commerce.js';
 import { domainService } from './services/DomainService.js';
+import { Store } from './models/index.js';
 
 export function createApp() {
   const app = express();
@@ -36,9 +37,19 @@ export function createApp() {
     app.use(express.static(clientDirectory, { index: false, setHeaders(res, file) { if (/\.(?:html|webmanifest)$|[\/]sw\.js$/.test(file)) res.set('Cache-Control', 'no-cache'); } }));
     app.get('/{*path}', asyncHandler(async (req, res, next) => {
       if (path.extname(req.path)) return next(new AppError('Archivo no encontrado.', 404, 'NOT_FOUND'));
-      const store = await domainService.resolveStoreByHost(req.hostname, { allowInactive: true });
-      const meta = store ? `<meta name="mty-store-slug" content="${store.slug}"><meta name="mty-store-url" content="${domainService.publicUrl(store)}"><meta name="mty-platform-url" content="${config.appUrl}">` : '';
-      const html = meta ? indexTemplate.replace('</head>', `${meta}</head>`) : indexTemplate;
+      let store = await domainService.resolveStoreByHost(req.hostname, { allowInactive: true });
+      if (!store) {
+        const match = req.path.match(/^\/t\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/i);
+        if (match) store = await Store.findOne({ slug: match[1].toLowerCase(), archived: { $ne: true } }).lean();
+      }
+      let html = indexTemplate;
+      if (store) {
+        const manifestHref = `/api/public/stores/${store.slug}/manifest.webmanifest`;
+        html = html.replace(/<link\s+rel=["']manifest["'][^>]*>/i, `<link rel="manifest" href="${manifestHref}">`);
+        if (store.pwa?.icon192Url) html = html.replace(/<link\s+rel=["']apple-touch-icon["'][^>]*>/i, `<link rel="apple-touch-icon" href="${store.pwa.icon192Url}">`);
+        const meta = `<meta name="mty-store-slug" content="${store.slug}"><meta name="mty-store-url" content="${domainService.publicUrl(store)}"><meta name="mty-platform-url" content="${config.appUrl}">`;
+        html = html.replace('</head>', `${meta}</head>`);
+      }
       res.set('Cache-Control', 'no-cache').type('html').send(html);
     }));
   } else app.get('/', (_req, res) => res.status(503).type('text').send('La API está iniciada. Ejecutá npm run build para generar el cliente, o npm run dev para desarrollar.'));

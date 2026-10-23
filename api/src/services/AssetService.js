@@ -61,8 +61,8 @@ export class AssetService {
 
   async isReferenced(storeId, url) {
     if (await Product.exists({ storeId, archived: { $ne: true }, images: url })) return true;
-    const store = await Store.findById(storeId).select('design').lean();
-    return store ? collectDesignImageUrls(store.design).includes(url) : false;
+    const store = await Store.findById(storeId).select('design pwa').lean();
+    return store ? collectDesignImageUrls(store.design).includes(url) || store.pwa?.iconUrl === url || store.pwa?.icon192Url === url : false;
   }
 
   async deleteUnclaimed(storeId, urls) {

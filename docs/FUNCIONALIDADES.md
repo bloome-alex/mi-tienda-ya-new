@@ -1,4 +1,4 @@
-# Funcionalidades y alcance de la versión 1.10
+# Funcionalidades y alcance de la versión 1.12
 
 Esta matriz describe lo implementado en **mi-tienda-ya-2** y sus límites concretos. «Implementado» se refiere al código y al flujo disponible; el alcance de las pruebas y de la revisión visual se detalla al final.
 
@@ -6,7 +6,7 @@ Esta matriz describe lo implementado en **mi-tienda-ya-2** y sus límites concre
 
 | Requisito | Implementación | Alcance y límites |
 | --- | --- | --- |
-| PWA con HTML, CSS y JavaScript | Vue 3.5.44, JavaScript ESM, CSS propio, manifiesto, iconos, service worker y pantalla sin conexión. | Instalable según el soporte del navegador y sobre HTTPS o localhost. API, catálogo actualizado, panel y compra requieren conexión; no hay checkout sin conexión. |
+| PWA con HTML, CSS y JavaScript | Vue 3.5.44, JavaScript ESM, CSS propio y service worker. Además, cada tienda tiene un manifest dinámico con nombre e íconos propios configurables. | Instalable según el soporte del navegador y sobre HTTPS o localhost. Las PWA de tiendas usan un `id`/`scope` propio por dominio o `/t/slug`; API, catálogo actualizado, panel y compra requieren conexión. |
 | Backend Node.js, Express y MongoDB | API Express, Mongoose y MongoDB standalone en el workspace `api`. | Funciona sin replica set. Las operaciones de varios documentos tienen compensación y recuperación, no una transacción global instantánea. |
 | Programación Orientada a Objetos | Servicios separados de autenticación, habilitación de planes, cuotas, inventario, pedidos, correo y proveedores. | El cliente también centraliza HTTP y carrito en servicios. Los componentes Vue conservan el modelo reactivo del framework. |
 | Vue con CSS sin otro framework visual | Vue Router para navegación, Vite para compilación y componentes propios. | No se incluyeron Vuetify, Bootstrap ni otro sistema de componentes visuales. |
@@ -29,7 +29,8 @@ Esta matriz describe lo implementado en **mi-tienda-ya-2** y sus límites concre
 | Vigencia configurable del enlace | Configuración → General, de 1 a 1440 minutos; valor inicial 15. Hash del token y consumo atómico con comprobación de vencimiento. | Cambiar la configuración afecta a enlaces nuevos; el acceso requiere consumir el enlace mediante POST. |
 | Prueba inicial de 15 días | Empieza en el primer acceso verificado; duración configurable entre 0 y 365 días. | Cambiar la duración no recalcula pruebas iniciadas; volver a ingresar no renueva la prueba. La prueba admite una tienda y no limita productos. |
 | Acceso aunque venza el plan | El vendedor conserva sesión, panel y edición de productos/configuración. | El catálogo y el checkout comprueban vigencia y cupos; una tienda sin habilitación efectiva no vende. |
-| Asignar o renovar planes | El administrador asigna plan, renueva por días o fija vencimiento. Se muestra en Usuarios y Tu plan. | La renovación suma desde el vencimiento vigente o desde ahora, según cuál sea posterior. La contratación del plan se coordina por contacto; no hay cobro recurrente de planes. |
+| Planes y renovación | El administrador puede asignar/renovar manualmente o habilitar suscripciones recurrentes con Mercado Pago desde Configuración → Suscripciones. Cada cobro aprobado agrega exactamente `durationDays` del plan. | Los períodos impagos pueden acumular deuda. Cancelar la renovación detiene cobros futuros y conserva el período ya pagado. |
+| Días de cortesía | El administrador define cuántos días puede seguir publicado un vendedor después del último período pagado. El panel calcula períodos y monto adeudados. | Al llegar al límite la habilitación de publicación expira automáticamente; Usuarios permite filtrar vendedores fuera de gracia para contacto y eventual baja manual. |
 | Límites de tiendas y productos | Posiciones de cuota con índices únicos MongoDB, control ante altas/activaciones concurrentes y reconciliación de publicaciones. | `maxProducts=0` significa sin límite. Los productos previamente aceptados se conservan al reducir un plan; se restringen nuevas altas mientras no haya cupo. |
 | Reducción o vencimiento del plan | Al editar/asignar un plan se desactivan tiendas publicadas excedentes. El acceso público comprueba el cupo también cuando un plan vence. | Se priorizan las tiendas activas más antiguas por fecha e identificador. El contenido se conserva; ampliar el plan no reactiva tiendas desactivadas automáticamente. |
 | Sesiones y aislamiento | Cookie HttpOnly, SameSite, Secure en producción, CSRF en mutaciones y comprobación del dueño de la tienda en la API. | Los límites de frecuencia se mantienen en memoria del proceso único; no son un límite global entre múltiples instancias. |
@@ -45,7 +46,7 @@ Esta matriz describe lo implementado en **mi-tienda-ya-2** y sus límites concre
 | Auditoría | Listado de acciones con búsqueda, actor, fecha y detalles operativos. | Registra eventos previstos por los servicios. No guarda contraseñas o secretos ni es una bitácora externa inmutable. |
 | Configuración por tabs | General, Planes, Contacto, WhatsApp y Página de inicio. | SMTP y secretos del servidor se configuran mediante variables de entorno. |
 | Planes | Nombre, ícono, descripción, precio anterior, precio actual, duración, funcionalidades, límites y estado. Formularios en páginas propias. | Desactivar un plan lo retira de la oferta pública; respeta las asignaciones existentes vigentes hasta su vencimiento. |
-| Contacto de Tienda Ya | Email, teléfono y WhatsApp para soporte/planes. | Se utiliza en la home y en Tu plan. Los enlaces de contacto deben contener tus datos reales. |
+| Contacto de Tienda Ya | Email, teléfono y WhatsApp para soporte/planes. | Se utiliza en la home y como canal general de soporte de la plataforma. Los enlaces de contacto deben contener tus datos reales. |
 | WhatsApp de administración | `whatsapp-web.js`, `LocalAuth`, `WHATSAPP_CLIENT_ID`, generación de QR, conectar/desconectar y polling cada 3 segundos en el panel. | Requiere Chromium y emparejar un teléfono. No abre navegador al instalar/arrancar; no incluye una campaña de mensajes ni sustituye la API oficial de WhatsApp Business. |
 
 La home admite hasta 12 beneficios —título, ícono y descripción—, 20 experiencias —nombre, emprendimiento y testimonio— y 30 preguntas frecuentes —pregunta y respuesta—. Son contenido administrable de la plataforma.
@@ -93,7 +94,7 @@ La home admite hasta 12 beneficios —título, ícono y descripción—, 20 expe
 | Seguimiento del pedido | Página `/pedido/:id?token=...` con estado, instrucciones, pago, comprobante y entrega. | El enlace es privado; conocer el ID sin el token no concede acceso. Puede consultarse aunque la tienda deje de estar publicada. |
 | Contacto del vendedor | Email, teléfono visible, WhatsApp, mensaje inicial y opciones de formulario/botón flotante. | El formulario envía usando el SMTP de la plataforma hacia el correo del vendedor. |
 | WhatsApp del vendedor y vista previa | Previsualización del mensaje y botón para probar `wa.me`; botón flotante configurable. | El comprador decide enviar el mensaje. No exige conectar la sesión `whatsapp-web.js` de administración. |
-| Tu plan | Plan actual, vencimiento, estado de prueba y botones de contacto por email o WhatsApp para cambiar/solicitar plan. | Usa el contacto de la plataforma; la asignación efectiva la realiza el administrador. |
+| Mi suscripción | Estado del plan, deuda, cortesía, cuenta de Mercado Pago vinculada, contratación, cancelación de renovación y desvinculación para usar otra cuenta. | El proveedor cobra automáticamente según la recurrencia configurada. La cuenta del vendedor no se desactiva automáticamente por mora; la publicación queda bloqueada al superar la cortesía. |
 
 ## 6. Diseñador de tiendas
 
