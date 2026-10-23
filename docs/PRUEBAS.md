@@ -91,3 +91,37 @@ En frontend se verifica la eliminación del focus azul fuerte, reemplazo de Tu p
 - El lockfile actual contiene dependencias que requieren Node `^22.18.0 || >=24.11.0`; el proyecto declara ahora ese mismo mínimo y mantiene Node 24 como versión recomendada.
 
 El ZIP se entrega sin `node_modules` y sin un `client/dist` heredado. Para validación integral en el servidor se recomienda Node 24.11+ y ejecutar `npm ci && npm run build && npm test`.
+
+## Verificación v1.13.0 · personificación, emails, branding y modo oscuro
+
+Se agregaron pruebas contractuales para comprobar que la personificación sólo pueda habilitarse fuera de producción, que las sesiones conserven el administrador de origen y que existan tanto el ingreso desde el ABM como la salida hacia Administración.
+
+También se verifican las rutas y plantillas del módulo de emails, la validación de asunto/CTA, el hint de Suscripciones, el nuevo branding visible `MiTiendaYa`, el wordmark especial del navbar y la paleta crema del modo oscuro.
+
+Las pruebas de focus de v1.12 se mantienen como regresión: inputs, selects, textareas y búsquedas quedan sin halo azul, mientras enlaces/botones conservan una señal mínima de foco para teclado.
+
+### Resultado final v1.13.0
+
+- **8/8 pruebas específicas nuevas aprobadas** para personificación, emails, hint, branding y modo oscuro.
+- **46/46 pruebas de regresión seleccionadas v1.9.0–v1.13.0 aprobadas**.
+- `node scripts/check.mjs` validó sintaxis en **36 archivos JavaScript**.
+- Se comprobaron además **73 bloques `<script>` de componentes Vue** con `node --check`.
+- Los scripts shell pasan `bash -n` y `package.json`/`package-lock.json` parsean correctamente.
+- No se incluyeron `node_modules` ni `client/dist` heredado en el paquete.
+
+## Verificación v1.14.0 · permisos comerciales y ajuste visual
+
+Se agregaron pruebas de contrato para comprobar que el modelo persiste `featureKeys`/`inheritsPlanId`, que el catálogo contiene las secciones y capacidades vendibles iniciales, que la herencia detecta ciclos y que los planes anteriores mantienen acceso mediante la inicialización de compatibilidad.
+
+La cobertura nueva también verifica `requireFeature`/`PLAN_FEATURE_REQUIRED`, rutas protegidas de Productos/Categorías/Stock/Pedidos/Diseño/Contacto/Dominio/PWA, restricciones de productos y medios de pago, y que dominio, manifest PWA y contacto público no sigan operando cuando el plan no incluye esas capacidades.
+
+En frontend se comprueba el wordmark limpio, el negro profundo con textos crema y acentos vivos, la herencia visible en el ABM, el filtrado de menú/rutas/editor, botones secundarios outlined y cursor de interacción para controles clickeables.
+
+
+### Resultado v1.14.0
+
+- **56/56 pruebas de regresión seleccionadas v1.9.0–v1.14.0 aprobadas**.
+- `node scripts/check.mjs`: sintaxis válida en **37 archivos JavaScript** de API/scripts.
+- Comprobación sintáctica adicional: **73 bloques `<script>` de Vue** válidos.
+- JSON y lockfiles principales válidos.
+- El entorno de preparación usa Node **22.16.0**, por debajo del requisito actual del lockfile (`^22.18.0 || >=24.11.0`), por lo que no se certifica aquí una recompilación Vite. El paquete se entrega sin `node_modules` ni `client/dist` heredado. Para despliegue se recomienda Node 24.11+ y ejecutar `npm ci && npm run build && npm test`.

@@ -25,6 +25,6 @@ export function useStoreBranding(design, { appearance = () => theme.resolved, pr
     icon?.setAttribute('href', originalIcon.href);
     icon?.setAttribute('type', originalIcon.type);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = theme.resolved === 'dark' ? '#161618' : '#ffffff';
+    if (meta) meta.content = theme.resolved === 'dark' ? '#050607' : '#ffffff';
   });
 }

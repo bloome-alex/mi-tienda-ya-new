@@ -25,7 +25,7 @@ export const sectionTemplate = {
 export const defaultDesign = {
   brand: {
     primary: '#18181b', accent: '#71717a', background: '#ffffff', text: '#202024',
-    darkPrimary: '#f4f4f5', darkAccent: '#a1a1aa', darkBackground: '#101012', darkText: '#ededf0',
+    darkPrimary: '#72e3ad', darkAccent: '#5bc5f4', darkBackground: '#050607', darkText: '#f1e7d9',
     font: 'modern', radius: 10, logo: '', favicon: '', colorMode: 'system', allowThemeToggle: true, textDirection: 'ltr'
   },
   navbar: {height:82,mobileHeight:72,paddingX:32,sticky:true,title:'',useStoreName:true,showTitle:true,logoWidth:160,logoHeight:48,mobileLogoWidth:120,mobileLogoHeight:40,logoShape:'natural',logoRadius:12,logoFit:'contain',linksAlign:'center',links:[{...navItemTemplate,id:'home',target:'home',label:'Tienda'},{...navItemTemplate,id:'contact',target:'contact',label:'Contacto'}]},
@@ -136,7 +136,7 @@ export function normalizeDesign(value) {
   // Existing stores keep their previous automatic dark primary until they customize it.
   if (normalized?.brand && value?.brand && value.brand.darkPrimary === undefined && /^#[a-f\d]{6}$/i.test(value.brand.primary || '')) {
     const color = value.brand.primary, channels = rgb(color);
-    normalized.brand.darkPrimary = luminance(color) < 0.25 ? (Math.max(...channels) - Math.min(...channels) < 25 ? '#f4f4f5' : mix(color, '#ffffff', 0.6)) : color;
+    normalized.brand.darkPrimary = luminance(color) < 0.25 ? (Math.max(...channels) - Math.min(...channels) < 25 ? '#72e3ad' : mix(color, '#72e3ad', 0.55)) : color;
   }
   return normalized;
 }

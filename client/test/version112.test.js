@@ -57,5 +57,5 @@ test('prompt de instalación se descarta por tienda y el service worker renueva 
   const app=source('App.vue');
   const sw=publicSource('sw.js');
   assert.match(app,/mty-install-dismissed:\$\{installScope\(\)\}/);
-  assert.match(sw,/mty2-shell-v1\.12\.0/);
+  assert.match(sw,/mty2-shell-v1\.\d+\.\d+/);
 });

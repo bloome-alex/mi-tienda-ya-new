@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Mi Tienda Ya 2",
-  "short_name": "Mi Tienda Ya",
+  "name": "MiTiendaYa",
+  "short_name": "MiTiendaYa",
   "description": "Tu emprendimiento, en su mejor versión. Administrá tu tienda online.",
   "lang": "es-AR",
   "start_url": "/",

@@ -1,10 +1,11 @@
 import dns from 'node:dns/promises';
 import { randomBytes } from 'node:crypto';
 import { domainToASCII } from 'node:url';
-import { Store } from '../models/index.js';
+import { Store, User } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import { domainProvisioningService } from './DomainProvisioningService.js';
+import { planFeatureService } from './PlanFeatureService.js';
 
 const SUBDOMAIN = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
 const HOSTNAME = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])$/;
@@ -17,8 +18,10 @@ function stripPort(host) {
 }
 
 export class DomainService {
-  constructor({ storeModel = Store, resolver = dns, storefront = config.storefront, appUrl = config.appUrl, provisioner = domainProvisioningService } = {}) {
+  constructor({ storeModel = Store, userModel = User, planFeatures = planFeatureService, resolver = dns, storefront = config.storefront, appUrl = config.appUrl, provisioner = domainProvisioningService } = {}) {
     this.storeModel = storeModel;
+    this.userModel = userModel;
+    this.planFeatures = planFeatures;
     this.resolver = resolver;
     this.storefront = storefront;
     this.appUrl = appUrl;
@@ -34,7 +37,7 @@ export class DomainService {
     if (value.length < 3) throw new AppError('El subdominio debe tener al menos 3 caracteres.', 422, 'INVALID_SUBDOMAIN');
     const hostname = this.managedHostname(value);
     const appHost = stripPort(new URL(this.appUrl).host);
-    if (this.storefront.reservedSubdomains.includes(value) || hostname === appHost || hostname === this.storefront.cnameTarget) throw new AppError('Ese subdominio está reservado por Mi Tienda Ya.', 409, 'SUBDOMAIN_RESERVED');
+    if (this.storefront.reservedSubdomains.includes(value) || hostname === appHost || hostname === this.storefront.cnameTarget) throw new AppError('Ese subdominio está reservado por MiTiendaYa.', 409, 'SUBDOMAIN_RESERVED');
     return value;
   }
 
@@ -50,7 +53,7 @@ export class DomainService {
     const base = this.baseDomain();
     const appHost = stripPort(new URL(this.appUrl).host);
     if (ascii === base || ascii.endsWith('.' + base)) throw new AppError(`Para direcciones ${base} usá la opción de subdominio.`, 422, 'USE_SUBDOMAIN_MODE');
-    if (ascii === appHost || ascii === this.storefront.cnameTarget) throw new AppError('Ese dominio está reservado por Mi Tienda Ya.', 409, 'DOMAIN_RESERVED');
+    if (ascii === appHost || ascii === this.storefront.cnameTarget) throw new AppError('Ese dominio está reservado por MiTiendaYa.', 409, 'DOMAIN_RESERVED');
     return ascii;
   }
 
@@ -199,7 +202,13 @@ export class DomainService {
     const domainFilter = parsed.type === 'subdomain'
       ? { 'domain.mode': 'subdomain', 'domain.subdomain': parsed.value }
       : { 'domain.mode': 'custom', 'domain.customDomain': parsed.value, 'domain.status': 'verified' };
-    const store = await this.storeModel.findOne({ ...domainFilter, archived: { $ne: true }, ...(allowInactive ? {} : { active: true }) });
+    let store = await this.storeModel.findOne({ ...domainFilter, archived: { $ne: true }, ...(allowInactive ? {} : { active: true }) });
+    if (store) {
+      const owner = await this.userModel.findById(store.ownerId);
+      const modeFeature = parsed.type === 'subdomain' ? 'domain.subdomain' : 'domain.custom';
+      const keys = owner ? await this.planFeatures.keysForUser(owner) : [];
+      if (!keys.includes('section.domain') || !keys.includes(modeFeature)) store = null;
+    }
     this.cache.set(cacheKey, { value: store || null, expires: Date.now() + 30000 });
     return store || null;
   }

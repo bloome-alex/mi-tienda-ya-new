@@ -42,7 +42,7 @@ export class ThemeService {
     this.document.documentElement.dataset.theme = this.state.resolved;
     this.document.documentElement.style.colorScheme = this.state.resolved;
     const meta = this.document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = this.state.resolved === 'dark' ? '#161618' : '#ffffff';
+    if (meta) meta.content = this.state.resolved === 'dark' ? '#050607' : '#ffffff';
   }
 
   dispose() {

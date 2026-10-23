@@ -1,6 +1,6 @@
-# mi-tienda-ya-2 · v1.12.0
+# mi-tienda-ya-2 · v1.14.0
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.12.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.14.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
@@ -14,7 +14,7 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Home público de la plataforma con navbar y sin menú lateral. Cabecera propia de cada tienda con título opcional, logo y alturas por dispositivo, enlaces configurables y navegación de categorías.
 - Textos editables agrupados y buscables, con alineación y dirección de lectura por zona. Secciones de redes con iconos, nombres o tarjetas y selección de perfiles visibles.
 - Apariencia inicial en negro, blanco y grises, con modo claro/oscuro desde la navbar. La preferencia se conserva en el navegador; inicialmente sigue la apariencia del dispositivo.
-- Administración de usuarios, tiendas, planes, página de inicio y contacto de la plataforma. Auditoría en español, con filtros, página de detalle y cambios antes/después cuando fueron registrados.
+- Administración de usuarios, tiendas, planes, página de inicio y contacto de la plataforma. Incluye emails masivos a vendedores con plantillas y personificación de vendedores exclusivamente en desarrollo/prueba. Auditoría en español, con filtros, página de detalle y cambios antes/después cuando fueron registrados.
 - Productos físicos y digitales, hasta cinco fotos, variantes, productos relacionados, fabricación a pedido e inventario con ajustes absolutos.
 - Categorías y subcategorías multinivel, con tabla jerárquica, movimiento de ramas, filtros que incluyen todos los descendientes y cinco presentaciones públicas de navegación.
 - Productos destacados desde su formulario o directamente desde la tabla, con filtro y guardado individual. La tienda muestra una sección configurable con hasta 12 destacados activos, independiente de los filtros y la paginación del catálogo.
@@ -25,7 +25,7 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
 
-La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.12.0](docs/CAMBIOS-1.12.0.md), [cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
+La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.14.0](docs/CAMBIOS-1.14.0.md), [cambios 1.13.0](docs/CAMBIOS-1.13.0.md), [cambios 1.12.0](docs/CAMBIOS-1.12.0.md), [cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
 ## 1. Preparar el entorno
 
@@ -75,6 +75,7 @@ Completá el archivo `.env`; contiene comentarios para cada opción.
 | `STOREFRONT_CNAME_TARGET` | Host estable al que deben apuntar los dominios propios, por ejemplo `stores.mitiendaya.com.ar`. |
 | `STOREFRONT_VERIFICATION_PREFIX` | Prefijo del TXT de propiedad; por defecto `_mitiendaya-verification`. |
 | `STOREFRONT_RESERVED_SUBDOMAINS` | Lista separada por comas de nombres que ninguna tienda puede reservar. |
+| `DEV_IMPERSONATION_ENABLED` | `false` por defecto. En desarrollo/prueba permite al administrador personificar vendedores desde el ABM. La API impide habilitarlo con `NODE_ENV=production`. |
 
 Para generar cada secreto, ejecutá el siguiente comando y copiá su salida en la variable correspondiente. Ejecutalo nuevamente para obtener la segunda clave:
 

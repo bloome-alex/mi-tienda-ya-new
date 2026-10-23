@@ -60,7 +60,7 @@ export class PlatformMercadoPagoService {
     await this.credentials({ requireEnabled: true });
     if (!config.appUrl.startsWith('https://') && config.isProduction) throw new AppError('APP_URL debe usar HTTPS para recibir el retorno de Mercado Pago.', 422, 'HTTPS_REQUIRED');
     const body = {
-      reason: `Mi Tienda Ya · ${plan.name}`.slice(0, 255),
+      reason: `MiTiendaYa · ${plan.name}`.slice(0, 255),
       external_reference: `mty-user-${user._id}-plan-${plan._id}`,
       payer_email: payerEmail,
       auto_recurring: { frequency: Number(plan.durationDays), frequency_type: 'days', transaction_amount: finiteMoney(plan.price), currency_id: 'ARS' },

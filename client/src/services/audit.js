@@ -58,7 +58,7 @@ export const auditLabels = {
   contactAlign: 'Alineación de contacto', contactDirection: 'Dirección de contacto', footerAlign: 'Alineación del pie', footerDirection: 'Dirección del pie', categoryNavigation: 'Presentación de categorías',
   socialVariant: 'Presentación de redes', socialIconSize: 'Tamaño de iconos de redes', socialNewTab: 'Abrir redes en otra pestaña', socialLinks: 'Redes sociales', network: 'Red social', url: 'Enlace',
   before: 'Antes', after: 'Después', delta: 'Diferencia', productId: 'Producto', productName: 'Producto', variantId: 'Variante', variantName: 'Variante', currentStock: 'Stock actual',
-  unassignedProducts: 'Productos que quedaron sin categoría', fileType: 'Tipo de comprobante', replaced: 'Reemplazó un comprobante anterior', expiresAt: 'Vencimiento', planName: 'Plan asignado', previousPlanName: 'Plan anterior', credentialsUpdated: 'Credenciales actualizadas', fields: 'Campos registrados', termsAccepted: 'Aceptación de términos', termsSource: 'Origen de términos',
+  featureKeys: 'Funcionalidades del plan', inheritsPlanId: 'Plan base', unassignedProducts: 'Productos que quedaron sin categoría', fileType: 'Tipo de comprobante', replaced: 'Reemplazó un comprobante anterior', expiresAt: 'Vencimiento', planName: 'Plan asignado', previousPlanName: 'Plan anterior', credentialsUpdated: 'Credenciales actualizadas', fields: 'Campos registrados', termsAccepted: 'Aceptación de términos', termsSource: 'Origen de términos',
   ...Object.fromEntries(storeTextFields.map(field=>[field.key,field.label])),
 };
 

@@ -248,13 +248,13 @@ Los usuarios de MongoDB se crean sólo al inicializar un volumen vacío. Cambiar
 
 La imagen instala Chromium en `/usr/bin/chromium` y usa `PUPPETEER_SKIP_DOWNLOAD=true` durante la construcción, evitando una segunda descarga del navegador. La instalación puede deshabilitarse con el argumento de build `INSTALL_CHROMIUM=false` si no necesitás WhatsApp.
 
-Por defecto se conserva el sandbox del navegador. Algunos hosts Docker restringen los espacios de nombres requeridos por Chromium; si los registros indican que el sandbox no puede iniciarse, podés optar explícitamente por:
+Por defecto se conserva el sandbox del navegador cuando el proceso corre con un usuario sin privilegios. Algunos hosts Docker restringen los espacios de nombres requeridos por Chromium; si los registros indican que el sandbox no puede iniciarse, podés optar explícitamente por:
 
 ```dotenv
 WHATSAPP_NO_SANDBOX=true
 ```
 
-Después recreá el servicio con `docker compose up -d`. Esta opción reduce el aislamiento del navegador, por lo que no se activa automáticamente. El resto de la aplicación funciona sin iniciar WhatsApp; la conexión se solicita desde administración.
+Si Node/PM2 se ejecuta con UID 0 (root), desde v1.14.1 MiTiendaYa activa automáticamente `--no-sandbox` y `--disable-setuid-sandbox`, porque Chromium rechaza directamente ese escenario sin esos argumentos. Después de cambiar la variable en Docker recreá el servicio con `docker compose up -d`. Esta opción reduce el aislamiento del navegador, por lo que sigue siendo preferible ejecutar la aplicación con un usuario sin privilegios cuando sea posible. El resto de la aplicación funciona sin iniciar WhatsApp; la conexión se solicita desde administración.
 
 ## 5. Chromium fuera de Docker
 
@@ -395,3 +395,20 @@ sudo systemctl status certbot.timer
 ```
 
 No agregues un `certbot renew` por tienda: un único timer renueva todos los certificados administrados por Certbot.
+
+## Personificación para desarrollo/prueba
+
+La personificación administrativa de vendedores está deshabilitada por defecto:
+
+```dotenv
+DEV_IMPERSONATION_ENABLED=false
+```
+
+Para habilitarla en una instalación exclusivamente de desarrollo o prueba:
+
+```dotenv
+NODE_ENV=development
+DEV_IMPERSONATION_ENABLED=true
+```
+
+No debe habilitarse en producción. La API bloquea el arranque si `DEV_IMPERSONATION_ENABLED=true` junto con `NODE_ENV=production`.

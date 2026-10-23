@@ -7,7 +7,7 @@ import { blockTemplate, createDesignSection } from '../../services/design.js';
 import { uniqueKey } from '../../services/ids.js';
 import { confirmDialog } from '../../services/notifications.js';
 import { alignmentOptions, directionOptions, targetOptions, spacingFields } from './fields.js';
-const props = defineProps({ modelValue: { type: Array, default: () => [] }, uploads: { type: Object, default: () => ({}) }, disabled: Boolean, design: Object });
+const props = defineProps({ modelValue: { type: Array, default: () => [] }, uploads: { type: Object, default: () => ({}) }, disabled: Boolean, design: Object, allowSocial: { type: Boolean, default: true } });
 const emit = defineEmits(['update:modelValue', 'upload']);
 const expanded = ref(''), expandedBlocks = reactive({}), newBlockTypes = reactive({});
 const socialEditors=new Map();
@@ -26,6 +26,7 @@ const types = [
   {type:'gallery',title:'Galería',description:'Una colección de fotos',icon:'image'},
   {type:'social',title:'Redes sociales',description:'Conectá con tu comunidad',icon:'globe'}
 ];
+const visibleTypes = () => types.filter(item => item.type !== 'social' || props.allowSocial);
 const blockTypes = [['text','Texto'],['image','Imagen'],['button','Botón'],['benefit','Beneficio'],['faq','Pregunta y respuesta']];
 const sectionFields = [
   {key:'image',label:'Imagen de la sección',type:'image',help:'JPG, PNG o WebP, hasta 5 MiB. También podés agregar imágenes como complementos.'},
@@ -109,7 +110,7 @@ function requestUpload(target,field,file,scope) { emit('upload',{file,target,fie
   <div class="ed-sections-editor">
     <div class="ed-intro"><strong>Armá una tienda a tu medida</strong><p>Agregá secciones, fotos, beneficios, preguntas o redes sociales. Acá definís su estructura y presentación; todos sus títulos, descripciones, preguntas, respuestas y botones se editan en Textos.</p><span class="ed-count">{{modelValue.length}} de 12 secciones</span></div>
     <div class="ed-section-presets" aria-label="Agregar una sección">
-      <button v-for="type in types" :key="type.type" type="button" :disabled="disabled || modelValue.length >= 12" @click="add(type.type)"><Icon :name="type.icon" :size="19"/><span><strong>{{type.title}}</strong><small>{{type.description}}</small></span><Icon name="plus" :size="14"/></button>
+      <button v-for="type in visibleTypes()" :key="type.type" type="button" :disabled="disabled || modelValue.length >= 12" @click="add(type.type)"><Icon :name="type.icon" :size="19"/><span><strong>{{type.title}}</strong><small>{{type.description}}</small></span><Icon name="plus" :size="14"/></button>
     </div>
     <p v-if="modelValue.length >= 12" class="ed-notice">Llegaste al límite de 12 secciones. Eliminá una para agregar otra.</p>
     <p v-if="!modelValue.length" class="ed-notice">Tu catálogo sigue disponible. Elegí una sección para sumar contenido a la portada de tu tienda.</p>
@@ -123,10 +124,10 @@ function requestUpload(target,field,file,scope) { emit('upload',{file,target,fie
         <p v-if="item.buttonText && targetHelp(item.buttonTarget)" class="ed-notice">{{targetHelp(item.buttonTarget)}}</p>
         <details class="ed-inner-details"><summary>Presentación y espaciado<Icon name="chevron-down" :size="14"/></summary><div><DesignField v-for="field in styleFields" :key="field.key" v-model="item[field.key]" :field="field" :scope="'sections.'+item.id" :disabled="disabled"/></div></details>
         <template v-if="item.type==='social'">
-          <DesignField v-model="item.socialVariant" :field="{key:'socialVariant',label:'Presentación de redes',type:'variants',options:[['icons','Sólo iconos'],['labels','Icono y nombre'],['cards','Tarjetas']]}" :scope="'sections.'+item.id" :disabled="disabled"/>
-          <DesignField v-model="item.socialIconSize" :field="{key:'socialIconSize',label:'Tamaño de iconos',type:'range',min:16,max:64,unit:'px'}" :scope="'sections.'+item.id" :disabled="disabled"/>
-          <DesignField v-model="item.socialNewTab" :field="{key:'socialNewTab',label:'Abrir redes en otra pestaña',type:'toggle'}" :scope="'sections.'+item.id" :disabled="disabled"/>
-          <DesignSocialEditor :ref="editor=>rememberSocialEditor(item.id,editor)" v-model="item.socialLinks" :scope="'sections.'+item.id+'.socialLinks'" :disabled="disabled"/>
+          <DesignField v-model="item.socialVariant" :field="{key:'socialVariant',label:'Presentación de redes',type:'variants',options:[['icons','Sólo iconos'],['labels','Icono y nombre'],['cards','Tarjetas']]}" :scope="'sections.'+item.id" :disabled="disabled||!props.allowSocial"/>
+          <DesignField v-model="item.socialIconSize" :field="{key:'socialIconSize',label:'Tamaño de iconos',type:'range',min:16,max:64,unit:'px'}" :scope="'sections.'+item.id" :disabled="disabled||!props.allowSocial"/>
+          <DesignField v-model="item.socialNewTab" :field="{key:'socialNewTab',label:'Abrir redes en otra pestaña',type:'toggle'}" :scope="'sections.'+item.id" :disabled="disabled||!props.allowSocial"/>
+          <DesignSocialEditor :ref="editor=>rememberSocialEditor(item.id,editor)" v-model="item.socialLinks" :scope="'sections.'+item.id+'.socialLinks'" :disabled="disabled||!props.allowSocial"/>
         </template>
         <section class="ed-blocks"><div class="ed-blocks-title"><h3>Complementos</h3><span>{{item.blocks.length}} / 12</span></div>
           <p class="ed-help">Un nivel de contenido dentro de la sección. Usá los botones de orden para organizarlo; su contenido escrito se edita en Textos.</p>

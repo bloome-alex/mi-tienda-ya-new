@@ -190,3 +190,7 @@ Las credenciales deben tener acceso de lectura y escritura a ambos buckets, pero
 La aplicación intenta eliminar de R2 de forma sincrónica cualquier objeto que deje de utilizarse al editar un producto o el diseño. El mismo criterio se aplica al archivar un producto o reemplazar un comprobante. Si R2 responde con un error temporal, se registra una tarea `StorageCleanup` en MongoDB; el worker reintenta y elimina la tarea cuando el objeto ya no está referenciado.
 
 Los uploads que se crean pero nunca se guardan en un producto/diseño quedan marcados como no asociados. El cliente intenta borrarlos al cancelar o abandonar el formulario y el worker realiza una segunda limpieza de seguridad para uploads sin referencia de más de 24 horas.
+
+### Chromium bajo PM2/root (v1.14.1)
+
+Si Node se ejecuta con UID 0, MiTiendaYa agrega automáticamente `--no-sandbox` y `--disable-setuid-sandbox` al Chromium de WhatsApp. También usa `--disable-dev-shm-usage`, `--disable-gpu`, `--no-first-run` y `--no-default-browser-check` para un arranque más estable en servidores. `WHATSAPP_NO_SANDBOX=true` queda disponible para forzar el mismo comportamiento en contenedores o entornos no-root.

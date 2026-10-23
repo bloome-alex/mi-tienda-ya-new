@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { nextTick } from 'vue';
-import { auth, loadSession } from './services/auth.js';
+import { auth, loadSession, canFeature } from './services/auth.js';
 import { isHostedStorefront } from './services/storeHost.js';
 
 const storeChildren=[
@@ -33,31 +33,32 @@ const platformRoutes=[
     {path:'stores/new',component:()=>import('./views/admin/StoreFormView.vue'),meta:{admin:true,title:'Nueva tienda'}},
     {path:'stores/:id',component:()=>import('./views/admin/StoreFormView.vue'),meta:{admin:true,title:'Editar tienda'}},
     {path:'settings',component:()=>import('./views/admin/SettingsView.vue'),meta:{admin:true,title:'Configuración'}},
+    {path:'emails',component:()=>import('./views/admin/EmailsView.vue'),meta:{admin:true,title:'Emails'}},
     {path:'settings/plans/new',component:()=>import('./views/admin/PlanFormView.vue'),meta:{admin:true,title:'Nuevo plan'}},
     {path:'settings/plans/:id',component:()=>import('./views/admin/PlanFormView.vue'),meta:{admin:true,title:'Editar plan'}},
     {path:'audit',component:()=>import('./views/admin/AuditView.vue'),meta:{admin:true,title:'Auditoría'}},
     {path:'audit/:id',component:()=>import('./views/admin/AuditDetailView.vue'),meta:{admin:true,title:'Detalle de auditoría'}},
-    {path:'products',component:()=>import('./views/seller/ProductsView.vue'),meta:{title:'Productos'}},
-    {path:'products/new',component:()=>import('./views/seller/ProductFormView.vue'),meta:{title:'Nuevo producto'}},
-    {path:'products/:id',component:()=>import('./views/seller/ProductFormView.vue'),meta:{title:'Editar producto'}},
-    {path:'categories',component:()=>import('./views/seller/CategoriesView.vue'),meta:{title:'Categorías'}},
-    {path:'categories/new',component:()=>import('./views/seller/CategoryFormView.vue'),meta:{title:'Nueva categoría'}},
-    {path:'categories/:id',component:()=>import('./views/seller/CategoryFormView.vue'),meta:{title:'Editar categoría'}},
-    {path:'stock',component:()=>import('./views/seller/StockView.vue'),meta:{title:'Stock'}},
-    {path:'orders',component:()=>import('./views/seller/OrdersView.vue'),meta:{title:'Pedidos'}},
-    {path:'orders/new',component:()=>import('./views/seller/OrderFormView.vue'),meta:{title:'Nuevo pedido'}},
-    {path:'orders/:id',component:()=>import('./views/seller/OrderDetailView.vue'),meta:{title:'Detalle del pedido'}},
-    {path:'payments',component:()=>import('./views/seller/PaymentsView.vue'),meta:{title:'Cobros y entrega'}},
-    {path:'payments/methods/new',component:()=>import('./views/seller/PaymentMethodFormView.vue'),meta:{title:'Nuevo medio de pago'}},
-    {path:'payments/methods/:id',component:()=>import('./views/seller/PaymentMethodFormView.vue'),meta:{title:'Editar medio de pago'}},
-    {path:'payments/deliveries/new',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Nueva forma de entrega'}},
-    {path:'payments/deliveries/:id',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Editar forma de entrega'}},
-    {path:'contact',component:()=>import('./views/seller/ContactView.vue'),meta:{title:'Contacto'}},
-    {path:'domain',component:()=>import('./views/seller/DomainView.vue'),meta:{title:'Dominio'}},
-    {path:'pwa',component:()=>import('./views/seller/StorePwaView.vue'),meta:{title:'Aplicación PWA'}},
+    {path:'products',component:()=>import('./views/seller/ProductsView.vue'),meta:{title:'Productos',feature:'section.products'}},
+    {path:'products/new',component:()=>import('./views/seller/ProductFormView.vue'),meta:{title:'Nuevo producto',feature:'section.products'}},
+    {path:'products/:id',component:()=>import('./views/seller/ProductFormView.vue'),meta:{title:'Editar producto',feature:'section.products'}},
+    {path:'categories',component:()=>import('./views/seller/CategoriesView.vue'),meta:{title:'Categorías',feature:'section.categories'}},
+    {path:'categories/new',component:()=>import('./views/seller/CategoryFormView.vue'),meta:{title:'Nueva categoría',feature:'section.categories'}},
+    {path:'categories/:id',component:()=>import('./views/seller/CategoryFormView.vue'),meta:{title:'Editar categoría',feature:'section.categories'}},
+    {path:'stock',component:()=>import('./views/seller/StockView.vue'),meta:{title:'Stock',feature:'section.stock'}},
+    {path:'orders',component:()=>import('./views/seller/OrdersView.vue'),meta:{title:'Pedidos',feature:'section.orders'}},
+    {path:'orders/new',component:()=>import('./views/seller/OrderFormView.vue'),meta:{title:'Nuevo pedido',features:['section.orders','orders.manual']}},
+    {path:'orders/:id',component:()=>import('./views/seller/OrderDetailView.vue'),meta:{title:'Detalle del pedido',feature:'section.orders'}},
+    {path:'payments',component:()=>import('./views/seller/PaymentsView.vue'),meta:{title:'Cobros y entrega',feature:'section.payments'}},
+    {path:'payments/methods/new',component:()=>import('./views/seller/PaymentMethodFormView.vue'),meta:{title:'Nuevo medio de pago',feature:'section.payments'}},
+    {path:'payments/methods/:id',component:()=>import('./views/seller/PaymentMethodFormView.vue'),meta:{title:'Editar medio de pago',feature:'section.payments'}},
+    {path:'payments/deliveries/new',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Nueva forma de entrega',features:['section.payments','payments.delivery']}},
+    {path:'payments/deliveries/:id',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Editar forma de entrega',features:['section.payments','payments.delivery']}},
+    {path:'contact',component:()=>import('./views/seller/ContactView.vue'),meta:{title:'Contacto',feature:'section.contact'}},
+    {path:'domain',component:()=>import('./views/seller/DomainView.vue'),meta:{title:'Dominio',feature:'section.domain'}},
+    {path:'pwa',component:()=>import('./views/seller/StorePwaView.vue'),meta:{title:'Aplicación PWA',feature:'section.pwa'}},
     {path:'plan',redirect:'/app/subscription'},
     {path:'subscription',component:()=>import('./views/seller/SubscriptionView.vue'),meta:{title:'Mi suscripción'}},
-    {path:'design',component:()=>import('./views/seller/DesignView.vue'),meta:{title:'Diseño de tu tienda'}}
+    {path:'design',component:()=>import('./views/seller/DesignView.vue'),meta:{title:'Diseño de tu tienda',feature:'section.design'}}
   ]},
   {path:'/t/:slug',component:()=>import('./layouts/StoreLayout.vue'),children:storeChildren},
   {path:'/pedido/:id',component:()=>import('./views/public/OrderTrackingView.vue'),meta:{title:'Tu pedido'}},
@@ -84,8 +85,12 @@ router.beforeEach(async to=>{
     try { await loadSession(); } catch { return {path:'/login',query:{error:'connection'}}; }
     if(!auth.user) return {path:'/login',query:{next:to.fullPath}};
     if(to.meta.admin && auth.user.role!=='admin') return '/app/dashboard';
+    if(auth.user.role==='vendedor'){
+      const required = to.meta.features || (to.meta.feature ? [to.meta.feature] : []);
+      if(required.length && !required.every(canFeature)) return {path:'/app/dashboard',query:{featureDenied:required[0]}};
+    }
     if(auth.user.mustChangePassword && !to.meta.allowPasswordChange) return '/root/change-password';
   }
 });
-router.afterEach(to=>{document.title=(to.meta.title ? `${to.meta.title} · `:'')+'Mi Tienda Ya';});
+router.afterEach(to=>{document.title=(to.meta.title ? `${to.meta.title} · `:'')+'MiTiendaYa';});
 export default router;

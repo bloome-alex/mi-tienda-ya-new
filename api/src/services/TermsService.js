@@ -6,10 +6,11 @@ import { normalizeDesign } from '../../../client/src/services/design.js';
 /** The document and its timestamp are server-owned. A manual order is never
  * recorded as an acceptance on behalf of its customer. */
 export class TermsService {
-  acceptance(store, input, { manual = false } = {}) {
+  acceptance(store, input, { manual = false, featureKeys = null } = {}) {
     const design = normalizeDesign(store.design || {});
-    const internal = design.terms.enabled === true;
-    const external = !internal && Boolean(design.checkout.termsUrl);
+    const termsAllowed = !Array.isArray(featureKeys) || featureKeys.includes('checkout.terms');
+    const internal = termsAllowed && design.terms.enabled === true;
+    const external = termsAllowed && !internal && Boolean(design.checkout.termsUrl);
     const required = internal || external;
     if (manual) return { required, accepted: false, source: 'manual' };
     if (input.termsAccepted !== undefined && typeof input.termsAccepted !== 'boolean') throw new AppError('La aceptación de términos debe ser un valor verdadero o falso.', 422, 'INVALID_TERMS_ACCEPTANCE');

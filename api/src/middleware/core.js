@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { Session, User, Store } from '../models/index.js';
 import { hashToken } from '../utils/crypto.js';
+import { planFeatureService } from '../services/PlanFeatureService.js';
 export class AppError extends Error {
   constructor(message, status = 400, code = 'VALIDATION_ERROR', details) { super(message); this.status = status; this.statusCode = status; this.code = code; this.details = details; }
 }
@@ -29,6 +30,22 @@ export function requireAdmin(req, res, next) {
     next();
   });
 }
+
+export const requireFeature = featureKey => asyncHandler(async (req, res, next) => {
+  await new Promise((resolve, reject) => requireAuth(req, res, error => error ? reject(error) : resolve()));
+  if (req.user.role === 'admin' || await planFeatureService.has(req.user, featureKey)) return next();
+  const label = planFeatureService.label(featureKey);
+  throw new AppError(`Tu plan no incluye ${label}.`, 403, 'PLAN_FEATURE_REQUIRED', { featureKey, label });
+});
+
+export const requireAnyFeature = featureKeys => asyncHandler(async (req, res, next) => {
+  await new Promise((resolve, reject) => requireAuth(req, res, error => error ? reject(error) : resolve()));
+  if (req.user.role === 'admin') return next();
+  const keys = await planFeatureService.keysForUser(req.user);
+  if (featureKeys.some(key => keys.includes(key))) return next();
+  throw new AppError('Tu plan no incluye esta funcionalidad.', 403, 'PLAN_FEATURE_REQUIRED', { featureKeys });
+});
+
 export const requireStoreAccess = asyncHandler(async (req, res, next) => {
   await new Promise((resolve, reject) => requireAuth(req, res, error => error ? reject(error) : resolve()));
   const id = req.params.storeId;

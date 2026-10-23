@@ -19,6 +19,7 @@ export const config = {
   sessionDays: number('SESSION_DAYS', 7),
   bcryptRounds: number('BCRYPT_ROUNDS', 12),
   trustProxy: process.env.TRUST_PROXY === '1' ? 1 : false,
+  devImpersonation: { enabled: !((process.env.NODE_ENV || 'development') === 'production') && process.env.DEV_IMPERSONATION_ENABLED === 'true' },
   uploadDir: path.resolve(process.env.UPLOAD_DIR || path.join(projectRoot, 'api/data/uploads')), // legado: sólo migración de archivos locales previos a v1.8
   storefront: {
     baseDomain: (process.env.STOREFRONT_BASE_DOMAIN || 'mitiendaya.com.ar').trim().toLowerCase().replace(/^\.+|\.+$/g, ''),
@@ -46,9 +47,12 @@ export const config = {
   whatsappClientId: process.env.WHATSAPP_CLIENT_ID || 'mi-tienda-ya-2',
   whatsappDataPath: path.resolve(process.env.WHATSAPP_DATA_PATH || path.join(projectRoot, 'api/data/whatsapp')),
   whatsappExecutablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-  whatsappNoSandbox: process.env.WHATSAPP_NO_SANDBOX === 'true',
+  // Chromium refuses to start as root unless --no-sandbox is present.
+  // Keep the explicit env switch for non-root/container deployments, but
+  // automatically enable it when PM2/Node is actually running as root.
+  whatsappNoSandbox: process.env.WHATSAPP_NO_SANDBOX === 'true' || (typeof process.getuid === 'function' && process.getuid() === 0),
   orderReservationMinutes: number('ORDER_RESERVATION_MINUTES', 60),
-  smtp: { host: process.env.SMTP_HOST, port: number('SMTP_PORT', 587), secure: process.env.SMTP_SECURE === 'true', user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS, from: process.env.SMTP_FROM || 'Mi Tienda Ya <no-reply@example.com>' },
+  smtp: { host: process.env.SMTP_HOST, port: number('SMTP_PORT', 587), secure: process.env.SMTP_SECURE === 'true', user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS, from: process.env.SMTP_FROM || 'MiTiendaYa <no-reply@example.com>' },
 };
 export function validateConfig() {
   if (!config.rootUser || !config.rootPassword) throw new Error('Configurá ROOT_USER y ROOT_PASSWORD en .env antes de iniciar.');
@@ -59,6 +63,7 @@ export function validateConfig() {
   if (!Number.isInteger(config.sessionDays) || config.sessionDays < 1 || config.sessionDays > 90) throw new Error('SESSION_DAYS debe estar entre 1 y 90.');
   if (config.rootUser.length > 100) throw new Error('ROOT_USER no puede superar 100 caracteres.');
   if (config.isProduction && !config.appUrl.startsWith('https://')) throw new Error('APP_URL debe usar HTTPS en producción.');
+  if (config.isProduction && process.env.DEV_IMPERSONATION_ENABLED === 'true') throw new Error('DEV_IMPERSONATION_ENABLED no puede habilitarse en producción.');
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(config.storefront.baseDomain)) throw new Error('STOREFRONT_BASE_DOMAIN debe ser un dominio válido.');
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(config.storefront.cnameTarget)) throw new Error('STOREFRONT_CNAME_TARGET debe ser un dominio válido.');
   if (!Number.isInteger(config.domainProvisioning.timeoutMs) || config.domainProvisioning.timeoutMs < 30000 || config.domainProvisioning.timeoutMs > 600000) throw new Error('DOMAIN_PROVISIONING_TIMEOUT_MS debe estar entre 30000 y 600000 ms.');

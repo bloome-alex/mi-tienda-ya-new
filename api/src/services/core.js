@@ -9,6 +9,7 @@ import { AuditService, auditService } from './AuditService.js';
 import { databaseIndexService } from './DatabaseIndexService.js';
 import { domainService } from './DomainService.js';
 import { subscriptionService } from './SubscriptionService.js';
+import { planFeatureService } from './PlanFeatureService.js';
 export { AuditService, auditService };
 
 export const defaultHome = {
@@ -28,20 +29,21 @@ export class SettingsService {
 export class EntitlementService {
   async forUser(input) {
     const user = input && typeof input === 'object' && typeof input.role === 'string' ? input : await User.findById(input?._id || input);
-    if (!user || !user.active) return { allowed: false, trial: false, expiresAt: null, maxStores: 1, maxProducts: 0, reason: 'Usuario inactivo.' };
-    if (user.role === 'admin') return { allowed: true, trial: false, expiresAt: null, maxStores: 1000, maxProducts: 0, reason: 'Administración' };
+    if (!user || !user.active) return { allowed: false, trial: false, expiresAt: null, maxStores: 1, maxProducts: 0, featureKeys: [], reason: 'Usuario inactivo.' };
+    if (user.role === 'admin') return { allowed: true, trial: false, expiresAt: null, maxStores: 1000, maxProducts: 0, featureKeys: planFeatureService.allKeys(), reason: 'Administración' };
     const planId = user.planId?._id || user.planId;
     const plan = planId ? await Plan.findById(planId) : null;
     const now = new Date();
-    if (plan && user.planExpiresAt && new Date(user.planExpiresAt) > now) return { allowed: true, trial: false, expiresAt: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
+    const featureKeys = await planFeatureService.keysForUser(user);
+    if (plan && user.planExpiresAt && new Date(user.planExpiresAt) > now) return { allowed: true, trial: false, expiresAt: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
     if (plan) {
       const [settings, subscription] = await Promise.all([SettingsService.get(), subscriptionService.current(user._id)]);
       const billing = subscriptionService.billingState({ user, subscription, settings, now });
-      if (billing.inGrace) return { allowed: true, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: 'Período de cortesía', billing };
-      if (billing.graceExpired) return { allowed: false, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, reason: 'El período de cortesía finalizó.', billing };
+      if (billing.inGrace) return { allowed: true, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: 'Período de cortesía', billing };
+      if (billing.graceExpired) return { allowed: false, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: 'El período de cortesía finalizó.', billing };
     }
-    if (user.trialEndsAt && new Date(user.trialEndsAt) > now) return { allowed: true, trial: true, expiresAt: user.trialEndsAt, maxStores: 1, maxProducts: 0, reason: 'Período de prueba' };
-    return { allowed: false, trial: false, expiresAt: user.planExpiresAt || user.trialEndsAt || null, maxStores: plan?.maxStores || 1, maxProducts: plan?.maxProducts || 0, reason: plan ? 'Tu plan venció.' : 'Tu prueba finalizó. Elegí un plan para publicar.' };
+    if (user.trialEndsAt && new Date(user.trialEndsAt) > now) return { allowed: true, trial: true, expiresAt: user.trialEndsAt, maxStores: 1, maxProducts: 0, featureKeys, reason: 'Período de prueba' };
+    return { allowed: false, trial: false, expiresAt: user.planExpiresAt || user.trialEndsAt || null, maxStores: plan?.maxStores || 1, maxProducts: plan?.maxProducts || 0, featureKeys, reason: plan ? 'Tu plan venció.' : 'Tu prueba finalizó. Elegí un plan para publicar.' };
   }
   static forUser(user) { return entitlementService.forUser(user); }
 }
@@ -72,12 +74,27 @@ export function safeStore(store) {
 export function publicStore(store) { const data = safeStore(store); delete data.ownerId; delete data.integrations; delete data.archived; delete data.__v; data.domain = { mode: data.domain.mode, publicUrl: data.publicUrl }; return data; }
 
 export class AuthService {
-  async session(user, res) {
+  async session(user, res, { impersonatedByUserId = null } = {}) {
     const token = randomToken(), csrfToken = randomToken();
     const expiresAt = new Date(Date.now() + config.sessionDays * 86400000);
-    await Session.create({ userId: user._id, tokenHash: hashToken(token), csrfToken, expiresAt });
+    await Session.create({ userId: user._id, ...(impersonatedByUserId ? { impersonatedByUserId } : {}), tokenHash: hashToken(token), csrfToken, expiresAt });
     res.cookie('mt_session', token, { httpOnly: true, secure: config.isProduction || config.appUrl.startsWith('https:'), sameSite: 'lax', expires: expiresAt, path: '/' });
-    return { user: safeUser(user), csrfToken };
+    return { user: safeUser(user), csrfToken, entitlement: await entitlementService.forUser(user), features: { devImpersonation: config.devImpersonation.enabled }, impersonation: { active: Boolean(impersonatedByUserId) } };
+  }
+  async impersonate(admin, seller, res, currentSession) {
+    if (!config.devImpersonation.enabled || config.isProduction) throw new AppError('La personificación sólo está disponible en desarrollo o prueba.', 404, 'DEV_IMPERSONATION_DISABLED');
+    if (admin?.role !== 'admin' || !seller?.active || seller?.role !== 'vendedor') throw new AppError('No se puede personificar este usuario.', 422, 'IMPERSONATION_INVALID_USER');
+    if (currentSession?._id) await Session.deleteOne({ _id: currentSession._id });
+    await AuditService.log({ actorId: admin._id, action: 'auth.impersonation.started', entity: 'user', entityId: seller._id, details: { sellerEmail: seller.email } });
+    return this.session(seller, res, { impersonatedByUserId: admin._id });
+  }
+  async exitImpersonation(session, res) {
+    if (!config.devImpersonation.enabled || config.isProduction || !session?.impersonatedByUserId) throw new AppError('No hay una personificación activa.', 404, 'IMPERSONATION_NOT_ACTIVE');
+    const admin = await User.findOne({ _id: session.impersonatedByUserId, role: 'admin', active: true });
+    if (!admin) throw new AppError('No se pudo recuperar la sesión de administración.', 403, 'IMPERSONATION_ADMIN_UNAVAILABLE');
+    await Session.deleteOne({ _id: session._id });
+    await AuditService.log({ actorId: admin._id, action: 'auth.impersonation.ended', entity: 'user', entityId: session.userId });
+    return this.session(admin, res);
   }
   async rootLogin({ username, password }, res) {
     const admin = await User.findOne({ role: 'admin', username }).select('+passwordHash');
@@ -103,7 +120,7 @@ export class AuthService {
     const link = await MagicLink.create({ email, name, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + settings.magicLinkMinutes * 60000) });
     const url = `${config.appUrl}/auth/verify?token=${token}`;
     try {
-      await MailService.send({ to: email, subject: 'Tu enlace de acceso a Mi Tienda Ya', text: `Ingresá a Mi Tienda Ya: ${url}\nEste enlace se puede usar una sola vez y vence en ${settings.magicLinkMinutes} minutos. Si no lo solicitaste, ignorá este correo.`, html: `<div style="font-family:Arial,sans-serif;max-width:540px;margin:auto;padding:32px;color:#153b36"><h1>Tu tienda te espera.</h1><p>Usá este enlace para ingresar a tu panel:</p><p><a style="background:#00796b;color:white;padding:14px 24px;display:inline-block;border-radius:8px;text-decoration:none" href="${escapeHtml(url)}">Ingresar a Mi Tienda Ya</a></p><p>Vence en ${settings.magicLinkMinutes} minutos y se puede usar una sola vez.</p><p>Si no solicitaste este acceso, podés ignorar el correo.</p></div>` });
+      await MailService.send({ to: email, subject: 'Tu enlace de acceso a MiTiendaYa', text: `Ingresá a MiTiendaYa: ${url}\nEste enlace se puede usar una sola vez y vence en ${settings.magicLinkMinutes} minutos. Si no lo solicitaste, ignorá este correo.`, html: `<div style="font-family:Arial,sans-serif;max-width:540px;margin:auto;padding:32px;color:#153b36"><h1>Tu tienda te espera.</h1><p>Usá este enlace para ingresar a tu panel:</p><p><a style="background:#00796b;color:white;padding:14px 24px;display:inline-block;border-radius:8px;text-decoration:none" href="${escapeHtml(url)}">Ingresar a MiTiendaYa</a></p><p>Vence en ${settings.magicLinkMinutes} minutos y se puede usar una sola vez.</p><p>Si no solicitaste este acceso, podés ignorar el correo.</p></div>` });
     } catch (error) { await MagicLink.deleteOne({ _id: link._id }); throw error; }
     return { message: 'Si el correo puede acceder, recibirá un enlace en unos instantes.' };
   }
@@ -135,6 +152,7 @@ export const authService = new AuthService();
 export async function bootstrap() {
   await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
   await databaseIndexService.reconcileCategoryUniquenessIndex();
+  await planFeatureService.initializeLegacyPlans();
   await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }

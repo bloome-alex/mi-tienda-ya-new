@@ -195,15 +195,57 @@ La pantalla de pago alojada en Mercado Pago corresponde a Checkout Pro y tiene l
 
 | Aspecto | Alcance entregado |
 | --- | --- |
-| ZIP | Fuente de ambos workspaces, dependencias fijadas en el lockfile, frontend compilado, `.env.example`, pruebas, documentación, PM2 y Docker Compose. Excluye `node_modules`, `.env` real, bases de datos y datos de clientes. |
+| ZIP | Fuente de ambos workspaces, dependencias fijadas en el lockfile, `.env.example`, pruebas, documentación, PM2 y Docker Compose. El frontend se compila en el entorno de despliegue con `npm run build`. Excluye `node_modules`, `.env` real, bases de datos y datos de clientes. |
 | Ejecución | Un proceso Node/Express en producción para API y cliente, administrable por PM2 en modo fork. El trabajador de correos/pedidos está en ese proceso. Las categorías usan exclusión persistida por tienda y recuperación antes de recibir tráfico; no ejecutar una segunda instancia mientras se recupera. |
 | Persistencia | MongoDB, imágenes y comprobantes, sesión de WhatsApp y claves de entorno deben conservarse entre despliegues. |
 | Demostración | Carga optativa e idempotente con `npm run seed:demo` y `DEMO_EMAIL`. La tienda Feria Estudio incluye tres categorías principales, tres subcategorías y seis productos, con variantes, destacados, un producto a pedido y uno digital; utiliza ilustraciones SVG propias. Los datos de cobro y enlace digital son ejemplos identificados. |
 | Pruebas automáticas | La suite incluye API con MongoDB temporal y servicios del frontend, categorías profundas, mutaciones simultáneas, recuperación y fondos flexibles. Los resultados de la versión y el alcance de revisión de interfaz están en PRUEBAS.md. |
-| Build y sintaxis | Frontend compilado incluido en client/dist. Los resultados de build y sintaxis de la entrega están en PRUEBAS.md. |
+| Build y sintaxis | El ZIP no arrastra un `client/dist` de una versión anterior. Los resultados de sintaxis y las instrucciones de build están en PRUEBAS.md. |
 | Arranque HTTP | Verificados API, MongoDB, cliente compilado, rutas profundas, PWA y privacidad de archivos. También verificados los dos workspaces en desarrollo y el proxy de Vite. |
 | Revisión visual | Portada y tienda revisadas con API real y datos temporales. Panel/diseñador revisados con los componentes reales y datos en memoria, en escritorio y 390 × 844 simulado. Se comprobó sincronización, scroll independiente, selección de tienda, subcategorías y chip de destacados; alcance exacto en PRUEBAS.md. |
 | Proveedores externos | Código real de SMTP, Mercado Pago y WhatsApp. Las pruebas automáticas usan respuestas controladas; no se enviaron mensajes con cuentas del usuario ni se hicieron cobros/emparejamientos reales. |
 | Contenedores | Incluye configuración Docker/Compose; no se ejecutó la imagen Docker durante la preparación de esta entrega. |
 
 La referencia de endpoints está en [API](API.md), las reglas de concurrencia en [Arquitectura](ARQUITECTURA.md), la instalación en [Despliegue](DESPLIEGUE.md) y los pasos con proveedores en [Integraciones](INTEGRACIONES.md). [Pruebas](PRUEBAS.md) contiene los casos y el recorrido de validación posterior.
+
+## Administración · Emails y herramientas de prueba
+
+- **Emails a vendedores:** plantillas de novedades de versión, comunicado y aviso de servicio, vista previa y envío mediante el SMTP configurado a todos los vendedores con email.
+- **Personificación de vendedor:** disponible únicamente cuando `DEV_IMPERSONATION_ENABLED=true` fuera de producción. Permite entrar desde el ABM de Usuarios y regresar a la sesión administrativa sin utilizar el enlace mágico del vendedor.
+- **Branding del panel:** todas las referencias visibles utilizan `MiTiendaYa`; el navbar aplica el wordmark adaptado al modo claro/oscuro.
+
+## Planes comerciales y permisos efectivos · v1.14.0
+
+Los planes se administran como una matriz de permisos. `featureKeys` contiene las funciones propias y `inheritsPlanId` permite heredar todas las funciones de un plan base. La herencia no copia precio, duración, cantidad de tiendas ni cantidad de productos. La autorización efectiva se calcula siempre en `PlanFeatureService` y se valida en frontend y backend.
+
+| Clave | Funcionalidad |
+| --- | --- |
+| `section.products` | Sección Productos |
+| `section.categories` | Sección Categorías |
+| `section.stock` | Sección Stock |
+| `section.orders` | Sección Pedidos |
+| `section.payments` | Sección Cobros y entregas |
+| `section.design` | Editor de Diseño |
+| `section.contact` | Sección y formulario de Contacto |
+| `section.domain` | Sección Dominio |
+| `section.pwa` | Aplicación PWA por tienda |
+| `domain.subdomain` | Subdominio MiTiendaYa |
+| `domain.custom` | Dominio propio con validación/aprovisionamiento |
+| `products.variants` | Variantes de producto |
+| `products.digital` | Productos digitales |
+| `products.featured` | Productos destacados |
+| `products.related` | Productos relacionados/recomendados |
+| `orders.manual` | Alta manual de pedidos |
+| `payments.cash` | Efectivo |
+| `payments.transfer` | Transferencia y comprobantes |
+| `payments.mercadopago` | Mercado Pago Checkout Pro por tienda |
+| `payments.delivery` | Formas de entrega configurables |
+| `design.custom_sections` | Secciones y complementos personalizados |
+| `design.theme_modes` | Temas claro/oscuro de la tienda |
+| `design.backgrounds` | Fondos personalizados |
+| `design.social_links` | Redes sociales |
+| `design.category_navigation` | Navegación avanzada de categorías |
+| `checkout.terms` | Términos personalizados y aceptación |
+| `contact.whatsapp` | WhatsApp flotante |
+
+Cualquier capacidad vendible nueva debe agregarse al catálogo central y tener una comprobación equivalente en la interfaz y en la API antes de considerarse parte de un plan.

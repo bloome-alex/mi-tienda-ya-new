@@ -5,7 +5,7 @@ import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
 import { User, Plan, Store, Category, Product, Settings, AuditLog, Subscription, Session } from '../models/index.js';
 import { config } from '../config.js';
-import { AppError, asyncHandler, requireAuth, requireAdmin, requireStoreAccess } from '../middleware/core.js';
+import { AppError, asyncHandler, requireAuth, requireAdmin, requireStoreAccess, requireFeature, requireAnyFeature } from '../middleware/core.js';
 import { ok, listResponse, pagination } from '../utils/http.js';
 import { encryptSecret } from '../utils/crypto.js';
 import { validateDesign } from '../utils/design.js';
@@ -17,6 +17,8 @@ import { imageService } from '../services/ImageService.js';
 import { assetService } from '../services/AssetService.js';
 import { domainService } from '../services/DomainService.js';
 import { subscriptionService } from '../services/SubscriptionService.js';
+import { sellerMailService } from '../services/SellerMailService.js';
+import { planFeatureService } from '../services/PlanFeatureService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -35,16 +37,20 @@ const searchFilter = (query, fields) => {
   return { $or: fields.map(field => ({ [field]: { $regex: escaped, $options: 'i' } })) };
 };
 const audit = (req, action, entity, entityId, details, storeId = req.store?._id) => AuditService.log({ actorId: req.user?._id, actor: req.user, storeId, store: req.store, action, entity, entityId, details });
+const assertPlanFeature = async (user, featureKey) => { if (user?.role === 'admin' || await planFeatureService.has(user, featureKey)) return; const label = planFeatureService.label(featureKey); throw new AppError(`Tu plan no incluye ${label}.`, 403, 'PLAN_FEATURE_REQUIRED', { featureKey, label }); };
 const authLimiter = rateLimit({ windowMs: 15 * 60000, limit: 15, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: { code: 'RATE_LIMIT', message: 'Demasiados intentos. Esperá unos minutos.' } } });
 
 router.get('/public/config', asyncHandler(async (_req, res) => {
   const settings = await SettingsService.get();
-  const plans = await Plan.find({ active: true }).sort({ sortOrder: 1, price: 1 }).lean();
+  const rows = await Plan.find({ active: true }).sort({ sortOrder: 1, price: 1 }).lean();
+  const plans = await planFeatureService.presentMany(rows);
   ok(res, { trialDays: settings.trialDays, contact: settings.contact, home: settings.home, plans });
 }));
 router.get('/public/stores/:slug/manifest.webmanifest', asyncHandler(async (req, res) => {
   const store = await Store.findOne({ slug: req.params.slug, archived: { $ne: true } }).lean();
   if (!store) throw new AppError('Tienda no encontrada.', 404, 'STORE_NOT_FOUND');
+  const owner = await User.findById(store.ownerId);
+  if (!owner || !await planFeatureService.has(owner, 'section.pwa')) throw new AppError('La aplicación PWA no está incluida en el plan de esta tienda.', 404, 'PWA_NOT_AVAILABLE');
   const hosted = await domainService.resolveStoreByHost(req.hostname, { allowInactive: true });
   const onOwnHost = hosted && String(hosted._id) === String(store._id);
   const root = onOwnHost ? '/' : `/t/${store.slug}/`;
@@ -57,7 +63,8 @@ router.get('/public/stores/:slug/manifest.webmanifest', asyncHandler(async (req,
     icons: [{ src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' }, { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }],
   }));
 }));
-router.get('/auth/me', asyncHandler(async (req, res) => ok(res, { user: req.user ? safeUser(req.user) : null, csrfToken: req.session?.csrfToken || null })));
+router.get('/auth/me', asyncHandler(async (req, res) => { const entitlement = req.user ? await EntitlementService.forUser(req.user) : null; ok(res, { user: req.user ? safeUser(req.user) : null, csrfToken: req.session?.csrfToken || null, features: { devImpersonation: config.devImpersonation.enabled }, entitlement, impersonation: { active: Boolean(req.session?.impersonatedByUserId) } }); }));
+router.post('/auth/impersonation/exit', requireAuth, asyncHandler(async (req, res) => ok(res, await authService.exitImpersonation(req.session, res))));
 router.post('/auth/root/login', authLimiter, asyncHandler(async (req, res) => {
   const body = z.object({ username: text(100).min(1), password: z.string().min(1).max(200) }).parse(req.body);
   if (req.session) await Session.deleteOne({ _id: req.session._id });
@@ -78,18 +85,58 @@ router.post('/auth/logout', requireAuth, asyncHandler(async (req, res) => {
   await Session.deleteOne({ _id: req.session._id }); res.clearCookie('mt_session', { path: '/', httpOnly: true, sameSite: 'lax', secure: config.isProduction || config.appUrl.startsWith('https:') }); ok(res, { message: 'Sesión cerrada.' });
 }));
 
-const planSchema = z.object({ name: text(100).min(1), icon: text(60).default('store'), previousPrice: money.default(0), price: money, durationDays: integer(3660).refine(n => n > 0).default(30), features: z.array(text(300).min(1)).max(40).default([]), maxStores: integer(1000).refine(n => n > 0).default(1), maxProducts: integer().default(100), active: trueBoolean.default(true), featured: trueBoolean.default(false), sortOrder: z.coerce.number().int().min(-1000).max(1000).default(0) });
-router.get('/admin/plans', requireAdmin, asyncHandler((req, res) => listResponse(res, Plan, searchFilter(req.query, ['name']), req.query, { sort: { sortOrder: 1, createdAt: -1 } })));
-router.get('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Plan.findById(req.params.id); if (!item) throw new AppError('Plan no encontrado.', 404); ok(res, item); }));
-router.post('/admin/plans', requireAdmin, asyncHandler(async (req, res) => { const item = await Plan.create(planSchema.parse(req.body)); await audit(req, 'plan.created', 'plan', item._id, { changes: AuditService.changes({}, item, Object.keys(planSchema.shape)) }); ok(res, item, 201); }));
+const featureKey = z.string().refine(key => planFeatureService.isKnown(key), 'Funcionalidad de plan desconocida.');
+const planSchema = z.object({
+  name: text(100).min(1), icon: text(60).default('store'), previousPrice: money.default(0), price: money,
+  durationDays: integer(3660).refine(n => n > 0).default(30), featureKeys: z.array(featureKey).max(100).default([]),
+  inheritsPlanId: objectId.nullable().optional().default(null), maxStores: integer(1000).refine(n => n > 0).default(1),
+  maxProducts: integer().default(100), active: trueBoolean.default(true), featured: trueBoolean.default(false),
+  sortOrder: z.coerce.number().int().min(-1000).max(1000).default(0),
+});
+const planPayload = body => {
+  const payload = { ...body };
+  if (Object.prototype.hasOwnProperty.call(body, 'featureKeys')) {
+    payload.featureKeys = planFeatureService.normalize(body.featureKeys);
+    payload.features = payload.featureKeys.map(key => planFeatureService.label(key));
+  }
+  return payload;
+};
+router.get('/admin/plan-features', requireAdmin, asyncHandler(async (_req, res) => {
+  const rows = await Plan.find({}).sort({ sortOrder: 1, price: 1, createdAt: 1 }).lean();
+  ok(res, { groups: planFeatureService.catalog(), plans: await planFeatureService.presentMany(rows, { admin: true }) });
+}));
+router.get('/admin/plans', requireAdmin, asyncHandler(async (req, res) => {
+  const { page, limit } = pagination(req.query);
+  const filter = searchFilter(req.query, ['name']);
+  const [rows, total] = await Promise.all([Plan.find(filter).sort({ sortOrder: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Plan.countDocuments(filter)]);
+  ok(res, await planFeatureService.presentMany(rows, { admin: true }), 200, { page, limit, total });
+}));
+router.get('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Plan.findById(req.params.id); if (!item) throw new AppError('Plan no encontrado.', 404); ok(res, await planFeatureService.present(item, { admin: true })); }));
+router.post('/admin/plans', requireAdmin, asyncHandler(async (req, res) => {
+  const body = planSchema.parse(req.body); await planFeatureService.assertInheritance({ inheritsPlanId: body.inheritsPlanId });
+  await planFeatureService.assertDependencies({ featureKeys: body.featureKeys, inheritsPlanId: body.inheritsPlanId });
+  const item = await Plan.create(planPayload(body));
+  await audit(req, 'plan.created', 'plan', item._id, { changes: AuditService.changes({}, item, Object.keys(planSchema.shape)) });
+  ok(res, await planFeatureService.present(item, { admin: true }), 201);
+}));
 router.put('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) => {
   const body = parsePatch(planSchema, req.body);
-  const before = await Plan.findByIdAndUpdate(req.params.id, { $set: body }, { returnDocument: 'before', runValidators: true });
-  if (!before) throw new AppError('Plan no encontrado.', 404);
-  const item = await Plan.findById(before._id); await quotaService.reconcilePlan(item._id);
-  await audit(req, 'plan.updated', 'plan', item._id, { changes: AuditService.changes(before, { ...before.toObject(), ...body }, Object.keys(body)) }); ok(res, item);
+  const current = await Plan.findById(req.params.id);
+  if (!current) throw new AppError('Plan no encontrado.', 404);
+  const nextParent = Object.hasOwn(body, 'inheritsPlanId') ? body.inheritsPlanId : current.inheritsPlanId;
+  const nextFeatures = Object.hasOwn(body, 'featureKeys') ? body.featureKeys : current.featureKeys;
+  if (Object.hasOwn(body, 'inheritsPlanId')) await planFeatureService.assertInheritance({ planId: req.params.id, inheritsPlanId: body.inheritsPlanId });
+  await planFeatureService.assertDependencies({ featureKeys: nextFeatures, inheritsPlanId: nextParent });
+  const payload = planPayload(body);
+  const before = await Plan.findByIdAndUpdate(req.params.id, { $set: payload }, { returnDocument: 'before', runValidators: true });
+  const item = await Plan.findById(before._id);
+  await quotaService.reconcilePlan(item._id);
+  await audit(req, 'plan.updated', 'plan', item._id, { changes: AuditService.changes(before, { ...before.toObject(), ...payload }, Object.keys(payload)) });
+  ok(res, await planFeatureService.present(item, { admin: true }));
 }));
 router.delete('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const children = await Plan.countDocuments({ inheritsPlanId: req.params.id, active: true });
+  if (children) throw new AppError('Este plan es base de otro plan activo. Cambiá primero su herencia.', 409, 'PLAN_HAS_CHILDREN');
   const before = await Plan.findByIdAndUpdate(req.params.id, { $set: { active: false } }, { returnDocument: 'before' });
   if (!before) throw new AppError('Plan no encontrado.', 404);
   await audit(req, 'plan.archived', 'plan', before._id, { changes: AuditService.changes(before, { active: false }, ['active']) }); ok(res, await Plan.findById(before._id));
@@ -114,6 +161,12 @@ router.get('/admin/users', requireAdmin, asyncHandler(async (req, res) => {
   ok(res, data, 200, { page, limit, total });
 }));
 router.get('/admin/users/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await User.findOne({ _id: req.params.id, role: 'vendedor' }); if (!item) throw new AppError('Vendedor no encontrado.', 404); ok(res, { ...safeUser(item), entitlement: await EntitlementService.forUser(item), subscription: await subscriptionService.summaryForUser(item) }); }));
+router.post('/admin/users/:id/impersonate', requireAdmin, asyncHandler(async (req, res) => {
+  if (!config.devImpersonation.enabled || config.isProduction) throw new AppError('La personificación sólo está disponible en desarrollo o prueba.', 404, 'DEV_IMPERSONATION_DISABLED');
+  const seller = await User.findOne({ _id: req.params.id, role: 'vendedor', active: true });
+  if (!seller) throw new AppError('Vendedor activo no encontrado.', 404, 'SELLER_NOT_FOUND');
+  ok(res, await authService.impersonate(req.user, seller, res, req.session));
+}));
 router.post('/admin/users', requireAdmin, asyncHandler(async (req, res) => {
   const body = userSchema.parse(req.body);
   // La prueba comienza con el primer acceso verificado, incluso si el admin creó la cuenta.
@@ -188,6 +241,18 @@ router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
   await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(beforeSafe, afterSafe, ['trialDays', 'magicLinkMinutes', 'subscriptionGraceDays', 'contact', 'home', 'platformBilling']), billingCredentialsUpdated });
   ok(res, afterSafe);
 }));
+router.get('/admin/emails', requireAdmin, asyncHandler(async (_req, res) => ok(res, { templates: sellerMailService.listTemplates(), recipientCount: await sellerMailService.recipientCount(), smtpConfigured: Boolean(config.smtp.host) })));
+router.post('/admin/emails/send', requireAdmin, asyncHandler(async (req, res) => {
+  const body = z.object({
+    template: z.enum(['release', 'announcement', 'maintenance']),
+    subject: text(180).min(1).refine(value => !/[\r\n]/.test(value), 'El asunto no puede contener saltos de línea.'), title: text(180).min(1), version: text(60).optional().default(''),
+    message: text(5000).min(1), changes: z.array(text(500)).max(30).optional().default([]),
+    ctaText: text(80).optional().default(''), ctaUrl: z.union([z.string().trim().max(2048).regex(/^https?:\/\//i, 'Usá una URL HTTP/HTTPS.'), z.literal('')]).optional().default(''),
+  }).parse(req.body);
+  const result = await sellerMailService.sendToAll(body);
+  await audit(req, 'seller.email.broadcast', 'email', body.template, { template: body.template, subject: body.subject, total: result.total, sent: result.sent, failed: result.failed });
+  ok(res, result);
+}));
 router.get('/admin/audit', requireAdmin, asyncHandler(async (req, res) => { const result = await AuditService.list(req.query); ok(res, result.data, 200, result.meta); }));
 router.get('/admin/audit/:id', requireAdmin, asyncHandler(async (req, res) => ok(res, await AuditService.get(req.params.id))));
 router.get('/admin/whatsapp/status', requireAdmin, (_req, res) => ok(res, whatsappService.status()));
@@ -229,22 +294,26 @@ router.get('/stores', requireAuth, asyncHandler(async (req, res) => {
   const items = await Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret').sort({ createdAt: 1 }); ok(res, items.map(safeStore));
 }));
 router.get('/stores/:storeId', requireStoreAccess, (req, res) => ok(res, safeStore(req.store)));
-router.get('/stores/:storeId/domain', requireStoreAccess, (req, res) => ok(res, domainService.publicDomain(req.store)));
-router.put('/stores/:storeId/domain', requireStoreAccess, asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/domain', requireStoreAccess, requireFeature('section.domain'), (req, res) => ok(res, domainService.publicDomain(req.store)));
+router.put('/stores/:storeId/domain', requireStoreAccess, requireFeature('section.domain'), asyncHandler(async (req, res) => {
+  const requestedMode = String(req.body?.mode || 'path');
+  if (requestedMode === 'subdomain') await assertPlanFeature(req.user, 'domain.subdomain');
+  if (requestedMode === 'custom') await assertPlanFeature(req.user, 'domain.custom');
   const body = z.object({ mode: z.enum(['path', 'subdomain', 'custom']), subdomain: text(63).optional(), customDomain: text(253).optional() }).parse(req.body);
   const { before, after } = await domainService.configure(req.store, body);
   await audit(req, 'store.domain.updated', 'store', req.store._id, { changes: AuditService.changes({ domain: before }, { domain: after }, ['domain']) });
   ok(res, after);
 }));
-router.post('/stores/:storeId/domain/verify', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/domain/verify', requireStoreAccess, requireFeature('section.domain'), asyncHandler(async (req, res) => {
+  await assertPlanFeature(req.user, 'domain.custom');
   const before = domainService.publicDomain(req.store);
   const after = await domainService.verify(req.store);
   await audit(req, 'store.domain.verified', 'store', req.store._id, { changes: AuditService.changes({ domain: before }, { domain: after }, ['domain']) });
   ok(res, after);
 }));
 const pwaSchema = z.object({ name: text(120).min(1), iconUrl: url.default(''), icon192Url: url.default('') });
-router.get('/stores/:storeId/pwa', requireStoreAccess, (req, res) => ok(res, { name: req.store.pwa?.name || req.store.name, iconUrl: req.store.pwa?.iconUrl || '', icon192Url: req.store.pwa?.icon192Url || '', manifestUrl: `/api/public/stores/${req.store.slug}/manifest.webmanifest` }));
-router.put('/stores/:storeId/pwa', requireStoreAccess, asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/pwa', requireStoreAccess, requireFeature('section.pwa'), (req, res) => ok(res, { name: req.store.pwa?.name || req.store.name, iconUrl: req.store.pwa?.iconUrl || '', icon192Url: req.store.pwa?.icon192Url || '', manifestUrl: `/api/public/stores/${req.store.slug}/manifest.webmanifest` }));
+router.put('/stores/:storeId/pwa', requireStoreAccess, requireFeature('section.pwa'), asyncHandler(async (req, res) => {
   const body = pwaSchema.parse(req.body); const before = { name: req.store.pwa?.name || '', iconUrl: req.store.pwa?.iconUrl || '', icon192Url: req.store.pwa?.icon192Url || '' };
   if (body.iconUrl || body.icon192Url) {
     const [large, small] = await Promise.all([imageService.validatePwaIcon(req.store._id, body.iconUrl), imageService.validatePwaIcon(req.store._id, body.icon192Url)]);
@@ -256,13 +325,26 @@ router.put('/stores/:storeId/pwa', requireStoreAccess, asyncHandler(async (req, 
   await audit(req, 'store.pwa.updated', 'store', req.store._id, { changes: AuditService.changes({ pwa: before }, { pwa: body }, ['pwa']) });
   ok(res, { ...body, manifestUrl: `/api/public/stores/${req.store.slug}/manifest.webmanifest` });
 }));
-router.put('/stores/:storeId', requireStoreAccess, asyncHandler(async (req, res) => { const body = parsePatch(storeSchema.omit({ ownerId: true }), req.body); ok(res, await updateStore(req, req.store, body)); }));
-router.put('/stores/:storeId/design', requireStoreAccess, asyncHandler(async (req, res) => {
+router.put('/stores/:storeId', requireStoreAccess, requireFeature('section.design'), asyncHandler(async (req, res) => { const body = parsePatch(storeSchema.omit({ ownerId: true }), req.body); ok(res, await updateStore(req, req.store, body)); }));
+const jsonSame = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+async function assertDesignFeatureChanges(user, before, after) {
+  const checks = [
+    ['design.custom_sections', before.sections, after.sections],
+    ['design.theme_modes', { colorMode: before.brand?.colorMode, allowThemeToggle: before.brand?.allowThemeToggle, darkPrimary: before.brand?.darkPrimary, darkAccent: before.brand?.darkAccent, darkBackground: before.brand?.darkBackground, darkText: before.brand?.darkText }, { colorMode: after.brand?.colorMode, allowThemeToggle: after.brand?.allowThemeToggle, darkPrimary: after.brand?.darkPrimary, darkAccent: after.brand?.darkAccent, darkBackground: after.brand?.darkBackground, darkText: after.brand?.darkText }],
+    ['design.backgrounds', before.wallpaper, after.wallpaper],
+    ['design.social_links', { sections: (before.sections || []).filter(item => item.type === 'social'), links: (before.navbar?.links || []).filter(item => item.target === 'social') }, { sections: (after.sections || []).filter(item => item.type === 'social'), links: (after.navbar?.links || []).filter(item => item.target === 'social') }],
+    ['design.category_navigation', { navigation: before.shop?.categoryNavigation, animation: before.shop?.categoryPanelAnimation, duration: before.shop?.categoryPanelDuration }, { navigation: after.shop?.categoryNavigation, animation: after.shop?.categoryPanelAnimation, duration: after.shop?.categoryPanelDuration }],
+    ['checkout.terms', { terms: before.terms, url: before.checkout?.termsUrl, label: before.checkout?.termsLabel }, { terms: after.terms, url: after.checkout?.termsUrl, label: after.checkout?.termsLabel }],
+  ];
+  for (const [featureKey, previous, next] of checks) if (!jsonSame(previous, next)) await assertPlanFeature(user, featureKey);
+}
+router.put('/stores/:storeId/design', requireStoreAccess, requireFeature('section.design'), asyncHandler(async (req, res) => {
   const { design } = z.object({ design: z.record(z.string(), z.unknown()) }).parse(req.body);
   const validated = validateDesign(design);
   await imageService.validateWallpapers(req.store._id, validated);
   await imageService.validateDesignAssets(req.store._id, validated);
   const before = normalizeDesign(req.store.design);
+  await assertDesignFeatureChanges(req.user, before, validated);
   req.store.design = validated; req.store.markModified('design'); await req.store.save();
   await assetService.markDesignAttached(req.store._id, validated);
   await assetService.cleanupDesignImages(req.store._id, before, validated);
@@ -270,15 +352,18 @@ router.put('/stores/:storeId/design', requireStoreAccess, asyncHandler(async (re
   ok(res, safeStore(req.store));
 }));
 const sellerContactSchema = contactSchema.extend({ message: text(1500).default('¡Hola! Quisiera hacer una consulta.'), showWhatsapp: trueBoolean.default(true), showContactForm: trueBoolean.default(false) });
-router.put('/stores/:storeId/contact', requireStoreAccess, asyncHandler(async (req, res) => { const before = req.store.contact.toObject(); req.store.contact = sellerContactSchema.parse(req.body.contact); await req.store.save(); await audit(req, 'store.contact.updated', 'store', req.store._id, { changes: AuditService.changes({ contact: before }, { contact: req.store.contact.toObject() }) }); ok(res, safeStore(req.store)); }));
+router.put('/stores/:storeId/contact', requireStoreAccess, requireFeature('section.contact'), asyncHandler(async (req, res) => { const before = req.store.contact.toObject(); const contact = sellerContactSchema.parse(req.body.contact); if (contact.showWhatsapp) await assertPlanFeature(req.user, 'contact.whatsapp'); req.store.contact = contact; await req.store.save(); await audit(req, 'store.contact.updated', 'store', req.store._id, { changes: AuditService.changes({ contact: before }, { contact: req.store.contact.toObject() }) }); ok(res, safeStore(req.store)); }));
 const deliverySchema = z.object({ id: text(60).min(1), type: z.enum(['pickup', 'shipping', 'digital', 'custom']), name: text(120).min(1), description: text(1000).default(''), price: money.default(0), active: trueBoolean.default(true) });
 const paymentSchema = z.object({ id: text(60).min(1), type: z.enum(['cash', 'transfer', 'mercadopago']), name: text(120).min(1), instructions: text(4000).default(''), deliveryIds: z.array(text(60)).max(20).default([]), active: trueBoolean.default(true), bank: z.object({ holder: text(180).optional(), bank: text(180).optional(), cbu: text(40).optional(), alias: text(60).optional(), cuit: text(30).optional() }).optional() });
-router.put('/stores/:storeId/payments', requireStoreAccess, asyncHandler(async (req, res) => {
+router.put('/stores/:storeId/payments', requireStoreAccess, requireFeature('section.payments'), asyncHandler(async (req, res) => {
   const body = z.object({ expectedUpdatedAt: z.string().datetime().optional(), payments: z.array(paymentSchema).max(20), deliveries: z.array(deliverySchema).max(20), mercadopago: z.object({ accessToken: text(1000).optional(), webhookSecret: text(1000).optional(), sandbox: trueBoolean.optional(), clearCredentials: trueBoolean.optional() }).optional() }).parse(req.body);
   if (body.expectedUpdatedAt && new Date(body.expectedUpdatedAt).getTime() !== req.store.updatedAt.getTime()) throw new AppError('La configuración de la tienda cambió. Recargá e intentá nuevamente.', 409, 'STORE_CONFLICT');
   if (new Set(body.payments.map(item => item.id)).size !== body.payments.length || new Set(body.deliveries.map(item => item.id)).size !== body.deliveries.length) throw new AppError('Los identificadores de cobros y entregas deben ser únicos.', 422);
   const deliveryIds = new Set(body.deliveries.map(item => item.id));
   if (body.payments.some(payment => payment.deliveryIds.some(id => !deliveryIds.has(id)))) throw new AppError('Un medio de pago referencia una entrega que no existe.', 422);
+  for (const payment of body.payments.filter(item => item.active)) await assertPlanFeature(req.user, `payments.${payment.type}`);
+  const currentDeliveries = (req.store.deliveries || []).map(item => item.toObject ? item.toObject() : item);
+  if (!jsonSame(currentDeliveries, body.deliveries)) await assertPlanFeature(req.user, 'payments.delivery');
   const before = safeStore(req.store);
   req.store.payments = body.payments; req.store.deliveries = body.deliveries;
   if (body.mercadopago) {
@@ -296,11 +381,15 @@ async function sellerSubscriptionPayload(user, { sync = false } = {}) {
   if (user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
   if (sync) await subscriptionService.syncCurrent(user._id);
   const freshUser = await User.findById(user._id); const settings = await SettingsService.get();
-  const [plan, plans, summary, entitlement] = await Promise.all([
-    freshUser.planId ? Plan.findById(freshUser.planId) : null,
+  const [planRow, planRows, summary, entitlement] = await Promise.all([
+    freshUser.planId ? Plan.findById(freshUser.planId).lean() : null,
     Plan.find({ active: true, price: { $gt: 0 } }).sort({ sortOrder: 1, price: 1 }).lean(),
     subscriptionService.summaryForUser(freshUser, { settings }),
     EntitlementService.forUser(freshUser),
+  ]);
+  const [plan, plans] = await Promise.all([
+    planRow ? planFeatureService.present(planRow) : null,
+    planFeatureService.presentMany(planRows),
   ]);
   const safeSettings = await adminSettingsPayload();
   return { user: safeUser(freshUser), plan, plans, subscription: summary, entitlement, contact: settings.contact, subscriptionsEnabled: Boolean(safeSettings.data.platformBilling?.enabled && safeSettings.data.platformBilling?.mercadopago?.hasAccessToken && safeSettings.data.platformBilling?.mercadopago?.hasWebhookSecret), graceDays: settings.subscriptionGraceDays };
@@ -324,17 +413,17 @@ router.post('/me/subscription/detach', requireAuth, asyncHandler(async (req, res
 router.post('/webhooks/platform/mercadopago', asyncHandler(async (req, res) => ok(res, await subscriptionService.webhook(req))));
 
 const categorySchema = z.object({ name: text(120).min(1), description: text(3000).default(''), parentId: objectId.nullable().default(null), active: trueBoolean.default(true) });
-router.get('/stores/:storeId/categories', requireStoreAccess, asyncHandler((req, res) => {
+router.get('/stores/:storeId/categories', requireStoreAccess, requireFeature('section.categories'), asyncHandler((req, res) => {
   const parentFilter = req.query.parentId === 'null' || req.query.parentId === 'root' ? { parentId: null } : req.query.parentId ? { parentId: objectId.parse(req.query.parentId) } : {};
   return listResponse(res, Category, { storeId: req.store._id, archived: { $ne: true }, ...parentFilter, ...searchFilter(req.query, ['name', 'description']) }, req.query, { sort: { name: 1, _id: 1 } });
 }));
-router.get('/stores/:storeId/categories/:id', requireStoreAccess, asyncHandler(async (req, res) => ok(res, safeCategory(await categoryService.find(req.store._id, req.params.id)))));
-router.post('/stores/:storeId/categories', requireStoreAccess, asyncHandler(async (req, res) => { const item = await categoryService.create(req.store._id, categorySchema.parse(req.body)); await audit(req, 'category.created', 'category', item._id, { changes: AuditService.changes({}, item, ['name', 'description', 'parentId', 'active']) }); ok(res, item, 201); }));
-router.put('/stores/:storeId/categories/:id', requireStoreAccess, asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/categories/:id', requireStoreAccess, requireFeature('section.categories'), asyncHandler(async (req, res) => ok(res, safeCategory(await categoryService.find(req.store._id, req.params.id)))));
+router.post('/stores/:storeId/categories', requireStoreAccess, requireFeature('section.categories'), asyncHandler(async (req, res) => { const item = await categoryService.create(req.store._id, categorySchema.parse(req.body)); await audit(req, 'category.created', 'category', item._id, { changes: AuditService.changes({}, item, ['name', 'description', 'parentId', 'active']) }); ok(res, item, 201); }));
+router.put('/stores/:storeId/categories/:id', requireStoreAccess, requireFeature('section.categories'), asyncHandler(async (req, res) => {
   const { item, before } = await categoryService.update(req.store._id, req.params.id, parsePatch(categorySchema, req.body), { includeBefore: true });
   await audit(req, 'category.updated', 'category', item._id, { changes: AuditService.changes(before, item, ['name', 'description', 'parentId', 'active']) }); ok(res, item);
 }));
-router.delete('/stores/:storeId/categories/:id', requireStoreAccess, asyncHandler(async (req, res) => {
+router.delete('/stores/:storeId/categories/:id', requireStoreAccess, requireFeature('section.categories'), asyncHandler(async (req, res) => {
   const { item, before, unassignedProducts } = await categoryService.archive(req.store._id, req.params.id, { includeBefore: true });
   await audit(req, 'category.archived', 'category', item._id, { changes: AuditService.changes(before, item, ['active', 'archived']), unassignedProducts }); ok(res, item);
 }));
@@ -350,15 +439,25 @@ async function validateProduct(body, storeId, currentId) {
     if (count !== new Set(body.relatedProductIds).size) throw new AppError('Los productos relacionados deben pertenecer a la misma tienda.', 422);
   }
 }
-router.get('/stores/:storeId/products', requireStoreAccess, asyncHandler(async (req, res) => listResponse(res, Product, { storeId: req.store._id, archived: { $ne: true }, ...await categoryService.productFilter(req.store._id, req.query), ...searchFilter(req.query, ['name', 'description', 'variants.sku']) }, req.query, { select: '-reservations' })));
-router.get('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(async (req, res) => { const item = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl -reservations'); if (!item) throw new AppError('Producto no encontrado.', 404); ok(res, item); }));
-router.post('/stores/:storeId/products', requireStoreAccess, asyncHandler(async (req, res) => {
-  const body = productSchema.parse(req.body); await validateProduct(body, req.store._id);
+async function validateProductPlanFeatures(user, body, { patch = false, current = null } = {}) {
+  const changed = key => !patch || !current || JSON.stringify(body[key]) !== JSON.stringify(current[key]?.toObject ? current[key].toObject() : current[key]);
+  if (((!patch || Object.hasOwn(body, 'type')) && body.type === 'digital' && changed('type')) || (patch && current?.type === 'digital' && Object.hasOwn(body, 'digitalUrl') && changed('digitalUrl'))) await assertPlanFeature(user, 'products.digital');
+  if ((!patch || Object.hasOwn(body, 'variants')) && body.variants?.length && changed('variants')) await assertPlanFeature(user, 'products.variants');
+  if ((!patch || Object.hasOwn(body, 'featured')) && body.featured === true && changed('featured')) await assertPlanFeature(user, 'products.featured');
+  if ((!patch || Object.hasOwn(body, 'relatedProductIds')) && body.relatedProductIds?.length && changed('relatedProductIds')) await assertPlanFeature(user, 'products.related');
+}
+router.get('/stores/:storeId/products', requireStoreAccess, requireFeature('section.products'), asyncHandler(async (req, res) => listResponse(res, Product, { storeId: req.store._id, archived: { $ne: true }, ...await categoryService.productFilter(req.store._id, req.query), ...searchFilter(req.query, ['name', 'description', 'variants.sku']) }, req.query, { select: '-reservations' })));
+router.get('/stores/:storeId/products/:id', requireStoreAccess, requireFeature('section.products'), asyncHandler(async (req, res) => { const item = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl -reservations'); if (!item) throw new AppError('Producto no encontrado.', 404); ok(res, item); }));
+router.post('/stores/:storeId/products', requireStoreAccess, requireFeature('section.products'), asyncHandler(async (req, res) => {
+  const body = productSchema.parse(req.body); await validateProductPlanFeatures(req.user, body); await validateProduct(body, req.store._id);
   await assetService.assertOwned(req.store._id, body.images);
   const item = await quotaService.createProduct(req.store._id, body); await assetService.markAttached(req.store._id, item.images); await audit(req, 'product.created', 'product', item._id, { changes: AuditService.changes({}, item, Object.keys(productSchema.shape)) }); ok(res, item, 201);
 }));
-router.put('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(async (req, res) => {
+router.put('/stores/:storeId/products/:id', requireStoreAccess, requireFeature('section.products'), asyncHandler(async (req, res) => {
   const patch = parsePatch(productSchema, req.body);
+  const currentForPlan = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl -reservations');
+  if (!currentForPlan) throw new AppError('Producto no encontrado.', 404);
+  await validateProductPlanFeatures(req.user, patch, { patch: true, current: currentForPlan });
   if (Object.keys(patch).length === 1 && Object.hasOwn(patch, 'featured')) {
     // La acción de destacado no reemplaza variantes ni cantidades leídas antes.
     // Se versiona para que una edición completa anterior detecte el cambio.
@@ -367,7 +466,7 @@ router.put('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(asy
     const item = await Product.findById(before._id).select('+digitalUrl -reservations');
     await audit(req, 'product.featured.updated', 'product', before._id, { changes: AuditService.changes(before, { featured: patch.featured }, ['featured']) }); ok(res, item); return;
   }
-  const current = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl'); if (!current) throw new AppError('Producto no encontrado.', 404);
+  const current = currentForPlan;
   const merged = productSchema.parse({ ...current.toObject({ flattenMaps: true }), ...patch }); await validateProduct(merged, req.store._id, current._id);
   await assetService.assertOwned(req.store._id, merged.images);
   delete merged.stock; merged.variants = merged.variants.map(variant => ({ ...variant, stock: current.variants.find(existing => existing.id === variant.id)?.stock || 0 }));
@@ -378,20 +477,20 @@ router.put('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(asy
   await assetService.cleanupProductImages(current, item.images);
   await audit(req, 'product.updated', 'product', item._id, { changes: AuditService.changes(current, item, Object.keys(productSchema.shape)) }); ok(res, item);
 }));
-router.delete('/stores/:storeId/products/:id', requireStoreAccess, asyncHandler(async (req, res) => {
+router.delete('/stores/:storeId/products/:id', requireStoreAccess, requireFeature('section.products'), asyncHandler(async (req, res) => {
   const before = await Product.findOneAndUpdate({ _id: req.params.id, storeId: req.store._id }, { $set: { active: false, archived: true }, $inc: { stockVersion: 1 } }, { returnDocument: 'before' });
   if (!before) throw new AppError('Producto no encontrado.', 404);
   await assetService.cleanupProductImages(before, []);
   await audit(req, 'product.archived', 'product', before._id, { changes: AuditService.changes(before, { active: false, archived: true }, ['active', 'archived']) }); ok(res, await Product.findById(before._id).select('-reservations'));
 }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { files: 5, fileSize: 5 * 1024 * 1024 }, fileFilter(_req, file, cb) { if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) return cb(new AppError('Solo imágenes JPG, PNG o WebP.', 422)); cb(null, true); } });
-router.post('/stores/:storeId/uploads', requireStoreAccess, upload.array('files', 5), asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/uploads', requireStoreAccess, requireAnyFeature(['section.products','section.design','section.pwa']), upload.array('files', 5), asyncHandler(async (req, res) => {
   const purpose = req.body.purpose === undefined ? 'image' : z.string().max(40).parse(req.body.purpose);
   const result = await imageService.upload({ files: req.files, purpose, storeId: req.store._id, actorId: req.user._id });
   await audit(req, purpose.startsWith('wallpaper-') ? 'wallpaper.uploaded' : 'image.uploaded', 'store', req.store._id, { count: result.length, purpose, images: result.map(({ width, height }) => ({ width, height })) });
   ok(res, result, 201);
 }));
-router.delete('/stores/:storeId/uploads', requireStoreAccess, asyncHandler(async (req, res) => {
+router.delete('/stores/:storeId/uploads', requireStoreAccess, requireAnyFeature(['section.products','section.design','section.pwa']), asyncHandler(async (req, res) => {
   const { urls } = z.object({ urls: z.array(z.string().max(2048)).max(50) }).parse(req.body);
   const result = await assetService.deleteUnclaimed(req.store._id, urls);
   ok(res, result);

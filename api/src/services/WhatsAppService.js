@@ -20,7 +20,21 @@ export class WhatsAppService {
     const module = await import('whatsapp-web.js');
     const { Client, LocalAuth } = module.default || module;
     if (generation !== this.generation) return;
-    const client = new Client({ authStrategy: new LocalAuth({ clientId: config.whatsappClientId, dataPath: config.whatsappDataPath }), puppeteer: { headless: true, executablePath: config.whatsappExecutablePath, args: config.whatsappNoSandbox ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] : ['--disable-dev-shm-usage'] } });
+    const puppeteerArgs = [
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+    ];
+    if (config.whatsappNoSandbox) puppeteerArgs.unshift('--no-sandbox', '--disable-setuid-sandbox');
+    const client = new Client({
+      authStrategy: new LocalAuth({ clientId: config.whatsappClientId, dataPath: config.whatsappDataPath }),
+      puppeteer: {
+        headless: true,
+        executablePath: config.whatsappExecutablePath,
+        args: puppeteerArgs,
+      },
+    });
     this.client = client;
     client.on('qr', qr => { qrcode.toDataURL(qr).then(data => { if (this.client === client) { this.state.status = 'qr'; this.state.qr = data; } }).catch(() => { this.state.error = 'No se pudo generar el QR.'; }); });
     client.on('authenticated', () => { if (this.client !== client) return; this.state.status = 'authenticated'; this.state.qr = null; });
