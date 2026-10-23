@@ -58,6 +58,7 @@ const platformRoutes=[
     {path:'pwa',component:()=>import('./views/seller/StorePwaView.vue'),meta:{title:'Aplicación PWA',feature:'section.pwa'}},
     {path:'plan',redirect:'/app/subscription'},
     {path:'subscription',component:()=>import('./views/seller/SubscriptionView.vue'),meta:{title:'Mi suscripción'}},
+    {path:'transfers',component:()=>import('./views/seller/TransfersView.vue'),meta:{title:'Transferencias de tiendas'}},
     {path:'design',component:()=>import('./views/seller/DesignView.vue'),meta:{title:'Diseño de tu tienda',feature:'section.design'}}
   ]},
   {path:'/t/:slug',component:()=>import('./layouts/StoreLayout.vue'),children:storeChildren},

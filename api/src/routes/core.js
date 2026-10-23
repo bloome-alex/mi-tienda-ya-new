@@ -17,8 +17,10 @@ import { imageService } from '../services/ImageService.js';
 import { assetService } from '../services/AssetService.js';
 import { domainService } from '../services/DomainService.js';
 import { subscriptionService } from '../services/SubscriptionService.js';
+import { subscriptionSupportService } from '../services/SubscriptionSupportService.js';
 import { sellerMailService } from '../services/SellerMailService.js';
 import { planFeatureService } from '../services/PlanFeatureService.js';
+import { storeTransferService } from '../services/StoreTransferService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -39,10 +41,11 @@ const searchFilter = (query, fields) => {
 const audit = (req, action, entity, entityId, details, storeId = req.store?._id) => AuditService.log({ actorId: req.user?._id, actor: req.user, storeId, store: req.store, action, entity, entityId, details });
 const assertPlanFeature = async (user, featureKey) => { if (user?.role === 'admin' || await planFeatureService.has(user, featureKey)) return; const label = planFeatureService.label(featureKey); throw new AppError(`Tu plan no incluye ${label}.`, 403, 'PLAN_FEATURE_REQUIRED', { featureKey, label }); };
 const authLimiter = rateLimit({ windowMs: 15 * 60000, limit: 15, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: { code: 'RATE_LIMIT', message: 'Demasiados intentos. Esperá unos minutos.' } } });
+const subscriptionSupportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 3 } });
 
 router.get('/public/config', asyncHandler(async (_req, res) => {
   const settings = await SettingsService.get();
-  const rows = await Plan.find({ active: true }).sort({ sortOrder: 1, price: 1 }).lean();
+  const rows = await Plan.find({ active: true, visible: { $ne: false } }).sort({ sortOrder: 1, price: 1 }).lean();
   const plans = await planFeatureService.presentMany(rows);
   ok(res, { trialDays: settings.trialDays, contact: settings.contact, home: settings.home, plans });
 }));
@@ -90,7 +93,7 @@ const planSchema = z.object({
   name: text(100).min(1), icon: text(60).default('store'), previousPrice: money.default(0), price: money,
   durationDays: integer(3660).refine(n => n > 0).default(30), featureKeys: z.array(featureKey).max(100).default([]),
   inheritsPlanId: objectId.nullable().optional().default(null), maxStores: integer(1000).refine(n => n > 0).default(1),
-  maxProducts: integer().default(100), active: trueBoolean.default(true), featured: trueBoolean.default(false),
+  maxProducts: integer().default(100), active: trueBoolean.default(true), visible: trueBoolean.default(true), featured: trueBoolean.default(false),
   sortOrder: z.coerce.number().int().min(-1000).max(1000).default(0),
 });
 const planPayload = body => {
@@ -114,8 +117,9 @@ router.get('/admin/plans', requireAdmin, asyncHandler(async (req, res) => {
 router.get('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Plan.findById(req.params.id); if (!item) throw new AppError('Plan no encontrado.', 404); ok(res, await planFeatureService.present(item, { admin: true })); }));
 router.post('/admin/plans', requireAdmin, asyncHandler(async (req, res) => {
   const body = planSchema.parse(req.body); await planFeatureService.assertInheritance({ inheritsPlanId: body.inheritsPlanId });
-  await planFeatureService.assertDependencies({ featureKeys: body.featureKeys, inheritsPlanId: body.inheritsPlanId });
-  const item = await Plan.create(planPayload(body));
+  const directFeatureKeys = await planFeatureService.directKeysForSave(body.featureKeys, body.inheritsPlanId);
+  await planFeatureService.assertDependencies({ featureKeys: directFeatureKeys, inheritsPlanId: body.inheritsPlanId });
+  const item = await Plan.create(planPayload({ ...body, featureKeys: directFeatureKeys }));
   await audit(req, 'plan.created', 'plan', item._id, { changes: AuditService.changes({}, item, Object.keys(planSchema.shape)) });
   ok(res, await planFeatureService.present(item, { admin: true }), 201);
 }));
@@ -126,8 +130,9 @@ router.put('/admin/plans/:id', requireAdmin, asyncHandler(async (req, res) => {
   const nextParent = Object.hasOwn(body, 'inheritsPlanId') ? body.inheritsPlanId : current.inheritsPlanId;
   const nextFeatures = Object.hasOwn(body, 'featureKeys') ? body.featureKeys : current.featureKeys;
   if (Object.hasOwn(body, 'inheritsPlanId')) await planFeatureService.assertInheritance({ planId: req.params.id, inheritsPlanId: body.inheritsPlanId });
-  await planFeatureService.assertDependencies({ featureKeys: nextFeatures, inheritsPlanId: nextParent });
-  const payload = planPayload(body);
+  const directFeatureKeys = await planFeatureService.directKeysForSave(nextFeatures, nextParent);
+  await planFeatureService.assertDependencies({ featureKeys: directFeatureKeys, inheritsPlanId: nextParent });
+  const payload = planPayload({ ...body, ...(Object.hasOwn(body, 'featureKeys') || Object.hasOwn(body, 'inheritsPlanId') ? { featureKeys: directFeatureKeys } : {}) });
   const before = await Plan.findByIdAndUpdate(req.params.id, { $set: payload }, { returnDocument: 'before', runValidators: true });
   const item = await Plan.findById(before._id);
   await quotaService.reconcilePlan(item._id);
@@ -216,11 +221,12 @@ async function adminSettingsPayload() {
 router.get('/admin/settings', requireAdmin, asyncHandler(async (_req, res) => { const { data } = await adminSettingsPayload(); ok(res, data); }));
 router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
   const billingSchema = z.object({ enabled: trueBoolean.optional(), mercadopago: z.object({ accessToken: text(1200).optional(), webhookSecret: text(1200).optional(), sandbox: trueBoolean.optional(), clearCredentials: trueBoolean.optional() }).optional() }).optional();
-  const body = z.object({ trialDays: integer(365).optional(), magicLinkMinutes: integer(1440).refine(n => n >= 1).optional(), subscriptionGraceDays: integer(3650).optional(), platformBilling: billingSchema, contact: contactSchema.partial().optional(), home: homeSchema.optional() }).parse(req.body);
+  const body = z.object({ trialDays: integer(365).optional(), magicLinkMinutes: integer(1440).refine(n => n >= 1).optional(), subscriptionGraceDays: integer(3650).optional(), subscriptionPendingLinkHours: integer(720).refine(n => n >= 1).optional(), platformBilling: billingSchema, contact: contactSchema.partial().optional(), home: homeSchema.optional() }).parse(req.body);
   const { settings } = await adminSettingsPayload(); const beforeSafe = (await adminSettingsPayload()).data;
   if (body.trialDays !== undefined) settings.trialDays = body.trialDays;
   if (body.magicLinkMinutes !== undefined) settings.magicLinkMinutes = body.magicLinkMinutes;
   if (body.subscriptionGraceDays !== undefined) settings.subscriptionGraceDays = body.subscriptionGraceDays;
+  if (body.subscriptionPendingLinkHours !== undefined) settings.subscriptionPendingLinkHours = body.subscriptionPendingLinkHours;
   if (body.contact) settings.contact = { ...settings.contact.toObject(), ...Object.fromEntries(Object.keys(req.body.contact).filter(key => Object.hasOwn(body.contact, key)).map(key => [key, body.contact[key]])) };
   if (body.home) { settings.home = { ...settings.home, ...body.home }; settings.markModified('home'); }
   let billingCredentialsUpdated = false;
@@ -238,9 +244,28 @@ router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
   }
   if (settings.platformBilling?.enabled && (!settings.platformBilling?.mercadopago?.accessToken || !settings.platformBilling?.mercadopago?.webhookSecret)) throw new AppError('Para habilitar suscripciones configurá el Access Token y la clave secreta de Webhooks de Mercado Pago.', 422, 'SUBSCRIPTIONS_NOT_CONFIGURED');
   await settings.save(); const afterSafe = (await adminSettingsPayload()).data;
-  await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(beforeSafe, afterSafe, ['trialDays', 'magicLinkMinutes', 'subscriptionGraceDays', 'contact', 'home', 'platformBilling']), billingCredentialsUpdated });
+  await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(beforeSafe, afterSafe, ['trialDays', 'magicLinkMinutes', 'subscriptionGraceDays', 'subscriptionPendingLinkHours', 'contact', 'home', 'platformBilling']), billingCredentialsUpdated });
   ok(res, afterSafe);
 }));
+router.get('/admin/subscription-support', requireAdmin, asyncHandler(async (_req, res) => ok(res, await subscriptionSupportService.listPending())));
+router.get('/admin/subscription-support/:id/receipt', requireAdmin, asyncHandler(async (req, res) => {
+  const file = await subscriptionSupportService.receipt(req.params.id);
+  res.set('Cache-Control', 'no-store'); res.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`); res.type(file.mimeType); res.send(file.body);
+}));
+router.post('/admin/subscription-support/:id/approve', requireAdmin, asyncHandler(async (req, res) => {
+  const body = z.object({ note: text(2000).optional().default('') }).parse(req.body || {});
+  const result = await subscriptionSupportService.approve(req.params.id, req.user._id, body);
+  await quotaService.reconcilePublications(result.user._id);
+  await audit(req, 'subscription.support.approved', 'subscription_support', result.request._id, { userId: result.user._id, manualAccessUntil: result.request.manualAccessUntil || null });
+  ok(res, { request: result.request, user: safeUser(result.user), entitlement: await EntitlementService.forUser(result.user) });
+}));
+router.post('/admin/subscription-support/:id/reject', requireAdmin, asyncHandler(async (req, res) => {
+  const body = z.object({ note: text(2000).optional().default('') }).parse(req.body || {});
+  const item = await subscriptionSupportService.reject(req.params.id, req.user._id, body);
+  await audit(req, 'subscription.support.rejected', 'subscription_support', item._id, { userId: item.userId });
+  ok(res, item);
+}));
+
 router.get('/admin/emails', requireAdmin, asyncHandler(async (_req, res) => ok(res, { templates: sellerMailService.listTemplates(), recipientCount: await sellerMailService.recipientCount(), smtpConfigured: Boolean(config.smtp.host) })));
 router.post('/admin/emails/send', requireAdmin, asyncHandler(async (req, res) => {
   const body = z.object({
@@ -383,7 +408,7 @@ async function sellerSubscriptionPayload(user, { sync = false } = {}) {
   const freshUser = await User.findById(user._id); const settings = await SettingsService.get();
   const [planRow, planRows, summary, entitlement] = await Promise.all([
     freshUser.planId ? Plan.findById(freshUser.planId).lean() : null,
-    Plan.find({ active: true, price: { $gt: 0 } }).sort({ sortOrder: 1, price: 1 }).lean(),
+    Plan.find({ active: true, price: { $gt: 0 }, $or: [{ visible: { $ne: false } }, ...(freshUser.planId ? [{ _id: freshUser.planId }] : [])] }).sort({ sortOrder: 1, price: 1 }).lean(),
     subscriptionService.summaryForUser(freshUser, { settings }),
     EntitlementService.forUser(freshUser),
   ]);
@@ -392,8 +417,31 @@ async function sellerSubscriptionPayload(user, { sync = false } = {}) {
     planFeatureService.presentMany(planRows),
   ]);
   const safeSettings = await adminSettingsPayload();
-  return { user: safeUser(freshUser), plan, plans, subscription: summary, entitlement, contact: settings.contact, subscriptionsEnabled: Boolean(safeSettings.data.platformBilling?.enabled && safeSettings.data.platformBilling?.mercadopago?.hasAccessToken && safeSettings.data.platformBilling?.mercadopago?.hasWebhookSecret), graceDays: settings.subscriptionGraceDays };
+  return { user: safeUser(freshUser), plan, plans, subscription: summary, entitlement, contact: settings.contact, subscriptionsEnabled: Boolean(safeSettings.data.platformBilling?.enabled && safeSettings.data.platformBilling?.mercadopago?.hasAccessToken && safeSettings.data.platformBilling?.mercadopago?.hasWebhookSecret), graceDays: settings.subscriptionGraceDays, pendingLinkHours: settings.subscriptionPendingLinkHours || 24 };
 }
+router.get('/me/store-transfers', requireAuth, asyncHandler(async (req, res) => ok(res, await storeTransferService.summary(req.user))));
+router.post('/me/store-transfers', requireAuth, requireFeature('stores.transfer'), asyncHandler(async (req, res) => {
+  const body = z.object({ storeId: objectId, recipientEmail: email }).parse(req.body);
+  const item = await storeTransferService.create(req.user, body);
+  await audit(req, 'store.transfer.created', 'store_transfer', item._id, { storeId: item.storeId, recipientEmail: item.recipientEmail, kind: item.kind }, item.storeId);
+  ok(res, await storeTransferService.summary(req.user), 201);
+}));
+router.post('/me/store-transfers/:id/cancel', requireAuth, asyncHandler(async (req, res) => {
+  const item = await storeTransferService.cancel(req.user, req.params.id);
+  await audit(req, 'store.transfer.cancelled', 'store_transfer', item._id, { storeId: item.storeId, recipientEmail: item.recipientEmail }, item.storeId);
+  ok(res, await storeTransferService.summary(req.user));
+}));
+router.post('/me/store-transfers/:id/accept', requireAuth, asyncHandler(async (req, res) => {
+  const result = await storeTransferService.accept(req.user, req.params.id);
+  await audit(req, 'store.transfer.accepted', 'store_transfer', result.transfer._id, { storeId: result.store._id, previousOwnerId: result.transfer.fromUserId, newOwnerId: req.user._id }, result.store._id);
+  ok(res, await storeTransferService.summary(req.user));
+}));
+router.post('/me/store-transfers/:id/return', requireAuth, asyncHandler(async (req, res) => {
+  const item = await storeTransferService.createReturn(req.user, req.params.id);
+  await audit(req, 'store.transfer.return.created', 'store_transfer', item._id, { storeId: item.storeId, recipientEmail: item.recipientEmail, previousTransferId: req.params.id }, item.storeId);
+  ok(res, await storeTransferService.summary(req.user), 201);
+}));
+
 router.get('/me/plan', requireAuth, asyncHandler(async (req, res) => ok(res, await sellerSubscriptionPayload(req.user))));
 router.get('/me/subscription', requireAuth, asyncHandler(async (req, res) => ok(res, await sellerSubscriptionPayload(req.user))));
 router.post('/me/subscription/checkout', requireAuth, asyncHandler(async (req, res) => {
@@ -409,6 +457,19 @@ router.post('/me/subscription/cancel', requireAuth, asyncHandler(async (req, res
 }));
 router.post('/me/subscription/detach', requireAuth, asyncHandler(async (req, res) => {
   const item = await subscriptionService.detach(req.user._id); await audit(req, 'subscription.detached', 'subscription', item._id); ok(res, await sellerSubscriptionPayload(req.user));
+}));
+router.post('/me/subscription/pending/cancel', requireAuth, asyncHandler(async (req, res) => {
+  if (req.user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
+  const item = await subscriptionService.cancelPendingForUser(req.user._id, { reason: 'seller' });
+  await audit(req, 'subscription.pending.cancelled', 'subscription', item._id, { reason: 'seller' });
+  ok(res, await sellerSubscriptionPayload(req.user));
+}));
+router.post('/me/subscription/pending/help', requireAuth, subscriptionSupportUpload.single('file'), asyncHandler(async (req, res) => {
+  if (req.user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
+  const note = text(2000).default('').parse(req.body?.note || '');
+  const item = await subscriptionSupportService.create(req.user._id, req.file, { note });
+  await audit(req, 'subscription.support.created', 'subscription_support', item._id, { subscriptionId: item.subscriptionId });
+  ok(res, await sellerSubscriptionPayload(req.user), 201);
 }));
 router.post('/webhooks/platform/mercadopago', asyncHandler(async (req, res) => ok(res, await subscriptionService.webhook(req))));
 

@@ -1,4 +1,4 @@
-import { StorageCleanup, UploadedImage, Product, Store } from '../models/index.js';
+import { StorageCleanup, UploadedImage, Product, Store, SubscriptionSupportRequest } from '../models/index.js';
 import { Order } from '../models/commerce.js';
 import { r2Storage } from './R2StorageService.js';
 import { config } from '../config.js';
@@ -25,6 +25,7 @@ export class StorageCleanupService {
       }
     }
     if (await Order.exists({ 'receipt.objectKey': objectKey })) return true;
+    if (await SubscriptionSupportRequest.exists({ 'receipt.objectKey': objectKey })) return true;
     return false;
   }
 

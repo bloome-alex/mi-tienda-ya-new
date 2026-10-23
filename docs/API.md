@@ -610,3 +610,11 @@ Ejemplos de configuración:
 En modo `custom`, la respuesta incluye el TXT de verificación y el destino CNAME/ALIAS. `POST .../verify` consulta DNS y, cuando el TXT contiene el token exacto, ejecuta el aprovisionamiento automático de Nginx/Certbot. El dominio sólo queda `verified` después de que `nginx -t`, la emisión SSL y la recarga final terminan correctamente. Si falla infraestructura, permanece `pending` y se puede reintentar.
 
 `GET /api/public/host-store` resuelve la tienda correspondiente al hostname de la petición y se utiliza como endpoint auxiliar de diagnóstico/integración. La tienda compilada normalmente recibe esta resolución directamente en el HTML servido por Express.
+
+## Transferencias de tiendas · v1.16.0
+
+- `GET /api/me/store-transfers`: pendientes entrantes/salientes, historial, cupo del destinatario y disponibilidad del permiso.
+- `POST /api/me/store-transfers`: inicia una transferencia. Requiere `stores.transfer`. Body: `{ storeId, recipientEmail }`.
+- `POST /api/me/store-transfers/:id/cancel`: cancela una transferencia saliente todavía pendiente.
+- `POST /api/me/store-transfers/:id/accept`: acepta una transferencia dirigida al email de la sesión. Exige suscripción vigente no-trial y cupo de tienda.
+- `POST /api/me/store-transfers/:id/return`: inicia una devolución al dueño anterior a partir de una transferencia ya aceptada.

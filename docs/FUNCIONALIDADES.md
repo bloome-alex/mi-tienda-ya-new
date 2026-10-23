@@ -249,3 +249,11 @@ Los planes se administran como una matriz de permisos. `featureKeys` contiene la
 | `contact.whatsapp` | WhatsApp flotante |
 
 Cualquier capacidad vendible nueva debe agregarse al catálogo central y tener una comprobación equivalente en la interfaz y en la API antes de considerarse parte de un plan.
+
+## Planes, visibilidad y transferencias · v1.16.0
+
+- **Herencia de planes:** un plan hijo guarda sólo funcionalidades adicionales. En la oferta comercial se muestra “Incluye todo lo de …” más esos adicionales, sin duplicar la lista heredada.
+- **Planes ocultos:** `visible=false` los retira de la home y de la contratación general, pero continúan disponibles para asignación administrativa y para el vendedor que ya los tenga asignados.
+- **Transferencia de tiendas:** el permiso `stores.transfer` permite iniciar una transferencia por email. Mientras esté pendiente la tienda continúa siendo del remitente y puede cancelarse.
+- **Aceptación:** exige una suscripción vigente y un cupo libre en `maxStores`; una prueba gratuita no alcanza para aceptar una tienda.
+- **Historial y devolución:** las tiendas transferidas permanecen en un historial y el receptor puede iniciar una devolución al dueño anterior mediante el mismo flujo pendiente/aceptación.

@@ -9,7 +9,7 @@ import Icon from '../../components/Icon.vue';
 const route=useRoute(),router=useRouter();
 const editing=computed(()=>!!route.params.id),loading=ref(true),saving=ref(false),error=ref('');
 const featureMeta=ref({groups:[],plans:[]});
-const form=reactive({name:'',icon:'store',previousPrice:0,price:0,durationDays:30,featureKeys:[],inheritsPlanId:null,maxStores:1,maxProducts:100,active:true,featured:false,sortOrder:0});
+const form=reactive({name:'',icon:'store',previousPrice:0,price:0,durationDays:30,featureKeys:[],inheritsPlanId:null,maxStores:1,maxProducts:100,active:true,visible:true,featured:false,sortOrder:0});
 const availableParents=computed(()=>{const current=String(route.params.id||'');return featureMeta.value.plans.filter(plan=>String(plan._id)!==current&&!(plan.inheritanceChain||[]).some(parent=>String(parent._id)===current));});
 const parentPlan=computed(()=>availableParents.value.find(plan=>String(plan._id)===String(form.inheritsPlanId||''))||null);
 const inheritedKeys=computed(()=>new Set(parentPlan.value?.resolvedFeatureKeys||[]));
@@ -31,7 +31,7 @@ onMounted(async()=>{
   try{
     const [meta,item]=await Promise.all([api.get('/admin/plan-features'),editing.value?api.get(`/admin/plans/${route.params.id}`):Promise.resolve(null)]);
     featureMeta.value=meta;
-    if(item) Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,active:item.active,featured:item.featured,sortOrder:item.sortOrder});
+    if(item) Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
   }catch(e){error.value=e.message}finally{loading.value=false}
 });
 
@@ -45,7 +45,7 @@ function featureChecked(key){return inheritedKeys.value.has(key)||form.featureKe
 async function save(){
   saving.value=true;error.value='';
   try{
-    const payload={name:form.name,icon:form.icon,previousPrice:form.previousPrice,price:form.price,durationDays:form.durationDays,featureKeys:form.featureKeys,inheritsPlanId:form.inheritsPlanId||null,maxStores:form.maxStores,maxProducts:form.maxProducts,active:form.active,featured:form.featured,sortOrder:form.sortOrder};
+    const payload={name:form.name,icon:form.icon,previousPrice:form.previousPrice,price:form.price,durationDays:form.durationDays,featureKeys:form.featureKeys,inheritsPlanId:form.inheritsPlanId||null,maxStores:form.maxStores,maxProducts:form.maxProducts,active:form.active,visible:form.visible,featured:form.featured,sortOrder:form.sortOrder};
     if(editing.value)await api.put(`/admin/plans/${route.params.id}`,payload);else await api.post('/admin/plans',payload);
     notify.success('Plan guardado.');router.push('/app/settings?tab=planes');
   }catch(e){error.value=e.message;notify.error(e.message)}finally{saving.value=false}
@@ -99,7 +99,7 @@ async function save(){
               </label>
             </section>
           </div>
-          <div class="plan-state-options"><label class="p-check"><input v-model="form.active" type="checkbox"/>Plan disponible</label><label class="p-check"><input v-model="form.featured" type="checkbox"/>Destacar como recomendado</label></div>
+          <div class="plan-state-options"><label class="p-check"><input v-model="form.active" type="checkbox"/>Plan disponible</label><label class="p-check"><input v-model="form.visible" type="checkbox"/>Visible públicamente</label><label class="p-check"><input v-model="form.featured" type="checkbox"/>Destacar como recomendado</label></div><p v-if="!form.visible" class="p-help">El plan puede asignarse desde Administración, pero no aparece en el home ni se ofrece a otros vendedores.</p>
         </section>
       </div>
 

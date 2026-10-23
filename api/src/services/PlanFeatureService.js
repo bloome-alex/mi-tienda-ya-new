@@ -13,6 +13,8 @@ export const PLAN_FEATURES = Object.freeze([
   { key: 'section.domain', group: 'Secciones del panel', label: 'Dominio', description: 'Subdominio de la plataforma o dominio propio.' },
   { key: 'section.pwa', group: 'Secciones del panel', label: 'Aplicación PWA', description: 'Nombre e ícono instalable por tienda.' },
 
+  { key: 'stores.transfer', group: 'Tiendas y colaboración', label: 'Transferencia de tiendas', description: 'Transferir una tienda a otro vendedor y conservar el historial de transferencias.' },
+
   { key: 'domain.subdomain', requires: ['section.domain'], group: 'Dominio y publicación', label: 'Subdominio MiTiendaYa', description: 'Publicar con un subdominio propio de la plataforma.' },
   { key: 'domain.custom', requires: ['section.domain'], group: 'Dominio y publicación', label: 'Dominio propio', description: 'Vincular, validar y aprovisionar un dominio externo con HTTPS.' },
 
@@ -89,13 +91,18 @@ export class PlanFeatureService {
     const data = plain(plan);
     const resolved = this.resolveFromGraph(data, graph);
     const parent = resolved.chain[0] || null;
+    const inheritedSet = new Set(resolved.inheritedKeys);
+    const directFeatureKeys = this.normalize(data.featureKeys).filter(key => !inheritedSet.has(key));
+    const directFeatures = directFeatureKeys.map(key => this.label(key));
     return {
       ...data,
-      featureKeys: this.normalize(data.featureKeys),
+      featureKeys: directFeatureKeys,
+      directFeatureKeys,
+      directFeatures,
       resolvedFeatureKeys: resolved.keys,
       inheritedFeatureKeys: resolved.inheritedKeys,
       inheritsPlan: parent,
-      features: this.displayFeatures(data, resolved),
+      features: [...(parent ? [`Incluye todo lo de ${parent.name}`] : []), ...directFeatures],
       ...(admin ? { inheritanceChain: resolved.chain } : {}),
     };
   }
@@ -107,6 +114,13 @@ export class PlanFeatureService {
   }
 
   async present(plan, options = {}) { return (await this.presentMany([plan], options))[0]; }
+
+  async directKeysForSave(featureKeys = [], inheritsPlanId = null) {
+    const direct = this.normalize(featureKeys);
+    if (!inheritsPlanId) return direct;
+    const inherited = new Set(await this.keysForPlan(inheritsPlanId));
+    return direct.filter(key => !inherited.has(key));
+  }
 
   async assertDependencies({ featureKeys = [], inheritsPlanId = null }) {
     const direct = this.normalize(featureKeys);
@@ -169,6 +183,21 @@ export class PlanFeatureService {
     await Plan.collection.updateMany({ featureKeys: { $exists: false } }, { $set: { featureKeys: this.allKeys() } }).catch(error => {
       if (!['NamespaceNotFound'].includes(error?.codeName)) throw error;
     });
+    await Plan.collection.updateMany({ visible: { $exists: false } }, { $set: { visible: true } }).catch(error => {
+      if (!['NamespaceNotFound'].includes(error?.codeName)) throw error;
+    });
+    // La base guarda solamente extras directos. Las heredadas se resuelven en tiempo real.
+    const rows = await Plan.find({}).lean();
+    const graph = this.graph(rows);
+    for (const row of rows) {
+      const parentId = idOf(row.inheritsPlanId);
+      if (!parentId) continue;
+      const parent = graph.get(parentId);
+      if (!parent) continue;
+      const inherited = new Set(this.resolveFromGraph(parent, graph).keys);
+      const direct = this.normalize(row.featureKeys).filter(key => !inherited.has(key));
+      if (JSON.stringify(direct) !== JSON.stringify(this.normalize(row.featureKeys))) await Plan.updateOne({ _id: row._id }, { $set: { featureKeys: direct, features: direct.map(key => this.label(key)) } });
+    }
   }
 }
 

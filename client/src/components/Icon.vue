@@ -49,6 +49,7 @@ const paths={
  globe:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18',
  filter:'M3 4h18l-7 8v8l-4-2v-6L3 4',
  star:'m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6',
+ transfer:'M4 7h13m0 0-4-4m4 4-4 4M20 17H7m0 0 4 4m-4-4 4-4',
  link:'m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0M16 8l2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0'
 };
 const aliases={'arrow-right':'arrow','arrow-left':'back','chevron-down':'chevron','chevron-right':'chevron','credit-card':'credit','external-link':'external','dashboard':'grid','log-out':'logout','copy':'receipt'};

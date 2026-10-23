@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
-import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Subscription, SubscriptionCharge, Session, MagicLink } from '../models/index.js';
+import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Subscription, SubscriptionCharge, SubscriptionSupportRequest, StoreTransfer, Session, MagicLink } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import { randomToken, hashToken } from '../utils/crypto.js';
@@ -23,7 +23,7 @@ export const defaultHome = {
 };
 
 export class SettingsService {
-  async get() { return Settings.findOneAndUpdate({ key: 'global' }, { $setOnInsert: { key: 'global', trialDays: 15, magicLinkMinutes: 15, subscriptionGraceDays: 7, platformBilling: { enabled: false, mercadopago: { sandbox: true } }, home: defaultHome, contact: { email: '', phone: '', whatsapp: '' } } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }); }
+  async get() { return Settings.findOneAndUpdate({ key: 'global' }, { $setOnInsert: { key: 'global', trialDays: 15, magicLinkMinutes: 15, subscriptionGraceDays: 7, subscriptionPendingLinkHours: 24, platformBilling: { enabled: false, mercadopago: { sandbox: true } }, home: defaultHome, contact: { email: '', phone: '', whatsapp: '' } } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }); }
   static get() { return settingsService.get(); }
 }
 export class EntitlementService {
@@ -35,7 +35,12 @@ export class EntitlementService {
     const plan = planId ? await Plan.findById(planId) : null;
     const now = new Date();
     const featureKeys = await planFeatureService.keysForUser(user);
-    if (plan && user.planExpiresAt && new Date(user.planExpiresAt) > now) return { allowed: true, trial: false, expiresAt: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
+    if (plan) {
+      const paidExpiry = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
+      const manualExpiry = user.subscriptionManualAccessUntil ? new Date(user.subscriptionManualAccessUntil) : null;
+      const effectiveExpiry = [paidExpiry, manualExpiry].filter(Boolean).sort((a, b) => b - a)[0] || null;
+      if (effectiveExpiry && effectiveExpiry > now) return { allowed: true, trial: false, expiresAt: effectiveExpiry, paidThrough: paidExpiry, manualAccessUntil: manualExpiry, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: manualExpiry && manualExpiry >= effectiveExpiry ? 'Habilitación manual de suscripción' : plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
+    }
     if (plan) {
       const [settings, subscription] = await Promise.all([SettingsService.get(), subscriptionService.current(user._id)]);
       const billing = subscriptionService.billingState({ user, subscription, settings, now });
@@ -138,8 +143,13 @@ export class AuthService {
       user = await User.findOneAndUpdate({ _id: user._id, trialStartedAt: null }, { $set: { trialStartedAt: new Date(), trialEndsAt: new Date(Date.now() + settings.trialDays * 86400000) } }, { returnDocument: 'after' }) || await User.findById(user._id);
     }
     if (!user?.active || user.role !== 'vendedor') throw new AppError('Este usuario no tiene acceso.', 403, 'USER_INACTIVE');
-    const stores = await Store.countDocuments({ ownerId: user._id });
-    if (stores === 0) {
+    const [stores, pendingTransfer] = await Promise.all([
+      Store.countDocuments({ ownerId: user._id }),
+      StoreTransfer.exists({ recipientEmail: String(user.email || '').toLowerCase(), status: 'pending' }),
+    ]);
+    // Si el primer acceso proviene de una transferencia, no consumimos el primer cupo
+    // creando una tienda vacía: el vendedor podrá contratar su plan y aceptar la recibida.
+    if (stores === 0 && !pendingTransfer) {
       const { quotaService } = await import('./QuotaService.js');
       const slug = `tienda-${String(user._id).slice(-10)}`;
       await quotaService.createStore({ ownerId: user._id, name: `Tienda de ${user.name}`, slug, active: false, contact: { email: user.email }, payments: [{ id: 'cash', type: 'cash', name: 'Efectivo', deliveryIds: ['pickup'], active: true }] }, { reuseSlug: true });
@@ -153,7 +163,7 @@ export async function bootstrap() {
   await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
   await databaseIndexService.reconcileCategoryUniquenessIndex();
   await planFeatureService.initializeLegacyPlans();
-  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), Session.init(), MagicLink.init()]);
+  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), SubscriptionSupportRequest.init(), StoreTransfer.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }
     catch (error) { if (error.code !== 11000) throw error; }

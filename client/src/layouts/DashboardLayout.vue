@@ -2,7 +2,7 @@
 import { computed, ref, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { auth, logout, canFeature } from '../services/auth.js';
-import { workspace, loadStores, selectStore, ensureWorkspaceCanLeave } from '../services/workspace.js';
+import { workspace, loadStores, loadTransferSummary, selectStore, ensureWorkspaceCanLeave } from '../services/workspace.js';
 import { notify } from '../services/notifications.js';
 import { api } from '../services/api.js';
 import { money, shortDate } from '../services/panel.js';
@@ -14,6 +14,9 @@ const route=useRoute(),router=useRouter();const open=ref(false),initializing=ref
 const isAdmin=computed(()=>auth.user?.role==='admin');
 const isDesign=computed(()=>route.matched.some(record=>record.path==='/app/design'));
 const store=computed(()=>workspace.stores.find(s=>s._id===workspace.activeStoreId));
+const transferSummary=computed(()=>workspace.transferSummary||{});
+const pendingTransferStoreIds=computed(()=>new Set(transferSummary.value.pendingOutgoingStoreIds||[]));
+const showTransfers=computed(()=>!isAdmin.value&&(canFeature('stores.transfer')||Number(transferSummary.value.pendingIncomingCount||0)>0||(transferSummary.value.pendingOutgoingStoreIds||[]).length>0||(transferSummary.value.history||[]).some(item=>item.canReturn)));
 const initials=computed(()=>(auth.user?.name||auth.user?.email||'A').slice(0,2).toUpperCase());
 const adminLinks=[['Resumen','/app/dashboard','grid'],['Usuarios','/app/users','users'],['Tiendas','/app/stores','store'],['Emails','/app/emails','mail'],['Configuración','/app/settings','settings'],['Auditoría','/app/audit','shield']];
 const sellerLinks=[['Resumen','/app/dashboard','grid',null],['Productos','/app/products','package','section.products'],['Categorías','/app/categories','tag','section.categories'],['Stock','/app/stock','stock','section.stock'],['Pedidos','/app/orders','receipt','section.orders']];
@@ -21,7 +24,7 @@ const storeLinks=[['Diseño de la tienda','/app/design','palette','section.desig
 const visibleSellerLinks=computed(()=>isAdmin.value?sellerLinks:sellerLinks.filter(link=>!link[3]||canFeature(link[3])));
 const visibleStoreLinks=computed(()=>isAdmin.value?storeLinks:storeLinks.filter(link=>!link[3]||canFeature(link[3])));
 watch(()=>route.fullPath,()=>{open.value=false;});
-onMounted(async()=>{try{await loadStores();if(!isAdmin.value){const data=await api.get('/me/subscription');if(data.subscription?.periodsDue>0){subscriptionAlert.value=data.subscription;notify.error(`No se pudo acreditar el último pago de tu suscripción. Adeudás ${money(data.subscription.debtAmount)}.`)}}}catch(e){notify.error(e.message)}finally{initializing.value=false}});
+onMounted(async()=>{try{await loadStores();if(!isAdmin.value){const [data]=await Promise.all([api.get('/me/subscription'),loadTransferSummary()]);if(data.subscription?.periodsDue>0){subscriptionAlert.value=data.subscription;notify.error(`No se pudo acreditar el último pago de tu suscripción. Adeudás ${money(data.subscription.debtAmount)}.`)}}}catch(e){notify.error(e.message)}finally{initializing.value=false}});
 async function exit(){
  if(exiting.value||switching.value)return;
  exiting.value=true;
@@ -40,8 +43,8 @@ async function exitImpersonation(){try{await api.post('/auth/impersonation/exit'
 <div class="p-app" :class="{'p-app-design':isDesign}" @touchstart.passive="touchStart=$event.touches[0].clientX" @touchend.passive="handleTouch">
  <header class="p-navbar">
   <div class="p-brand-area"><button class="p-icon-btn p-mobile-menu" @click="open=!open" :aria-expanded="open" aria-label="Abrir menú"><Icon name="menu"/></button><RouterLink to="/app/dashboard" class="p-brand"><span class="p-logo"><Icon name="store" :size="22"/></span><span><BrandWordmark/><small>{{isAdmin?'Administración':'Panel de ventas'}}</small></span></RouterLink></div>
-  <div class="p-navbar-store"><span class="p-navbar-store-icon"><Icon name="store" :size="18"/></span><div><label for="navbar-store-selector">{{isAdmin?'TIENDA A GESTIONAR':'ESTÁS TRABAJANDO EN'}}</label><select id="navbar-store-selector" :value="workspace.activeStoreId" @change="changeStore" :disabled="workspace.loading||switching||exiting||!workspace.stores.length" :aria-busy="switching"><option v-if="!workspace.stores.length" value="">{{workspace.loading?'Cargando tiendas…':'Sin tiendas asignadas'}}</option><option v-for="s in workspace.stores" :key="s._id" :value="s._id">{{s.name}}</option></select></div><span v-if="store" class="p-navbar-store-state" :class="{published:store.active}">{{store.active?'Publicada':'Borrador'}}</span></div>
-  <div class="p-navbar-right"><a v-if="store" :href="store.publicUrl || `/t/${store.slug}`" class="p-visit-store" target="_blank" rel="noopener"><Icon name="external" :size="16"/><span>Ver tienda</span></a><ThemeToggle/><span class="p-avatar">{{initials}}</span><div class="p-user-label"><strong>{{auth.user?.name||auth.user?.username||'Mi cuenta'}}</strong><small>{{isAdmin?'Administrador':'Vendedor'}}</small></div></div>
+  <div class="p-navbar-store"><span class="p-navbar-store-icon"><Icon name="store" :size="18"/></span><div><label for="navbar-store-selector">{{isAdmin?'TIENDA A GESTIONAR':'ESTÁS TRABAJANDO EN'}}</label><select id="navbar-store-selector" :value="workspace.activeStoreId" @change="changeStore" :disabled="workspace.loading||switching||exiting||!workspace.stores.length" :aria-busy="switching"><option v-if="!workspace.stores.length" value="">{{workspace.loading?'Cargando tiendas…':'Sin tiendas asignadas'}}</option><option v-for="s in workspace.stores" :key="s._id" :value="s._id">{{s.name}}{{pendingTransferStoreIds.has(s._id)?' · Transferencia pendiente':''}}</option></select></div><span v-if="store" class="p-navbar-store-state" :class="{published:store.active}">{{pendingTransferStoreIds.has(store._id)?'Transferencia pendiente':store.active?'Publicada':'Borrador'}}</span></div>
+  <div class="p-navbar-right"><RouterLink v-if="showTransfers" to="/app/transfers" class="p-icon-btn p-transfer-nav" title="Transferencias de tiendas"><Icon name="transfer" :size="17"/><span v-if="transferSummary.pendingIncomingCount" class="p-transfer-badge">{{transferSummary.pendingIncomingCount}}</span></RouterLink><a v-if="store" :href="store.publicUrl || `/t/${store.slug}`" class="p-visit-store" target="_blank" rel="noopener"><Icon name="external" :size="16"/><span>Ver tienda</span></a><ThemeToggle/><span class="p-avatar">{{initials}}</span><div class="p-user-label"><strong>{{auth.user?.name||auth.user?.username||'Mi cuenta'}}</strong><small>{{isAdmin?'Administrador':'Vendedor'}}</small></div></div>
  </header>
  <button v-if="open" class="p-sidebar-overlay" @click="open=false" aria-label="Cerrar menú"/>
  <aside class="p-sidebar" :class="{'p-sidebar-open':open}">
@@ -52,3 +55,7 @@ async function exitImpersonation(){try{await api.post('/auth/impersonation/exit'
  <main id="main-content" class="p-main" :class="{'p-main-design':isDesign}"><div v-if="auth.impersonation.active" class="p-info p-impersonation-alert"><strong>Modo prueba:</strong> estás personificando a {{auth.user?.name||auth.user?.email}}. <button type="button" class="btn btn-secondary btn-small" @click="exitImpersonation">Volver a Administración</button></div><div v-if="subscriptionAlert && !isAdmin" class="p-info p-warning p-subscription-alert"><strong>No se pudo acreditar el último pago de tu suscripción.</strong> Adeudás {{money(subscriptionAlert.debtAmount)}} por {{subscriptionAlert.periodsDue}} {{subscriptionAlert.periodsDue===1?'período':'períodos'}}.<template v-if="subscriptionAlert.inGrace"> Tenés servicio hasta {{shortDate(subscriptionAlert.graceUntil)}} durante el período de cortesía.</template><template v-else-if="subscriptionAlert.graceExpired"> El período de cortesía finalizó.</template> <RouterLink to="/app/subscription">Ver Mi suscripción →</RouterLink></div><div v-if="initializing" class="p-loading-page"><span class="p-spinner"/>Preparando tu espacio...</div><RouterView v-else :key="`${route.path}-${workspace.activeStoreId}`"/></main>
 </div>
 </template>
+
+<style scoped>
+.p-transfer-nav{position:relative}.p-transfer-badge{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--danger);color:#fff;display:grid;place-items:center;font-size:9px;font-weight:800;border:2px solid var(--surface)}
+</style>

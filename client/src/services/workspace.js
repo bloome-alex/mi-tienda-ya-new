@@ -1,6 +1,6 @@
 import { reactive } from 'vue';
 import { api } from './api.js';
-export const workspace = reactive({ stores: [], activeStoreId: '', loading: false });
+export const workspace = reactive({ stores: [], activeStoreId: '', loading: false, transferSummary: { pendingIncoming: [], pendingOutgoing: [], history: [], pendingIncomingCount: 0, pendingOutgoingStoreIds: [], canTransfer: false } });
 export async function loadStores() {
   workspace.loading = true;
   try {
@@ -12,6 +12,13 @@ export async function loadStores() {
     }
   } finally { workspace.loading = false; }
 }
+
+export async function loadTransferSummary() {
+  const result = await api.get('/me/store-transfers');
+  workspace.transferSummary = result || { pendingIncoming: [], pendingOutgoing: [], history: [], pendingIncomingCount: 0, pendingOutgoingStoreIds: [], canTransfer: false };
+  return workspace.transferSummary;
+}
+
 let storeSwitchGuard;
 export function registerStoreSwitchGuard(guard) { storeSwitchGuard=guard; return ()=>{if(storeSwitchGuard===guard)storeSwitchGuard=undefined;}; }
 export async function ensureWorkspaceCanLeave() { return storeSwitchGuard ? !!(await storeSwitchGuard()) : true; }

@@ -22,7 +22,7 @@ const values = {
 export const auditLabels = {
   id: 'Identificador', attributes: 'Atributos', sku: 'SKU', order: 'Orden', storeId: 'Tienda',
   name: 'Nombre', email: 'Correo', phone: 'Teléfono', whatsapp: 'WhatsApp', message: 'Mensaje inicial', showWhatsapp: 'Botón de WhatsApp', showContactForm: 'Formulario de contacto',
-  active: 'Activo', archived: 'Archivado', featured: 'Destacado', price: 'Precio', previousPrice: 'Precio anterior', durationDays: 'Duración en días', features: 'Funcionalidades',
+  active: 'Activo', visible: 'Visible públicamente', archived: 'Archivado', featured: 'Destacado', price: 'Precio', previousPrice: 'Precio anterior', durationDays: 'Duración en días', features: 'Funcionalidades',
   maxStores: 'Máximo de tiendas', maxProducts: 'Máximo de productos', sortOrder: 'Orden', icon: 'Icono', role: 'Rol', planId: 'Plan', planExpiresAt: 'Vencimiento del plan',
   trialDays: 'Días de prueba', magicLinkMinutes: 'Duración del enlace de acceso', slug: 'Dirección de la tienda', description: 'Descripción', ownerId: 'Vendedor asignado', domain: 'Dominio', subdomain: 'Subdominio', customDomain: 'Dominio propio', publicUrl: 'URL pública', verifiedAt: 'Fecha de verificación', verification: 'Verificación DNS', baseDomain: 'Dominio base', cnameTarget: 'Destino DNS', dnsVerifiedAt: 'DNS verificado', provisionedAt: 'HTTPS activado', provisioningError: 'Error de aprovisionamiento',
   parentId: 'Categoría principal', categoryId: 'Categoría', type: 'Tipo', stock: 'Stock', variants: 'Variantes', images: 'Imágenes', madeToOrder: 'Hecho a pedido', relatedProductIds: 'Productos relacionados',
@@ -58,7 +58,7 @@ export const auditLabels = {
   contactAlign: 'Alineación de contacto', contactDirection: 'Dirección de contacto', footerAlign: 'Alineación del pie', footerDirection: 'Dirección del pie', categoryNavigation: 'Presentación de categorías',
   socialVariant: 'Presentación de redes', socialIconSize: 'Tamaño de iconos de redes', socialNewTab: 'Abrir redes en otra pestaña', socialLinks: 'Redes sociales', network: 'Red social', url: 'Enlace',
   before: 'Antes', after: 'Después', delta: 'Diferencia', productId: 'Producto', productName: 'Producto', variantId: 'Variante', variantName: 'Variante', currentStock: 'Stock actual',
-  featureKeys: 'Funcionalidades del plan', inheritsPlanId: 'Plan base', unassignedProducts: 'Productos que quedaron sin categoría', fileType: 'Tipo de comprobante', replaced: 'Reemplazó un comprobante anterior', expiresAt: 'Vencimiento', planName: 'Plan asignado', previousPlanName: 'Plan anterior', credentialsUpdated: 'Credenciales actualizadas', fields: 'Campos registrados', termsAccepted: 'Aceptación de términos', termsSource: 'Origen de términos',
+  featureKeys: 'Funcionalidades del plan', inheritsPlanId: 'Plan base', recipientEmail: 'Email destinatario', previousOwnerId: 'Dueño anterior', newOwnerId: 'Nuevo dueño', previousTransferId: 'Transferencia anterior', kind: 'Tipo de transferencia', unassignedProducts: 'Productos que quedaron sin categoría', fileType: 'Tipo de comprobante', replaced: 'Reemplazó un comprobante anterior', expiresAt: 'Vencimiento', planName: 'Plan asignado', previousPlanName: 'Plan anterior', credentialsUpdated: 'Credenciales actualizadas', fields: 'Campos registrados', termsAccepted: 'Aceptación de términos', termsSource: 'Origen de términos',
   ...Object.fromEntries(storeTextFields.map(field=>[field.key,field.label])),
 };
 

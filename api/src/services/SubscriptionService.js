@@ -4,9 +4,11 @@ import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import { decryptSecret } from '../utils/crypto.js';
 import { subscriptionBillingPolicy } from './SubscriptionBillingPolicy.js';
+import { subscriptionSupportService } from './SubscriptionSupportService.js';
 const providerError = (message, status = 502, code = 'SUBSCRIPTION_PROVIDER_ERROR') => new AppError(message, status, code);
 const asDate = value => value ? new Date(value) : null;
 const finiteMoney = value => Math.round(Number(value || 0) * 100) / 100;
+const HOUR = 3600000;
 
 function snapshot(plan) {
   return { name: plan.name, price: finiteMoney(plan.price), durationDays: Number(plan.durationDays), maxStores: Number(plan.maxStores), maxProducts: Number(plan.maxProducts) };
@@ -80,7 +82,77 @@ export class PlatformMercadoPagoService {
 }
 
 export class SubscriptionService {
-  constructor({ provider = new PlatformMercadoPagoService() } = {}) { this.provider = provider; }
+  constructor({ provider = new PlatformMercadoPagoService() } = {}) { this.provider = provider; this.pendingTimer = null; }
+
+  pendingHours(settings) { return Math.max(1, Math.min(720, Number(settings?.subscriptionPendingLinkHours || 24))); }
+
+  async ensurePendingExpiry(subscription, settings) {
+    if (!subscription || subscription.status !== 'pending') return subscription;
+    if (!subscription.pendingExpiresAt) {
+      const base = subscription.createdAt ? new Date(subscription.createdAt).getTime() : Date.now();
+      subscription.pendingExpiresAt = new Date(base + this.pendingHours(settings) * HOUR);
+      await subscription.save();
+    }
+    return subscription;
+  }
+
+  async cancelPendingSubscription(subscription, { reason = 'seller' } = {}) {
+    if (!subscription || subscription.status !== 'pending') throw new AppError('No hay una vinculación pendiente para cancelar.', 409, 'PENDING_SUBSCRIPTION_NOT_FOUND');
+    if (subscription.providerSubscriptionId) {
+      const remote = await this.provider.getSubscription(subscription.providerSubscriptionId);
+      const remoteStatus = String(remote?.status || '').toLowerCase();
+      if (remoteStatus && remoteStatus !== 'pending') {
+        if (['cancelled', 'canceled'].includes(remoteStatus)) {
+          subscription.status = 'cancelled'; subscription.providerStatus = remoteStatus; subscription.current = false; subscription.checkoutUrl = '';
+          subscription.pendingCancelledAt = subscription.pendingCancelledAt || new Date(); subscription.pendingCancelReason = reason; subscription.canceledAt = subscription.canceledAt || new Date();
+          await subscription.save(); await subscriptionSupportService.closePendingForSubscription(subscription._id, reason === 'expired' ? 'La vinculación venció automáticamente.' : 'El vendedor canceló la vinculación pendiente.'); return subscription;
+        }
+        await this.applyRemoteSubscription(subscription, remote);
+        throw new AppError('Mercado Pago ya cambió el estado de esta vinculación. Actualizá la pantalla antes de cancelarla.', 409, 'PENDING_SUBSCRIPTION_CHANGED');
+      }
+      await this.provider.updateSubscription(subscription.providerSubscriptionId, { status: 'canceled' });
+    }
+    subscription.status = 'cancelled'; subscription.providerStatus = 'cancelled'; subscription.current = false; subscription.checkoutUrl = '';
+    subscription.pendingCancelledAt = new Date(); subscription.pendingCancelReason = reason; subscription.canceledAt = subscription.canceledAt || new Date();
+    await subscription.save();
+    await subscriptionSupportService.closePendingForSubscription(subscription._id, reason === 'expired' ? 'La vinculación venció automáticamente.' : 'El vendedor canceló la vinculación pendiente.');
+    return subscription;
+  }
+
+  async cancelPendingForUser(userId, { reason = 'seller' } = {}) {
+    const subscription = await this.current(userId);
+    return this.cancelPendingSubscription(subscription, { reason });
+  }
+
+  async expirePendingForUser(userId, { settings, now = new Date() } = {}) {
+    settings ||= await Settings.findOne({ key: 'global' });
+    const subscription = await this.current(userId);
+    if (!subscription || subscription.status !== 'pending') return subscription;
+    await this.ensurePendingExpiry(subscription, settings);
+    if (subscription.pendingExpiresAt > now) return subscription;
+    return this.cancelPendingSubscription(subscription, { reason: 'expired' });
+  }
+
+  async expireDuePending(limit = 50) {
+    const settings = await Settings.findOne({ key: 'global' });
+    const rows = await Subscription.find({ current: true, status: 'pending' }).sort({ createdAt: 1 }).limit(limit);
+    for (const subscription of rows) {
+      try {
+        await this.ensurePendingExpiry(subscription, settings);
+        if (subscription.pendingExpiresAt <= new Date()) await this.cancelPendingSubscription(subscription, { reason: 'expired' });
+      } catch (error) {
+        console.error(`[subscription-pending-worker] ${subscription._id}: ${error.code || error.name} ${error.message}`);
+      }
+    }
+  }
+
+  startPendingWorker() {
+    if (this.pendingTimer) return;
+    const run = () => this.expireDuePending().catch(error => console.error('[subscription-pending-worker]', error.code || error.name, error.message));
+    this.pendingTimer = setInterval(run, 60000); this.pendingTimer.unref?.(); run();
+  }
+
+  stopPendingWorker() { if (this.pendingTimer) clearInterval(this.pendingTimer); this.pendingTimer = null; }
 
   async current(userId) {
     return Subscription.findOne({ userId, current: true }).sort({ createdAt: -1 });
@@ -93,25 +165,46 @@ export class SubscriptionService {
   async summaryForUser(user, { settings, subscription } = {}) {
     settings ||= await Settings.findOne({ key: 'global' });
     subscription ||= await this.current(user._id);
+    if (subscription?.status === 'pending') {
+      await this.ensurePendingExpiry(subscription, settings);
+      if (subscription.pendingExpiresAt <= new Date()) {
+        try { await this.cancelPendingSubscription(subscription, { reason: 'expired' }); subscription = null; }
+        catch { /* El worker reintentará; la UI muestra el intento como vencido. */ }
+      }
+    }
     const state = this.billingState({ user, subscription, settings });
+    const supportRequest = subscription ? await subscriptionSupportService.currentForUser(user._id, subscription._id) : null;
+    const pendingExpired = Boolean(subscription?.status === 'pending' && subscription.pendingExpiresAt && subscription.pendingExpiresAt <= new Date());
     return {
       ...state,
       subscriptionId: subscription?._id || null,
       planId: subscription?.planId || user.planId || null,
       providerSubscriptionId: subscription?.providerSubscriptionId || '',
-      checkoutUrl: subscription?.status === 'pending' ? subscription.checkoutUrl : '',
+      checkoutUrl: subscription?.status === 'pending' && !pendingExpired ? subscription.checkoutUrl : '',
       payerEmail: subscription?.payerEmail || '',
       paymentMethodId: subscription?.paymentMethodId || '',
       planSnapshot: subscription?.planSnapshot || null,
       current: Boolean(subscription?.current),
+      pendingExpiresAt: subscription?.pendingExpiresAt || null,
+      pendingExpired,
+      pendingLinkHours: this.pendingHours(settings),
+      manualAccessUntil: user.subscriptionManualAccessUntil || null,
+      supportRequest: supportRequest ? { id: supportRequest._id, status: supportRequest.status, note: supportRequest.note || '', adminNote: supportRequest.adminNote || '', createdAt: supportRequest.createdAt, reviewedAt: supportRequest.reviewedAt, manualAccessUntil: supportRequest.manualAccessUntil || null } : null,
     };
   }
 
   async createCheckout(user, planId, { payerEmail = user.email } = {}) {
     const plan = await Plan.findOne({ _id: planId, active: true });
     if (!plan) throw new AppError('El plan seleccionado no está disponible.', 404, 'PLAN_NOT_FOUND');
+    const currentPlanId = user.planId?._id || user.planId;
+    if (plan.visible === false && String(currentPlanId || '') !== String(plan._id)) throw new AppError('Este plan sólo puede ser asignado por Administración.', 403, 'PLAN_HIDDEN');
     if (!(Number(plan.price) > 0)) throw new AppError('Este plan no puede contratarse como suscripción porque no tiene un precio mayor a cero.', 422, 'PLAN_NOT_SUBSCRIBABLE');
-    const existing = await this.current(user._id);
+    const settings = await Settings.findOne({ key: 'global' });
+    let existing = await this.current(user._id);
+    if (existing?.status === 'pending') {
+      await this.ensurePendingExpiry(existing, settings);
+      if (existing.pendingExpiresAt <= new Date()) { await this.cancelPendingSubscription(existing, { reason: 'expired' }); existing = null; }
+    }
     if (existing?.providerSubscriptionId && !['cancelled', 'detached'].includes(existing.status)) {
       if (existing.status === 'pending' && String(existing.planId) === String(plan._id) && existing.checkoutUrl) return { checkoutUrl: existing.checkoutUrl, subscription: existing };
       throw new AppError('Ya tenés una vinculación de Mercado Pago activa o pendiente. Cancelala o desvinculala antes de contratar otra.', 409, 'SUBSCRIPTION_ALREADY_LINKED');
@@ -120,7 +213,7 @@ export class SubscriptionService {
     const remote = await this.provider.createSubscription({ user, plan, payerEmail });
     if (!remote?.id || !remote?.init_point || !/^https:\/\//i.test(remote.init_point)) throw providerError('Mercado Pago no devolvió un enlace de suscripción válido.');
     const item = await Subscription.create({
-      userId: user._id, planId: plan._id, providerSubscriptionId: String(remote.id), checkoutUrl: remote.init_point, current: true, status: 'pending', providerStatus: String(remote.status || 'pending'), payerEmail, planSnapshot: snapshot(plan), nextPaymentAt: asDate(remote.next_payment_date), lastProviderSyncAt: new Date(),
+      userId: user._id, planId: plan._id, providerSubscriptionId: String(remote.id), checkoutUrl: remote.init_point, current: true, status: 'pending', providerStatus: String(remote.status || 'pending'), payerEmail, planSnapshot: snapshot(plan), nextPaymentAt: asDate(remote.next_payment_date), pendingExpiresAt: new Date(Date.now() + this.pendingHours(settings) * HOUR), lastProviderSyncAt: new Date(),
     });
     return { checkoutUrl: item.checkoutUrl, subscription: item };
   }
@@ -139,10 +232,12 @@ export class SubscriptionService {
   async applyRemoteSubscription(subscription, remote) {
     const providerStatus = String(remote?.status || '');
     const next = { providerStatus, payerId: remote?.payer_id ? String(remote.payer_id) : subscription.payerId, paymentMethodId: remote?.payment_method_id || subscription.paymentMethodId, nextPaymentAt: asDate(remote?.next_payment_date), lastProviderSyncAt: new Date() };
-    if (providerStatus === 'authorized' && !subscription.cancelAtPeriodEnd) { next.status = subscription.lastPaymentStatus && subscription.lastPaymentStatus !== 'approved' ? 'payment_failed' : 'authorized'; next.startedAt = subscription.startedAt || new Date(); }
+    if (providerStatus === 'authorized' && !subscription.cancelAtPeriodEnd) { next.status = subscription.lastPaymentStatus && subscription.lastPaymentStatus !== 'approved' ? 'payment_failed' : 'authorized'; next.startedAt = subscription.startedAt || new Date(); next.checkoutUrl = ''; next.pendingExpiresAt = null; }
     else if (providerStatus === 'paused') next.status = 'paused';
     else if (providerStatus === 'cancelled' || providerStatus === 'canceled') {
-      if (subscription.cancelAtPeriodEnd) {
+      if (subscription.status === 'pending') {
+        next.status = 'cancelled'; next.current = false; next.checkoutUrl = ''; next.pendingCancelledAt = subscription.pendingCancelledAt || new Date(); next.canceledAt = subscription.canceledAt || new Date();
+      } else if (subscription.cancelAtPeriodEnd) {
         next.status = 'cancelled';
         next.canceledAt = subscription.canceledAt || new Date();
       } else {
@@ -155,6 +250,8 @@ export class SubscriptionService {
     else if (providerStatus === 'pending') next.status = 'pending';
     await Subscription.updateOne({ _id: subscription._id }, { $set: next });
     Object.assign(subscription, next);
+    if (next.status === 'authorized') await subscriptionSupportService.resolveProviderConfirmed(subscription._id);
+    else if (next.status === 'cancelled' && next.current === false) await subscriptionSupportService.closePendingForSubscription(subscription._id, 'Mercado Pago informó que la vinculación ya no está pendiente.');
     return subscription;
   }
 
@@ -242,3 +339,4 @@ export class SubscriptionService {
 
 export const platformMercadoPagoService = new PlatformMercadoPagoService();
 export const subscriptionService = new SubscriptionService({ provider: platformMercadoPagoService });
+subscriptionSupportService.setSubscriptionService(subscriptionService);

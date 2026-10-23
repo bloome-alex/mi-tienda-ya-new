@@ -9,15 +9,17 @@ export const auditActions = Object.freeze({
   'plan.created': 'Plan creado', 'plan.updated': 'Plan actualizado', 'plan.archived': 'Plan desactivado',
   'user.created': 'Vendedor creado', 'user.updated': 'Vendedor actualizado', 'user.disabled': 'Vendedor desactivado', 'user.plan.assigned': 'Plan del vendedor actualizado',
   'settings.updated': 'Configuración de la plataforma actualizada', 'store.created': 'Tienda creada', 'store.updated': 'Tienda actualizada', 'store.archived': 'Tienda archivada',
+  'store.transfer.created': 'Transferencia de tienda iniciada', 'store.transfer.cancelled': 'Transferencia de tienda cancelada', 'store.transfer.accepted': 'Transferencia de tienda aceptada', 'store.transfer.return.created': 'Devolución de tienda iniciada',
   'store.design.updated': 'Diseño de tienda actualizado', 'store.contact.updated': 'Contacto de tienda actualizado', 'store.payments.updated': 'Cobros y entregas actualizados', 'store.domain.updated': 'Dominio de tienda actualizado', 'store.domain.verified': 'Dominio propio verificado',
   'category.created': 'Categoría creada', 'category.updated': 'Categoría actualizada', 'category.archived': 'Categoría archivada',
   'product.created': 'Producto creado', 'product.updated': 'Producto actualizado', 'product.featured.updated': 'Producto destacado actualizado', 'product.archived': 'Producto archivado',
   'image.uploaded': 'Imágenes subidas', 'wallpaper.uploaded': 'Fondo de tienda subido', 'stock.adjusted': 'Stock ajustado',
   'order.created': 'Pedido creado', 'order.pending': 'Pedido pendiente', 'order.awaiting_payment': 'Pedido esperando pago', 'order.processing': 'Pedido en proceso',
   'order.paid': 'Pedido pagado', 'order.cancelled': 'Pedido cancelado', 'order.fulfillment': 'Entrega del pedido actualizada', 'order.receipt.uploaded': 'Comprobante de transferencia recibido',
+  'subscription.pending.cancelled': 'Vinculación pendiente de suscripción cancelada', 'subscription.support.created': 'Comprobante de suscripción enviado', 'subscription.support.approved': 'Comprobante de suscripción aprobado', 'subscription.support.rejected': 'Comprobante de suscripción rechazado',
   'whatsapp.connect': 'Conexión de WhatsApp solicitada', 'whatsapp.disconnect': 'WhatsApp desconectado',
 });
-export const auditEntities = Object.freeze({ user: 'Usuario', store: 'Tienda', plan: 'Plan', category: 'Categoría', product: 'Producto', order: 'Pedido', settings: 'Configuración', integration: 'Integración' });
+export const auditEntities = Object.freeze({ user: 'Usuario', store: 'Tienda', plan: 'Plan', category: 'Categoría', product: 'Producto', order: 'Pedido', settings: 'Configuración', integration: 'Integración', subscription_support: 'Revisión de suscripción', store_transfer: 'Transferencia de tienda' });
 
 const secret = /password|passwd|contrase[nñ]a|secret|token|csrf|authorization|cookie|credential|api[_-]?key|private[_-]?key|encryption[_-]?key|digital[_-]?url/i;
 const unsafeKey = key => ['__proto__', 'constructor', 'prototype'].includes(key);

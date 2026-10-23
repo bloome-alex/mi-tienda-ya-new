@@ -125,3 +125,22 @@ En frontend se comprueba el wordmark limpio, el negro profundo con textos crema 
 - Comprobación sintáctica adicional: **73 bloques `<script>` de Vue** válidos.
 - JSON y lockfiles principales válidos.
 - El entorno de preparación usa Node **22.16.0**, por debajo del requisito actual del lockfile (`^22.18.0 || >=24.11.0`), por lo que no se certifica aquí una recompilación Vite. El paquete se entrega sin `node_modules` ni `client/dist` heredado. Para despliegue se recomienda Node 24.11+ y ejecutar `npm ci && npm run build && npm test`.
+
+## v1.15.0
+
+Se agregaron pruebas contractuales para expiración configurable de vinculación, worker automático, verificación del estado real antes de cancelar, cancelación manual del vendedor, comprobantes privados en R2, revisión administrativa, habilitación manual temporal y cierre automático de solicitudes obsoletas.
+
+Regresión seleccionada v1.10-v1.15: 57/57 pruebas aprobadas durante la preparación del ZIP. También se validó sintaxis de 38 archivos JavaScript y 73 bloques `<script>` de Vue.
+
+## v1.16.0 · herencia, planes ocultos y transferencia de tiendas
+
+Se agregaron pruebas para comprobar que los planes hijos almacenen sólo extras, que la visibilidad pública sea independiente de `active`, que `stores.transfer` forme parte del catálogo de permisos y que el flujo de transferencia conserve la propiedad mientras está pendiente.
+
+También se prueba la política de aceptación: requiere vendedor activo con plan vigente no-trial y cupo disponible; existe un único pending por tienda; cancelar/aceptar/devolver están expuestos por API; el navbar muestra la notificación y la tienda pendiente; y el primer login con una transferencia entrante no crea una tienda vacía que consuma el primer cupo.
+
+### Resultado final v1.16.0
+
+- **8/8 pruebas específicas nuevas de v1.16.0 aprobadas** para herencia/visibilidad de planes, política de aceptación, API de transferencia, unicidad de pending, primer acceso y contratos de interfaz.
+- **73/73 pruebas de regresión seleccionadas v1.9.0–v1.16.0 aprobadas**.
+- La sintaxis del backend y de los bloques `<script>` de Vue se validó antes de empaquetar.
+- El ZIP se entrega sin `node_modules` y sin `client/dist` heredado; para compilación integral se recomienda Node 24.11+ y `npm ci && npm run build && npm test`.

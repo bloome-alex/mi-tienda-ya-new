@@ -1,6 +1,6 @@
-# mi-tienda-ya-2 · v1.14.0
+# mi-tienda-ya-2 · v1.16.0
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.14.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.16.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
@@ -25,7 +25,7 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
 
-La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.14.0](docs/CAMBIOS-1.14.0.md), [cambios 1.13.0](docs/CAMBIOS-1.13.0.md), [cambios 1.12.0](docs/CAMBIOS-1.12.0.md), [cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
+La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.16.0](docs/CAMBIOS-1.16.0.md), [cambios 1.15.0](docs/CAMBIOS-1.15.0.md), [cambios 1.14.1](docs/CAMBIOS-1.14.1.md), [cambios 1.14.0](docs/CAMBIOS-1.14.0.md), [cambios 1.13.0](docs/CAMBIOS-1.13.0.md), [cambios 1.12.0](docs/CAMBIOS-1.12.0.md), [cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
 ## 1. Preparar el entorno
 

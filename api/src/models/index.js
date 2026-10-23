@@ -7,13 +7,13 @@ const userSchema = new Schema({
   role: { type: String, enum: ['admin', 'vendedor'], default: 'vendedor', required: true },
   name: { type: String, trim: true, maxlength: 100, default: '' }, email: { type: String, lowercase: true, trim: true },
   username: { type: String, trim: true }, passwordHash: { type: String, select: false }, mustChangePassword: { type: Boolean, default: false },
-  active: { type: Boolean, default: true }, planId: ref('Plan'), planExpiresAt: Date, trialStartedAt: Date, trialEndsAt: Date,
+  active: { type: Boolean, default: true }, planId: ref('Plan'), planExpiresAt: Date, subscriptionManualAccessUntil: Date, trialStartedAt: Date, trialEndsAt: Date,
   subscriptionAppliedPaymentIds: { type: [String], default: [], select: false },
 }, options);
 userSchema.index({ role: 1 }, { unique: true, partialFilterExpression: { role: 'admin' } });
 userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } });
 userSchema.set('optimisticConcurrency', true);
-const planSchema = new Schema({ name: { type: String, required: true, maxlength: 100 }, icon: { type: String, default: 'store' }, previousPrice: nonnegative, price: nonnegative, durationDays: { type: Number, min: 1, default: 30 }, features: { type: [String], default: [] }, featureKeys: { type: [String], default: [] }, inheritsPlanId: { ...ref('Plan'), default: null }, maxStores: { type: Number, min: 1, default: 1 }, maxProducts: { type: Number, min: 0, default: 100 }, active: { type: Boolean, default: true }, featured: { type: Boolean, default: false }, sortOrder: { type: Number, default: 0 } }, options);
+const planSchema = new Schema({ name: { type: String, required: true, maxlength: 100 }, icon: { type: String, default: 'store' }, previousPrice: nonnegative, price: nonnegative, durationDays: { type: Number, min: 1, default: 30 }, features: { type: [String], default: [] }, featureKeys: { type: [String], default: [] }, inheritsPlanId: { ...ref('Plan'), default: null }, maxStores: { type: Number, min: 1, default: 1 }, maxProducts: { type: Number, min: 0, default: 100 }, active: { type: Boolean, default: true }, visible: { type: Boolean, default: true }, featured: { type: Boolean, default: false }, sortOrder: { type: Number, default: 0 } }, options);
 const deliverySchema = new Schema({ id: { type: String, required: true }, type: { type: String, enum: ['pickup', 'shipping', 'digital', 'custom'], required: true }, name: { type: String, required: true }, description: String, price: nonnegative, active: { type: Boolean, default: true } }, { _id: false });
 const paymentSchema = new Schema({ id: { type: String, required: true }, type: { type: String, enum: ['cash', 'transfer', 'mercadopago'], required: true }, name: { type: String, required: true }, instructions: String, deliveryIds: [String], active: { type: Boolean, default: true }, bank: { holder: String, bank: String, cbu: String, alias: String, cuit: String } }, { _id: false });
 const storeSchema = new Schema({ ownerSlot: { type: Number, min: 0, validate: Number.isSafeInteger }, publicationSlot: { type: Number, min: 0, validate: Number.isSafeInteger }, ownerId: { ...ref('User'), required: true, index: true }, name: { type: String, required: true, maxlength: 120 }, slug: { type: String, required: true, unique: true, lowercase: true }, description: { type: String, default: '' }, active: { type: Boolean, default: false }, archived: { type: Boolean, default: false },
@@ -40,7 +40,7 @@ const productSchema = new Schema({ quotaSlot: { type: Number, min: 0, validate: 
 productSchema.index({ storeId: 1, active: 1, archived: 1 });
 productSchema.index({ storeId: 1, featured: 1, active: 1, archived: 1, createdAt: -1 });
 productSchema.index({ storeId: 1, quotaSlot: 1 }, { unique: true, partialFilterExpression: { archived: false, quotaSlot: { $type: 'number' } } });
-const settingsSchema = new Schema({ key: { type: String, default: 'global', unique: true }, trialDays: { type: Number, min: 0, max: 365, default: 15 }, magicLinkMinutes: { type: Number, min: 1, max: 1440, default: 15 }, subscriptionGraceDays: { type: Number, min: 0, max: 3650, default: 7 }, contact: { email: { type: String, default: '' }, phone: { type: String, default: '' }, whatsapp: { type: String, default: '' } }, platformBilling: { enabled: { type: Boolean, default: false }, mercadopago: { accessToken: { type: String, select: false }, webhookSecret: { type: String, select: false }, sandbox: { type: Boolean, default: true } } }, home: { type: Schema.Types.Mixed, default: {} } }, options);
+const settingsSchema = new Schema({ key: { type: String, default: 'global', unique: true }, trialDays: { type: Number, min: 0, max: 365, default: 15 }, magicLinkMinutes: { type: Number, min: 1, max: 1440, default: 15 }, subscriptionGraceDays: { type: Number, min: 0, max: 3650, default: 7 }, subscriptionPendingLinkHours: { type: Number, min: 1, max: 720, default: 24 }, contact: { email: { type: String, default: '' }, phone: { type: String, default: '' }, whatsapp: { type: String, default: '' } }, platformBilling: { enabled: { type: Boolean, default: false }, mercadopago: { accessToken: { type: String, select: false }, webhookSecret: { type: String, select: false }, sandbox: { type: Boolean, default: true } } }, home: { type: Schema.Types.Mixed, default: {} } }, options);
 settingsSchema.set('optimisticConcurrency', true);
 const auditSchema = new Schema({ actorId: ref('User'), storeId: ref('Store'), action: String, entity: String, entityId: String, actorSnapshot: Schema.Types.Mixed, storeSnapshot: Schema.Types.Mixed, entitySnapshot: Schema.Types.Mixed, details: Schema.Types.Mixed }, { timestamps: { createdAt: true, updatedAt: false } });
 auditSchema.index({ createdAt: -1 });
@@ -76,6 +76,9 @@ const subscriptionSchema = new Schema({
   lastPaymentStatus: String,
   lastPaymentStatusDetail: String,
   lastFailureAt: Date,
+  pendingExpiresAt: Date,
+  pendingCancelledAt: Date,
+  pendingCancelReason: { type: String, enum: ['', 'seller', 'expired', 'admin'], default: '' },
   cancelAtPeriodEnd: { type: Boolean, default: false },
   canceledAt: Date,
   detachedAt: Date,
@@ -89,6 +92,41 @@ const subscriptionChargeSchema = new Schema({
   status: { type: String, default: 'pending', index: true }, statusDetail: String, amount: { type: Number, min: 0, default: 0 }, currency: { type: String, default: 'ARS' }, dueAt: Date, paidAt: Date,
 }, options);
 subscriptionChargeSchema.index({ providerPaymentId: 1 }, { unique: true, partialFilterExpression: { providerPaymentId: { $type: 'string' } }, name: 'subscription_payment_unique' });
+
+
+const subscriptionSupportRequestSchema = new Schema({
+  userId: { ...ref('User'), required: true, index: true },
+  subscriptionId: { ...ref('Subscription'), required: true, index: true },
+  planId: { ...ref('Plan'), required: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  note: { type: String, maxlength: 2000, default: '' },
+  receipt: {
+    objectKey: { type: String, select: false },
+    name: { type: String, default: '' }, mimeType: { type: String, default: '' }, uploadedAt: Date,
+  },
+  reviewedBy: ref('User'), reviewedAt: Date, adminNote: { type: String, maxlength: 2000, default: '' },
+  manualAccessUntil: Date,
+}, options);
+subscriptionSupportRequestSchema.index({ subscriptionId: 1, status: 1 });
+subscriptionSupportRequestSchema.index({ userId: 1, createdAt: -1 });
+
+const storeTransferSchema = new Schema({
+  storeId: { ...ref('Store'), required: true, index: true },
+  fromUserId: { ...ref('User'), required: true, index: true },
+  toUserId: { ...ref('User'), default: null, index: true },
+  recipientEmail: { type: String, required: true, lowercase: true, trim: true, index: true },
+  status: { type: String, enum: ['pending', 'accepted', 'cancelled'], default: 'pending', index: true },
+  kind: { type: String, enum: ['transfer', 'return'], default: 'transfer' },
+  previousTransferId: { ...ref('StoreTransfer'), default: null },
+  storeSnapshot: { name: { type: String, default: '' }, slug: { type: String, default: '' } },
+  fromUserSnapshot: { name: { type: String, default: '' }, email: { type: String, default: '' } },
+  toUserSnapshot: { name: { type: String, default: '' }, email: { type: String, default: '' } },
+  acceptedAt: Date, cancelledAt: Date, processingAt: Date,
+}, options);
+storeTransferSchema.index({ storeId: 1, status: 1 }, { unique: true, partialFilterExpression: { status: 'pending' }, name: 'store_transfer_pending_unique' });
+storeTransferSchema.index({ recipientEmail: 1, status: 1, createdAt: -1 });
+storeTransferSchema.index({ fromUserId: 1, createdAt: -1 });
+storeTransferSchema.index({ toUserId: 1, createdAt: -1 });
 
 const sessionSchema = new Schema({ userId: { ...ref('User'), required: true, index: true }, impersonatedByUserId: ref('User'), tokenHash: { type: String, required: true, unique: true }, csrfToken: { type: String, required: true }, expiresAt: { type: Date, required: true } }, options);
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
@@ -106,5 +144,7 @@ export const UploadedImage = mongoose.models.UploadedImage || mongoose.model('Up
 export const StorageCleanup = mongoose.models.StorageCleanup || mongoose.model('StorageCleanup', storageCleanupSchema);
 export const Subscription = mongoose.models.Subscription || mongoose.model('Subscription', subscriptionSchema);
 export const SubscriptionCharge = mongoose.models.SubscriptionCharge || mongoose.model('SubscriptionCharge', subscriptionChargeSchema);
+export const SubscriptionSupportRequest = mongoose.models.SubscriptionSupportRequest || mongoose.model('SubscriptionSupportRequest', subscriptionSupportRequestSchema);
+export const StoreTransfer = mongoose.models.StoreTransfer || mongoose.model('StoreTransfer', storeTransferSchema);
 export const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 export const MagicLink = mongoose.models.MagicLink || mongoose.model('MagicLink', magicSchema);
