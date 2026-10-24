@@ -29,9 +29,9 @@ const platformRoutes=[
     {path:'users',component:()=>import('./views/admin/UsersView.vue'),meta:{admin:true,title:'Usuarios'}},
     {path:'users/new',component:()=>import('./views/admin/UserFormView.vue'),meta:{admin:true,title:'Nuevo vendedor'}},
     {path:'users/:id',component:()=>import('./views/admin/UserFormView.vue'),meta:{admin:true,title:'Editar vendedor'}},
-    {path:'stores',component:()=>import('./views/admin/StoresView.vue'),meta:{admin:true,title:'Tiendas'}},
-    {path:'stores/new',component:()=>import('./views/admin/StoreFormView.vue'),meta:{admin:true,title:'Nueva tienda'}},
-    {path:'stores/:id',component:()=>import('./views/admin/StoreFormView.vue'),meta:{admin:true,title:'Editar tienda'}},
+    {path:'stores',component:()=>import('./views/admin/StoresView.vue'),meta:{multiStore:true,title:'Tiendas'}},
+    {path:'stores/new',component:()=>import('./views/admin/StoreFormView.vue'),meta:{multiStore:true,title:'Nueva tienda'}},
+    {path:'stores/:id',component:()=>import('./views/admin/StoreFormView.vue'),meta:{multiStore:true,title:'Editar tienda'}},
     {path:'settings',component:()=>import('./views/admin/SettingsView.vue'),meta:{admin:true,title:'Configuración'}},
     {path:'emails',component:()=>import('./views/admin/EmailsView.vue'),meta:{admin:true,title:'Emails'}},
     {path:'settings/plans/new',component:()=>import('./views/admin/PlanFormView.vue'),meta:{admin:true,title:'Nuevo plan'}},
@@ -87,6 +87,7 @@ router.beforeEach(async to=>{
     if(!auth.user) return {path:'/login',query:{next:to.fullPath}};
     if(to.meta.admin && auth.user.role!=='admin') return '/app/dashboard';
     if(auth.user.role==='vendedor'){
+      if(to.meta.multiStore && Number(auth.entitlement?.maxStores||1)<=1) return {path:'/app/dashboard',query:{multiStoreDenied:'1'}};
       const required = to.meta.features || (to.meta.feature ? [to.meta.feature] : []);
       if(required.length && !required.every(canFeature)) return {path:'/app/dashboard',query:{featureDenied:required[0]}};
     }

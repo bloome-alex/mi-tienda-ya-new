@@ -139,7 +139,7 @@ WHATSAPP_NO_SANDBOX=false
 
 Cada aplicación debe tener un `WHATSAPP_CLIENT_ID` diferente. La carpeta de sesión debe persistir entre reinicios. No ejecutes dos procesos simultáneos con el mismo identificador y la misma carpeta; por eso el archivo PM2 incluido utiliza una instancia en modo fork.
 
-Desde **Configuración → WhatsApp**, iniciá la conexión y escaneá el QR con WhatsApp. El panel consulta el estado periódicamente hasta observar la conexión. No se inicia un navegador al instalar el proyecto.
+Desde **Configuración → WhatsApp**, iniciá la primera conexión y escaneá el QR con WhatsApp. El panel consulta el estado periódicamente hasta observar la conexión. En reinicios posteriores, si `WHATSAPP_DATA_PATH` conserva una sesión `LocalAuth` y el administrador no pulsó **Desconectar**, la API programa una reconexión automática después de quedar disponible. Una desconexión manual deja una marca persistente para evitar que el siguiente reinicio vuelva a conectar por sí solo.
 
 La conexión administrativa se mantiene separada de los botones `wa.me` de cada vendedor. Esos botones usan el número y mensaje configurados en **Contacto**, sin necesitar un navegador conectado para cada tienda.
 

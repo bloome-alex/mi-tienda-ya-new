@@ -22,7 +22,7 @@ try {
   await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10000 });
   await bootstrap(); await initCommerce(); subscriptionService.startPendingWorker();
   const app = createApp();
-  server = app.listen(config.port, '0.0.0.0', () => { console.log(`[api] MiTiendaYa disponible en puerto ${config.port}.`); if (process.send) process.send('ready'); });
+  server = app.listen(config.port, '0.0.0.0', () => { console.log(`[api] MiTiendaYa disponible en puerto ${config.port}.`); if (process.send) process.send('ready'); whatsappService.scheduleAutoReconnect(); });
   server.on('error', error => { console.error(`[api] No se pudo escuchar: ${error.message}`); close('listen-error'); });
   process.on('SIGTERM', () => close('SIGTERM')); process.on('SIGINT', () => close('SIGINT'));
   process.on('unhandledRejection', error => { console.error('[api] Promesa no controlada.', error?.message); close('unhandledRejection'); });

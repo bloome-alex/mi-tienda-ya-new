@@ -15,16 +15,21 @@ const isAdmin=computed(()=>auth.user?.role==='admin');
 const isDesign=computed(()=>route.matched.some(record=>record.path==='/app/design'));
 const store=computed(()=>workspace.stores.find(s=>s._id===workspace.activeStoreId));
 const transferSummary=computed(()=>workspace.transferSummary||{});
+const canManageMultipleStores=computed(()=>!isAdmin.value&&Number(auth.entitlement?.maxStores||1)>1);
 const pendingTransferStoreIds=computed(()=>new Set(transferSummary.value.pendingOutgoingStoreIds||[]));
-const showTransfers=computed(()=>!isAdmin.value&&(canFeature('stores.transfer')||Number(transferSummary.value.pendingIncomingCount||0)>0||(transferSummary.value.pendingOutgoingStoreIds||[]).length>0||(transferSummary.value.history||[]).some(item=>item.canReturn)));
+const showTransfers=computed(()=>!isAdmin.value&&(Number(transferSummary.value.pendingIncomingCount||0)>0||(transferSummary.value.history||[]).some(item=>item.canReturn)||(!canManageMultipleStores.value&&(canFeature('stores.transfer')||(transferSummary.value.pendingOutgoingStoreIds||[]).length>0))));
 const initials=computed(()=>(auth.user?.name||auth.user?.email||'A').slice(0,2).toUpperCase());
 const adminLinks=[['Resumen','/app/dashboard','grid'],['Usuarios','/app/users','users'],['Tiendas','/app/stores','store'],['Emails','/app/emails','mail'],['Configuración','/app/settings','settings'],['Auditoría','/app/audit','shield']];
 const sellerLinks=[['Resumen','/app/dashboard','grid',null],['Productos','/app/products','package','section.products'],['Categorías','/app/categories','tag','section.categories'],['Stock','/app/stock','stock','section.stock'],['Pedidos','/app/orders','receipt','section.orders']];
 const storeLinks=[['Diseño de la tienda','/app/design','palette','section.design'],['Dominio','/app/domain','globe','section.domain'],['Aplicación PWA','/app/pwa','phone','section.pwa'],['Cobros y entregas','/app/payments','credit','section.payments'],['Contacto','/app/contact','phone','section.contact']];
-const visibleSellerLinks=computed(()=>isAdmin.value?sellerLinks:sellerLinks.filter(link=>!link[3]||canFeature(link[3])));
+const visibleSellerLinks=computed(()=>{
+  if(isAdmin.value)return sellerLinks;
+  const links=[sellerLinks[0],...(canManageMultipleStores.value?[['Tiendas','/app/stores','store',null]]:[]),...sellerLinks.slice(1)];
+  return links.filter(link=>!link[3]||canFeature(link[3]));
+});
 const visibleStoreLinks=computed(()=>isAdmin.value?storeLinks:storeLinks.filter(link=>!link[3]||canFeature(link[3])));
 watch(()=>route.fullPath,()=>{open.value=false;});
-onMounted(async()=>{try{await loadStores();if(!isAdmin.value){const [data]=await Promise.all([api.get('/me/subscription'),loadTransferSummary()]);if(data.subscription?.periodsDue>0){subscriptionAlert.value=data.subscription;notify.error(`No se pudo acreditar el último pago de tu suscripción. Adeudás ${money(data.subscription.debtAmount)}.`)}}}catch(e){notify.error(e.message)}finally{initializing.value=false}});
+onMounted(async()=>{try{await loadStores();if(!isAdmin.value){const [data]=await Promise.all([api.get('/me/subscription'),loadTransferSummary()]);if(data.entitlement)auth.entitlement={...auth.entitlement,...data.entitlement};if(data.subscription?.periodsDue>0){subscriptionAlert.value=data.subscription;notify.error(`No se pudo acreditar el último pago de tu suscripción. Adeudás ${money(data.subscription.debtAmount)}.`)}}}catch(e){notify.error(e.message)}finally{initializing.value=false}});
 async function exit(){
  if(exiting.value||switching.value)return;
  exiting.value=true;

@@ -1,13 +1,34 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import qrcode from 'qrcode';
 
 /** Una instancia por proceso. LocalAuth separa el perfil Chromium por clientId. */
 export class WhatsAppService {
-  constructor() { this.client = null; this.connecting = null; this.generation = 0; this.state = { status: 'disconnected', qr: null, error: null, clientId: config.whatsappClientId }; }
+  constructor() {
+    this.client = null;
+    this.connecting = null;
+    this.generation = 0;
+    this.autoReconnectTimer = null;
+    this.state = { status: 'disconnected', qr: null, error: null, clientId: config.whatsappClientId };
+  }
   status() { return { ...this.state }; }
-  async connect() {
+  sessionPath() { return path.join(config.whatsappDataPath, `session-${config.whatsappClientId}`); }
+  manualDisconnectPath() { return path.join(config.whatsappDataPath, `.manual-disconnect-${config.whatsappClientId}`); }
+  hasPersistedSession() {
+    try { return fs.existsSync(this.sessionPath()) && fs.readdirSync(this.sessionPath()).length > 0; }
+    catch { return false; }
+  }
+  autoReconnectDisabled() { return fs.existsSync(this.manualDisconnectPath()); }
+  clearManualDisconnect() { try { fs.rmSync(this.manualDisconnectPath(), { force: true }); } catch {} }
+  markManualDisconnect() {
+    try { fs.mkdirSync(config.whatsappDataPath, { recursive: true }); fs.writeFileSync(this.manualDisconnectPath(), new Date().toISOString()); }
+    catch (error) { console.error(`[whatsapp] No se pudo registrar la desconexión manual: ${error.message}`); }
+  }
+  async connect({ automatic = false } = {}) {
     if (this.client || this.connecting) return this.status();
+    if (!automatic) this.clearManualDisconnect();
     this.state = { ...this.state, status: 'connecting', error: null, qr: null };
     this.connecting = this.initialize(++this.generation);
     this.connecting.catch(error => {
@@ -15,6 +36,19 @@ export class WhatsAppService {
       console.error(`[whatsapp] ${error.name}: ${error.message}`);
     }).finally(() => { this.connecting = null; });
     return this.status();
+  }
+  async autoReconnect() {
+    if (this.client || this.connecting || this.autoReconnectDisabled() || !this.hasPersistedSession()) return this.status();
+    console.log('[whatsapp] Sesión persistida detectada. Reconectando automáticamente.');
+    return this.connect({ automatic: true });
+  }
+  scheduleAutoReconnect(delayMs = 1500) {
+    if (this.autoReconnectTimer) clearTimeout(this.autoReconnectTimer);
+    this.autoReconnectTimer = setTimeout(() => {
+      this.autoReconnectTimer = null;
+      this.autoReconnect().catch(error => console.error(`[whatsapp] Reconexión automática fallida: ${error.message}`));
+    }, delayMs);
+    this.autoReconnectTimer.unref?.();
   }
   async initialize(generation) {
     const module = await import('whatsapp-web.js');
@@ -44,12 +78,20 @@ export class WhatsAppService {
     try { await client.initialize(); } catch (error) { this.client = null; await client.destroy().catch(() => {}); throw error; }
   }
   async disconnect() {
-    this.generation++; const client = this.client; this.client = null;
+    this.generation++;
+    if (this.autoReconnectTimer) { clearTimeout(this.autoReconnectTimer); this.autoReconnectTimer = null; }
+    this.markManualDisconnect();
+    const client = this.client; this.client = null;
     if (client) { await client.logout().catch(() => {}); await client.destroy().catch(() => {}); }
     this.state = { status: 'disconnected', qr: null, error: null, clientId: config.whatsappClientId };
     return this.status();
   }
-  async close() { this.generation++; const client = this.client; this.client = null; if (client) await client.destroy().catch(() => {}); }
+  async close() {
+    this.generation++;
+    if (this.autoReconnectTimer) { clearTimeout(this.autoReconnectTimer); this.autoReconnectTimer = null; }
+    const client = this.client; this.client = null;
+    if (client) await client.destroy().catch(() => {});
+  }
   async send(phone, text) {
     if (!this.client || this.state.status !== 'connected') throw new AppError('WhatsApp no está conectado.', 503, 'WHATSAPP_DISCONNECTED');
     const number = String(phone).replace(/\D/g, '');

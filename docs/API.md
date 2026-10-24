@@ -611,6 +611,18 @@ En modo `custom`, la respuesta incluye el TXT de verificación y el destino CNAM
 
 `GET /api/public/host-store` resuelve la tienda correspondiente al hostname de la petición y se utiliza como endpoint auxiliar de diagnóstico/integración. La tienda compilada normalmente recibe esta resolución directamente en el HTML servido por Express.
 
+## ABM de tiendas del vendedor · v1.16.1
+
+Disponible únicamente para vendedores cuyo `entitlement.maxStores` sea mayor que 1. Todas las consultas y mutaciones se limitan al `ownerId` de la sesión.
+
+- `GET /api/me/stores`: listado paginado de las tiendas propias.
+- `GET /api/me/stores/:id`: consulta una tienda propia.
+- `POST /api/me/stores`: crea una tienda propia usando la cuota del plan.
+- `PUT /api/me/stores/:id`: edita nombre, slug, descripción y publicación de una tienda propia.
+- `DELETE /api/me/stores/:id`: archiva una tienda propia. Si tiene una transferencia pendiente, primero debe cancelarse.
+
+Las transferencias salientes se siguen ejecutando con `/api/me/store-transfers`, pero para vendedores multi-tienda la interfaz las inicia, muestra y cancela directamente desde este ABM.
+
 ## Transferencias de tiendas · v1.16.0
 
 - `GET /api/me/store-transfers`: pendientes entrantes/salientes, historial, cupo del destinatario y disponibilidad del permiso.

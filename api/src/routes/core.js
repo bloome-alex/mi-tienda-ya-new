@@ -21,6 +21,7 @@ import { subscriptionSupportService } from '../services/SubscriptionSupportServi
 import { sellerMailService } from '../services/SellerMailService.js';
 import { planFeatureService } from '../services/PlanFeatureService.js';
 import { storeTransferService } from '../services/StoreTransferService.js';
+import { storeManagementService } from '../services/StoreManagementService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -314,6 +315,34 @@ router.delete('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) =
   await domainService.deprovisionStore(before);
   await audit(req, 'store.archived', 'store', before._id, { changes: AuditService.changes(before, { active: false, archived: true }, ['active', 'archived']) }, before._id); ok(res, safeStore(await Store.findById(before._id)));
 }));
+
+// ABM propio para vendedores cuyo plan admite más de una tienda.
+const sellerStoreSchema = storeSchema.omit({ ownerId: true });
+router.get('/me/stores', requireAuth, asyncHandler(async (req, res) => {
+  const { page, limit } = pagination(req.query);
+  const result = await storeManagementService.list(req.user, { page, limit, search: req.query.search });
+  ok(res, result.items.map(safeStore), 200, { page, limit, total: result.total });
+}));
+router.get('/me/stores/:id', requireAuth, asyncHandler(async (req, res) => ok(res, safeStore(await storeManagementService.get(req.user, req.params.id)))));
+router.post('/me/stores', requireAuth, asyncHandler(async (req, res) => {
+  const body = sellerStoreSchema.parse(req.body);
+  const item = await storeManagementService.create(req.user, body);
+  await audit(req, 'store.created', 'store', item._id, { changes: AuditService.changes({}, item, ['name', 'slug', 'active']) }, item._id);
+  ok(res, safeStore(item), 201);
+}));
+router.put('/me/stores/:id', requireAuth, asyncHandler(async (req, res) => {
+  const before = safeStore(await storeManagementService.get(req.user, req.params.id));
+  const body = parsePatch(sellerStoreSchema, req.body);
+  const item = await storeManagementService.update(req.user, req.params.id, body);
+  await audit(req, 'store.updated', 'store', item._id, { changes: AuditService.changes(before, safeStore(item), Object.keys(body)) }, item._id);
+  ok(res, safeStore(item));
+}));
+router.delete('/me/stores/:id', requireAuth, asyncHandler(async (req, res) => {
+  const before = await storeManagementService.archive(req.user, req.params.id);
+  await audit(req, 'store.archived', 'store', before._id, { changes: AuditService.changes(before, { active: false, archived: true }, ['active', 'archived']) }, before._id);
+  ok(res, safeStore(await Store.findById(before._id)));
+}));
+
 router.get('/stores', requireAuth, asyncHandler(async (req, res) => {
   const filter = { archived: { $ne: true }, ...(req.user.role === 'admin' ? {} : { ownerId: req.user._id }) };
   const items = await Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret').sort({ createdAt: 1 }); ok(res, items.map(safeStore));
