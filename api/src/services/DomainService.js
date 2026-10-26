@@ -207,7 +207,7 @@ export class DomainService {
       const owner = await this.userModel.findById(store.ownerId);
       const modeFeature = parsed.type === 'subdomain' ? 'domain.subdomain' : 'domain.custom';
       const keys = owner ? await this.planFeatures.keysForUser(owner) : [];
-      if (!keys.includes('section.domain') || !keys.includes(modeFeature)) store = null;
+      if (!keys.includes(modeFeature)) store = null;
     }
     this.cache.set(cacheKey, { value: store || null, expires: Date.now() + 30000 });
     return store || null;

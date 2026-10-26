@@ -1,6 +1,6 @@
-# mi-tienda-ya-2 · v1.16.1
+# mi-tienda-ya-2 · v1.19.0
 
-Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.16.1** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
+Plataforma para crear y administrar tiendas online, con panel de administrador, panel de vendedor, catálogo público, carrito, checkout y editor de diseño. La versión **1.19.0** usa **Vue 3.5.44 y CSS propio**, JavaScript, Node.js, Express y MongoDB standalone. La API está organizada mediante **Programación Orientada a Objetos**, con servicios para autenticación, permisos, cuotas, inventario, pedidos y proveedores externos.
 
 El proyecto tiene dos workspaces npm, `api` y `client`. Vue Router resuelve la navegación y Vite compila el cliente. Se respetó el pedido de usar Vue con estilos propios: no se incorporó Vuetify, Bootstrap ni otro framework visual.
 
@@ -24,6 +24,8 @@ La distribución incluye código fuente, `package-lock.json`, configuración de 
 - Términos propios por tienda, validaciones de checkout con notificaciones rojas y protección de cambios con Guardar, Descartar o Seguir editando.
 - Recomendaciones a partir de compras conjuntas, relaciones manuales y categorías de la misma tienda.
 - SMTP, conexión de WhatsApp por QR con `whatsapp-web.js`, contacto por `wa.me` y PWA con pantalla sin conexión.
+
+La guía de [pruebas mock de integraciones](docs/PRUEBAS-INTEGRACIONES-1.19.0.md) documenta los comandos de Mercado Pago y Facebook. [Cambios 1.19.0](docs/CAMBIOS-1.19.0.md).
 
 La [matriz de funcionalidades](docs/FUNCIONALIDADES.md) detalla todos los campos y el alcance efectivo de cada función. [Cambios 1.16.1](docs/CAMBIOS-1.16.1.md), [cambios 1.16.0](docs/CAMBIOS-1.16.0.md), [cambios 1.15.0](docs/CAMBIOS-1.15.0.md), [cambios 1.14.1](docs/CAMBIOS-1.14.1.md), [cambios 1.14.0](docs/CAMBIOS-1.14.0.md), [cambios 1.13.0](docs/CAMBIOS-1.13.0.md), [cambios 1.12.0](docs/CAMBIOS-1.12.0.md), [cambios 1.11.0](docs/CAMBIOS-1.11.0.md), [cambios 1.10.0](docs/CAMBIOS-1.10.0.md), [cambios 1.9.0](docs/CAMBIOS-1.9.0.md), [hotfix 1.8.1](docs/CAMBIOS-1.8.1.md) y [cambios de la versión 1.8.0](docs/CAMBIOS-1.8.0.md) describe las novedades y cómo actualizar una instalación conservando su configuración y sus datos. El [manual del diseñador](docs/DISENO.md) explica las variantes, los fondos, los espaciados y las secciones.
 
@@ -210,6 +212,8 @@ Los datos bancarios y la URL digital de la demostración son ejemplos identifica
 
 **Transferencias y efectivo.** Se pueden limitar a determinadas formas de entrega. Un comprobante bancario adjunto queda disponible para el vendedor y el administrador; adjuntarlo no confirma el pago. Los comprobantes se almacenan en el bucket privado `R2_RECEIPTS_BUCKET_NAME` y se descargan únicamente a través de la API autenticada. El vendedor verifica el cobro y cambia el estado manualmente.
 
+**Facebook Ads.** Cada tienda dispone de **Redes y anuncios**. En v1.18.0 Facebook permite conectar una Página y una cuenta publicitaria mediante OAuth y crear anuncios de tráfico de productos en estado `PAUSED`. Instagram, YouTube y TikTok se muestran como **Muy pronto**. Para desarrollo se puede habilitar una conexión de Marketing API Sandbox. Los tokens se cifran con `ENCRYPTION_KEY` antes de persistirse en MongoDB. La configuración y una prueba sin gasto se detallan en [Cambios 1.18.0](docs/CAMBIOS-1.18.0.md) y [Integraciones](docs/INTEGRACIONES.md).
+
 **WhatsApp.** La conexión de administración utiliza `whatsapp-web.js`, `LocalAuth`, un `WHATSAPP_CLIENT_ID` exclusivo y consultas periódicas del estado del QR. La primera vinculación se inicia desde **Conectar**; si existe una sesión persistida y no fue desconectada manualmente, la API intenta reconectarla automáticamente después de quedar escuchando. El botón flotante de cada tienda abre un enlace `wa.me` con el mensaje elegido y funciona de manera independiente de esa sesión.
 
 **PWA.** La plataforma mantiene su PWA y cada tienda publica además un manifest dinámico con nombre, `id`, alcance e íconos propios configurados desde **Tu tienda → Aplicación PWA**. Los íconos se procesan a 192 y 512 px y se almacenan en R2. El catálogo actualizado, la administración, los pedidos y los pagos requieren Internet; no se guardan compras para ejecutarlas después sin conexión.
@@ -269,14 +273,15 @@ También se incluyen `Dockerfile` y `compose.yaml`, con MongoDB autenticado, dat
 
 ## 9. Verificación de esta entrega
 
-Se ejecutaron **51 pruebas del frontend que no requieren instalar Vue**, todas aprobadas. La versión agrega una regresión que recorre todos los campos publicados en Textos y comprueba especialmente Términos, secciones y complementos personalizados. La guía de [cambios de v1.7.0](docs/CAMBIOS-1.7.0.md) detalla el alcance.
+Para v1.18.0 se ejecutó `npm run check`: **43 archivos JavaScript** tienen sintaxis válida. También se extrajo y validó con `node --check` el bloque `<script setup>` de **80 componentes Vue**. Las pruebas de contrato de v1.16.0, v1.16.1, v1.16.2, v1.17.0 y v1.18.0 pasan **19/19**.
 
-La instalación de dependencias no terminó dentro del límite del entorno de preparación, por lo que no se afirma una recompilación local de Vite para v1.7.0. Para evitar incluir recursos compilados de una versión anterior, el ZIP no contiene `client/dist`: después de `npm ci` ejecutá `npm run build` antes de iniciar la aplicación.
+La instalación completa de dependencias no pudo terminar dentro del entorno de preparación. El host disponible usa Node **22.16.0** mientras el proyecto declara **22.18.0 o superior**. La suite del cliente pudo ejecutar 96 casos: 89 aprobaron y 7 no llegaron a cargar por ausencia de `vue`/`@vue/compiler-sfc` después de esa instalación incompleta; no se registraron fallos de aserción vinculados a los cambios de esta versión. Por el mismo motivo no se afirma un build local de Vite.
 
-En el primer `npm test`, `mongodb-memory-server` puede descargar el binario de MongoDB. Las pruebas utilizan una base temporal propia y requieren permiso para abrir puertos locales.
+El ZIP no incluye `node_modules` ni dependencias parciales. En un entorno con la versión de Node indicada por `package.json`, ejecutá `npm ci`, `npm test` y `npm run build` antes de desplegar.
 
 ## Documentación
 
+- [Cambios de la versión 1.18.0: solicitudes de planes y Facebook Ads](docs/CAMBIOS-1.18.0.md).
 - [Cambios de la versión 1.7.0 y actualización de instalaciones existentes](docs/CAMBIOS-1.7.0.md).
 - [Historial de cambios de la versión 1.6.0](docs/CAMBIOS-1.6.0.md).
 - [Historial de cambios de la versión 1.5.0](docs/CAMBIOS-1.5.0.md).

@@ -7,14 +7,13 @@ const here=path.dirname(fileURLToPath(import.meta.url));
 const root=path.resolve(here,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8');
 
-test('seller sees stores ABM only when the plan allows multiple stores',()=>{
+test('seller sees stores ABM only when Gestión de Tiendas is enabled',()=>{
   const layout=read('src/layouts/DashboardLayout.vue');
   const router=read('src/router.js');
-  assert.match(layout,/canManageMultipleStores/);
-  assert.match(layout,/Number\(auth\.entitlement\?\.maxStores\|\|1\)>1/);
-  assert.match(layout,/\['Tiendas','\/app\/stores'/);
-  assert.match(router,/meta:\{multiStore:true,title:'Tiendas'\}/);
-  assert.match(router,/to\.meta\.multiStore.*maxStores/);
+  assert.match(layout,/\['Tiendas','\/app\/stores','store','management\.stores'\]/);
+  assert.match(router,/path:'stores'.*feature:'management\.stores'/s);
+  assert.match(router,/to\.meta\.feature/);
+  assert.doesNotMatch(router,/multiStore/);
 });
 
 test('seller store ABM centralizes outgoing transfer state and cancellation',()=>{

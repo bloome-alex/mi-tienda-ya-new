@@ -4,7 +4,8 @@ import { onBeforeRouteLeave } from 'vue-router';
 import { api } from '../../services/api.js';
 import { workspace, registerStoreSwitchGuard } from '../../services/workspace.js';
 import { canFeature } from '../../services/auth.js';
-import { normalizeDesign, defaultDesign, wallpaperSpecs, storeTextFields, socialNetworks } from '../../services/design.js';
+import { normalizeDesign, defaultDesign, wallpaperSpecs, socialNetworks } from '../../services/design.js';
+import { storeTextFields } from '../../services/storeCopy.js';
 import { DesignTextCatalog } from '../../services/designTextCatalog.js';
 import { notify, confirmDialog, unsavedChangesDialog } from '../../services/notifications.js';
 import { PREVIEW_MESSAGE, isTrustedPreviewMessage, previewSectionPath, readPreviewLocation } from '../../services/previewProtocol.js';
@@ -41,27 +42,22 @@ const sections=[
   {key:'brand',label:'Identidad',icon:'sparkles',description:'Marca, temas, fondos y datos de tu tienda.'},
   {key:'navbar',label:'Cabecera',icon:'menu',description:'Logo, altura, visibilidad y navegación de tu tienda.'},
   {key:'shop',label:'Tienda',icon:'store',description:'Portada, destacados y catálogo con tu estilo.'},
-  {key:'sections',label:'Secciones',icon:'grid',description:'Contenido propio, organizado por secciones y complementos.'},
+  {key:'sections',label:'Secciones personalizadas',icon:'grid',description:'Contenido propio, organizado por secciones y complementos.'},
   {key:'copy',label:'Textos',icon:'edit',description:'Único lugar para editar títulos, descripciones, etiquetas, botones y mensajes.'},
   {key:'product',label:'Producto',icon:'package',description:'Presentá cada producto con claridad.'},
   {key:'cart',label:'Carrito',icon:'cart',description:'Prepará una experiencia de compra simple.'},
   {key:'checkout',label:'Checkout',icon:'credit-card',description:'Datos, entrega y pago a tu manera.'},
   {key:'terms',label:'Términos',icon:'receipt',description:'Publicación y presentación de la página de términos.'}
 ];
-const visibleSections=computed(()=>sections.filter(item=>(item.key!=='sections'||canFeature('design.custom_sections'))&&(item.key!=='terms'||canFeature('checkout.terms'))));
+const canPremium=computed(()=>canFeature('design.premium'));
+const canEnterprise=computed(()=>canFeature('design.enterprise'));
+const limitedTabs=new Set(['brand','shop','copy']);
+const premiumTabs=new Set(['navbar','sections','product','terms']);
+const enterpriseTabs=new Set(['cart','checkout']);
+const visibleSections=computed(()=>sections.filter(item=>limitedTabs.has(item.key)||(canPremium.value&&premiumTabs.has(item.key))||(canEnterprise.value&&enterpriseTabs.has(item.key))));
 const current=computed(()=>sections.find(item=>item.key===section.value));
-const visibleEditorGroups=computed(()=>(editorGroups[section.value]||[]).filter(group=>{
-  if(group.special==='wallpaper'&&!canFeature('design.backgrounds'))return false;
-  if(section.value==='brand'&&group.key==='dark-colors'&&!canFeature('design.theme_modes'))return false;
-  if(section.value==='product'&&group.key==='related'&&!canFeature('products.related'))return false;
-  if(section.value==='checkout'&&group.key==='trust'&&!canFeature('checkout.terms'))return false;
-  return group.special||group.items.some(field=>!['text','textarea'].includes(field.type));
-}));
-function fieldAllowed(field,group){
-  if(section.value==='brand'&&group.key==='theme'&&['colorMode','allowThemeToggle'].includes(field.key)&&!canFeature('design.theme_modes'))return false;
-  if(section.value==='shop'&&group.key==='catalog'&&['categoryNavigation','categoryPanelAnimation','categoryPanelDuration'].includes(field.key)&&!canFeature('design.category_navigation'))return false;
-  return true;
-}
+const visibleEditorGroups=computed(()=>(editorGroups[section.value]||[]).filter(group=>group.special||group.items.some(field=>!['text','textarea'].includes(field.type))));
+function fieldAllowed(){return true;}
 const previewPageLabel=computed(()=>sections.find(item=>item.key===previewPage.value.section)?.label||'Tienda');
 const previewPath=computed(()=>store.value&&previewPage.value.path?`${previewPage.value.path}?preview=${store.value._id}`:'');
 const wallpaperDevices=computed(()=>draft.value.wallpaper.mode==='responsive'?['desktop','mobile']:['shared']);
@@ -121,9 +117,7 @@ function dispatchNavigation(){
   preview.value?.contentWindow?.postMessage({type:PREVIEW_MESSAGE.navigate,storeId:store.value._id,...pendingNavigation.value},location.origin);
 }
 function selectSection(key){
-  if(!sections.some(item=>item.key===key))return;
-  if(key==='sections'&&!canFeature('design.custom_sections'))return;
-  if(key==='terms'&&!canFeature('checkout.terms'))return;
+  if(!visibleSections.value.some(item=>item.key===key))return;
   section.value=key;pendingNavigation.value=null;
   if(['brand','navbar','copy'].includes(key)||!store.value)return;
   const target=key==='sections'?'shop':key,productId=rememberedProductId.value||firstProduct.value?._id||'';
@@ -201,20 +195,17 @@ function abortUploads(){uploadGeneration++;for(const task of uploadTasks.values(
 async function cleanupSessionUploads(){const id=store.value?._id,urls=[...sessionUploads];sessionUploads.clear();if(!id||!urls.length)return;try{await api.delete(`/stores/${id}/uploads`,{urls});}catch(error){console.warn('[r2-cleanup]',error.message);}}
 function preset(value){
   ['primary','accent','background','text'].forEach((key,index)=>{draft.value.brand[key]=value.colors[index];});
-  if(canFeature('design.theme_modes'))['darkPrimary','darkAccent','darkBackground','darkText'].forEach((key,index)=>{draft.value.brand[key]=value.dark[index];});
+  ['darkPrimary','darkAccent','darkBackground','darkText'].forEach((key,index)=>{draft.value.brand[key]=value.dark[index];});
   Object.assign(draft.value.brand,{font:value.font,radius:value.radius});draft.value.shop.layout=value.layout;
-  notify.info(canFeature('design.theme_modes')?'Paletas clara y oscura aplicadas a la vista previa. Guardá para usarlas en tu tienda.':'Paleta clara aplicada a la vista previa. Guardá para usarla en tu tienda.');
+  notify.info('Paletas clara y oscura aplicadas a la vista previa. Guardá para usarlas en tu tienda.');
 }
 async function reset(){
   if(saving.value)return;
   if(await confirmDialog({title:'Restaurar el diseño inicial',message:'Se reemplazarán las opciones de diseño habilitadas por tu plan por sus valores iniciales. Los datos generales de la tienda se conservan. Podés revisar el resultado antes de guardar.',confirmText:'Restaurar diseño',danger:true})){
     abortUploads();await cleanupSessionUploads();const previous=JSON.parse(JSON.stringify(draft.value)),next=normalizeDesign(defaultDesign);
-    if(!canFeature('design.custom_sections'))next.sections=previous.sections;
-    if(!canFeature('design.theme_modes'))for(const key of ['colorMode','allowThemeToggle','darkPrimary','darkAccent','darkBackground','darkText'])next.brand[key]=previous.brand[key];
-    if(!canFeature('design.backgrounds'))next.wallpaper=previous.wallpaper;
-    if(!canFeature('design.category_navigation'))for(const key of ['categoryNavigation','categoryPanelAnimation','categoryPanelDuration'])next.shop[key]=previous.shop[key];
-    if(!canFeature('checkout.terms')){next.terms=previous.terms;next.checkout.termsUrl=previous.checkout.termsUrl;next.checkout.termsLabel=previous.checkout.termsLabel;}
-    if(!canFeature('design.social_links')){const socials=previous.sections.filter(item=>item.type==='social');next.sections=[...next.sections.filter(item=>item.type!=='social'),...socials];const socialLinks=previous.navbar.links.filter(item=>item.target==='social');next.navbar.links=[...next.navbar.links.filter(item=>item.target!=='social'),...socialLinks];}
+    const preserveCopy=sections=>{for(const field of storeTextFields.filter(item=>sections.includes(item.section)))next.copy[field.key]=previous.copy[field.key];};
+    if(!canPremium.value){next.navbar=previous.navbar;next.sections=previous.sections;next.product=previous.product;next.terms=previous.terms;preserveCopy(['product','terms']);}
+    if(!canEnterprise.value){next.cart=previous.cart;next.checkout=previous.checkout;preserveCopy(['cart','checkout']);}
     draft.value=next;saveError.value='';notify.info('Diseño inicial cargado en la vista previa.');
   }
 }
@@ -340,7 +331,7 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
           <div class="design-controls-title"><h2>{{current.label}}</h2><p>{{current.description}}</p></div>
           <div v-if="saveError" class="ed-error" role="alert"><Icon name="warning" :size="16"/><span>{{saveError}}</span><button type="button" aria-label="Cerrar mensaje de error" @click="saveError=''">×</button></div>
           <p v-if="['navbar','shop','sections','product','cart','checkout','terms'].includes(section)" class="ed-notice ed-text-centralized"><Icon name="edit" :size="14"/><span>Los títulos, descripciones, etiquetas y textos de esta zona se editan únicamente en <button type="button" class="link" @click="selectSection('copy')">Textos</button>.</span></p>
-          <DesignSectionsEditor v-if="section==='sections'" ref="sectionsEditor" v-model="draft.sections" :uploads="uploads" :disabled="saving" :design="draft" :allow-social="canFeature('design.social_links')" @upload="requestUpload"/>
+          <DesignSectionsEditor v-if="section==='sections'" ref="sectionsEditor" v-model="draft.sections" :uploads="uploads" :disabled="saving" :design="draft" :allow-social="true" @upload="requestUpload"/>
           <DesignCopyEditor v-if="section==='copy'" ref="copyEditor" v-model="draft" :active-page="previewPage.section" :disabled="saving"/>
           <DesignGroup v-for="group in visibleEditorGroups" :key="section + '-' + group.key" :title="group.title" :description="group.description" :model-value="expandedGroups[section]===group.key" @update:model-value="expandedGroups[section]=$event?group.key:''">
             <form v-if="group.special==='general'" class="ed-general-form" @submit.prevent="save"><DesignField v-for="field in generalFields" :key="field.key" v-model="general[field.key]" :field="field" scope="general"/><div class="ed-address-preview"><Icon name="link" :size="14"/><span>/t/{{general.slug || 'tu-tienda'}}</span></div><p class="ed-help">Los datos generales se guardan junto con el diseño usando <strong>Guardar cambios</strong>. La vista previa mantiene la dirección actual hasta guardar.</p></form>

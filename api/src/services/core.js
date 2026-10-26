@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
-import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Subscription, SubscriptionCharge, SubscriptionSupportRequest, StoreTransfer, Session, MagicLink } from '../models/index.js';
+import { User, Plan, Store, Category, CategoryHierarchy, Product, Settings, AuditLog, UploadedImage, StorageCleanup, Subscription, SubscriptionCharge, SubscriptionSupportRequest, CustomPlanRequest, SocialOAuthState, SocialIntegration, SocialAd, StoreTransfer, Session, MagicLink } from '../models/index.js';
 import { config } from '../config.js';
 import { AppError } from '../middleware/core.js';
 import { randomToken, hashToken } from '../utils/crypto.js';
@@ -163,7 +163,7 @@ export async function bootstrap() {
   await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
   await databaseIndexService.reconcileCategoryUniquenessIndex();
   await planFeatureService.initializeLegacyPlans();
-  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), SubscriptionSupportRequest.init(), StoreTransfer.init(), Session.init(), MagicLink.init()]);
+  await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), SubscriptionSupportRequest.init(), CustomPlanRequest.init(), SocialOAuthState.init(), SocialIntegration.init(), SocialAd.init(), StoreTransfer.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }
     catch (error) { if (error.code !== 11000) throw error; }

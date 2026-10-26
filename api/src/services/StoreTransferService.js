@@ -64,6 +64,33 @@ export class StoreTransferService {
     };
   }
 
+  async transferredHistory(user, { page = 1, limit = 50, search = '' } = {}) {
+    if (!user || user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
+    const filter = { status: 'accepted', fromUserId: user._id };
+    const term = String(search || '').trim().slice(0, 100);
+    if (term) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { 'storeSnapshot.name': { $regex: escaped, $options: 'i' } },
+        { recipientEmail: { $regex: escaped, $options: 'i' } },
+        { 'toUserSnapshot.name': { $regex: escaped, $options: 'i' } },
+        { 'toUserSnapshot.email': { $regex: escaped, $options: 'i' } },
+      ];
+    }
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    const [rows, total] = await Promise.all([
+      StoreTransfer.find(filter).sort({ acceptedAt: -1, updatedAt: -1 }).skip((safePage - 1) * safeLimit).limit(safeLimit).populate('storeId', 'name slug ownerId archived').populate('fromUserId', 'name email').populate('toUserId', 'name email'),
+      StoreTransfer.countDocuments(filter),
+    ]);
+    return {
+      rows: rows.map(row => this.present(row, user._id)),
+      total,
+      page: safePage,
+      limit: safeLimit,
+    };
+  }
+
   async create(user, { storeId, recipientEmail, kind = 'transfer', previousTransferId = null } = {}) {
     if (!user || user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
     const email = lowerEmail(recipientEmail);

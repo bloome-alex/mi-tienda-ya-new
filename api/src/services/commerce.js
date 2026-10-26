@@ -62,36 +62,25 @@ export function pagination(query = {}) {
 }
 
 const hasPlanFeature = (featureKeys, key) => !Array.isArray(featureKeys) || featureKeys.includes(key);
-export function safeProduct(product, { featureKeys = null } = {}) {
+export function safeProduct(product) {
   const p = plain(product);
   return {
     _id: p._id, storeId: p.storeId, name: p.name, description: p.description,
     categoryId: p.categoryId, type: p.type, images: p.images || [], price: p.price,
-    previousPrice: p.previousPrice, active: p.active, featured: p.featured === true && hasPlanFeature(featureKeys, 'products.featured'), madeToOrder: p.madeToOrder,
-    stock: p.stock, createdAt: p.createdAt, relatedProductIds: hasPlanFeature(featureKeys, 'products.related') ? (p.relatedProductIds || []) : [],
-    variants: hasPlanFeature(featureKeys, 'products.variants') ? (p.variants || []).map(v => ({ id: v.id, name: v.name, sku: v.sku, stock: v.stock, price: v.price, attributes: v.attributes })) : [],
+    previousPrice: p.previousPrice, active: p.active, featured: p.featured === true, madeToOrder: p.madeToOrder,
+    stock: p.stock, createdAt: p.createdAt, relatedProductIds: p.relatedProductIds || [],
+    variants: (p.variants || []).map(v => ({ id: v.id, name: v.name, sku: v.sku, stock: v.stock, price: v.price, attributes: v.attributes })),
   };
 }
 export function safePublicStore(store, { featureKeys = null } = {}) {
   const s = plain(store);
   const design = normalizeDesign(s.design || {});
-  if (!hasPlanFeature(featureKeys, 'design.custom_sections')) design.sections = [];
-  if (!hasPlanFeature(featureKeys, 'design.theme_modes')) { design.brand.allowThemeToggle = false; design.brand.colorMode = 'light'; }
-  if (!hasPlanFeature(featureKeys, 'design.backgrounds')) design.wallpaper.enabled = false;
-  if (!hasPlanFeature(featureKeys, 'design.social_links')) {
-    design.sections = (design.sections || []).filter(section => section.type !== 'social');
-    design.navbar.links = (design.navbar.links || []).filter(link => link.target !== 'social');
-  }
-  if (!hasPlanFeature(featureKeys, 'design.category_navigation')) design.shop.categoryNavigation = 'chips';
-  if (!hasPlanFeature(featureKeys, 'checkout.terms')) { design.terms.enabled = false; design.checkout.termsUrl = ''; }
   if (!design.terms.enabled) design.terms = structuredClone(defaultDesign.terms);
   const contact = { ...(s.contact || {}) };
-  if (!hasPlanFeature(featureKeys, 'section.contact')) { contact.showContactForm = false; contact.showWhatsapp = false; design.shop.showContact = false; }
   if (!hasPlanFeature(featureKeys, 'contact.whatsapp')) contact.showWhatsapp = false;
-  const payments = (s.payments || []).filter(p => p.active && hasPlanFeature(featureKeys, `payments.${p.type}`)).map(p => ({ id: p.id, type: p.type, name: p.name, instructions: p.instructions, deliveryIds: p.deliveryIds || [], active: true }));
-  let deliveries = (s.deliveries || []).filter(d => d.active).map(d => ({ id: d.id, type: d.type, name: d.name, description: d.description, price: d.price, active: true }));
-  if (!hasPlanFeature(featureKeys, 'payments.delivery')) deliveries = deliveries.filter(d => d.type === 'pickup').slice(0, 1);
-  const pwa = hasPlanFeature(featureKeys, 'section.pwa') ? (s.pwa || {}) : { name: '', iconUrl: '', icon192Url: '' };
+  const payments = (s.payments || []).filter(p => p.active && (p.type !== 'mercadopago' || hasPlanFeature(featureKeys, 'payments.mercadopago'))).map(p => ({ id: p.id, type: p.type, name: p.name, instructions: p.instructions, deliveryIds: p.deliveryIds || [], active: true }));
+  const deliveries = (s.deliveries || []).filter(d => d.active).map(d => ({ id: d.id, type: d.type, name: d.name, description: d.description, price: d.price, active: true }));
+  const pwa = hasPlanFeature(featureKeys, 'store.pwa') ? (s.pwa || {}) : { name: '', iconUrl: '', icon192Url: '' };
   return { _id: s._id, name: s.name, slug: s.slug, description: s.description, design, contact, payments, deliveries, pwa };
 }
 export function safeOrder(order, { publicView = false } = {}) {
@@ -147,15 +136,13 @@ export class CatalogService {
     const featureKeys = store.$locals.entitlement?.featureKeys || [];
     const available = { storeId: store._id, active: true, archived: { $ne: true } };
     const filter = { ...available, ...await categoryService.productFilter(store._id, query) };
-    if (!featureKeys.includes('products.digital')) filter.type = { $ne: 'digital' };
-    if (!featureKeys.includes('products.variants')) filter['variants.0'] = { $exists: false };
     if (typeof query.search === 'string' && query.search.trim()) filter.name = new RegExp(regexText(query.search.trim().slice(0, 100)), 'i');
     const { page, limit, skip } = pagination({ ...query, limit: query.limit || 500 });
     const sort = ({ price_asc: { price: 1, _id: 1 }, price_desc: { price: -1, _id: 1 }, name: { name: 1, _id: 1 } })[query.sort] || { createdAt: -1, _id: -1 };
     const [categoryRows, products, total, featuredProducts] = await Promise.all([
       Category.find({ storeId: store._id, active: true, archived: { $ne: true } }).sort({ name: 1, _id: 1 }).select('name description active parentId').lean(),
       Product.find(filter).sort(sort).skip(skip).limit(limit).lean(), Product.countDocuments(filter),
-      featureKeys.includes('products.featured') ? Product.find({ ...available, featured: true, ...(featureKeys.includes('products.digital') ? {} : { type: { $ne: 'digital' } }), ...(featureKeys.includes('products.variants') ? {} : { 'variants.0': { $exists: false } }) }).sort({ createdAt: -1, _id: -1 }).limit(12).lean() : [],
+      Product.find({ ...available, featured: true }).sort({ createdAt: -1, _id: -1 }).limit(12).lean(),
     ]);
     const categories = categoryService.visibleCategories(categoryRows).map(category => ({ ...category, parentId: category.parentId || null }));
     return { store: safePublicStore(store, { featureKeys }), categories, products: products.map(product => safeProduct(product, { featureKeys })), featuredProducts: featuredProducts.map(product => safeProduct(product, { featureKeys })), meta: { total, page, limit } };
@@ -164,17 +151,15 @@ export class CatalogService {
   async product(slug, productId) {
     const store = await this.storeBySlug(slug);
     const featureKeys = store.$locals.entitlement?.featureKeys || [];
-    const featureFilter = { ...(featureKeys.includes('products.digital') ? {} : { type: { $ne: 'digital' } }), ...(featureKeys.includes('products.variants') ? {} : { 'variants.0': { $exists: false } }) };
-    const product = await Product.findOne({ _id: id(productId), storeId: store._id, active: true, archived: { $ne: true }, ...featureFilter }).lean();
+    const product = await Product.findOne({ _id: id(productId), storeId: store._id, active: true, archived: { $ne: true } }).lean();
     if (!product) throw commerceError('El producto no está disponible.', 404, 'PRODUCT_NOT_FOUND');
-    const related = featureKeys.includes('products.related') ? await Product.find({ _id: { $in: product.relatedProductIds || [] }, storeId: store._id, active: true, archived: { $ne: true }, ...featureFilter }).limit(24).lean() : [];
-    const recommendations = featureKeys.includes('products.related') ? await this.recommend(store, [productId]) : [];
+    const related = await Product.find({ _id: { $in: product.relatedProductIds || [] }, storeId: store._id, active: true, archived: { $ne: true } }).limit(24).lean();
+    const recommendations = await this.recommend(store, [productId]);
     return { product: safeProduct(product, { featureKeys }), related: related.map(item => safeProduct(item, { featureKeys })), recommendations };
   }
 
   async recommend(store, productIds = []) {
     const featureKeys = store.$locals?.entitlement?.featureKeys;
-    if (Array.isArray(featureKeys) && !featureKeys.includes('products.related')) return [];
     if (!Array.isArray(productIds) || productIds.length > 100) throw commerceError('Selección de productos inválida.');
     const ids = [...new Set(productIds.map(value => id(value)))].map(value => new mongoose.Types.ObjectId(value));
     if (!ids.length) return [];
@@ -202,7 +187,7 @@ export class CatalogService {
   async contact(slug, input) {
     const store = await this.storeBySlug(slug);
     const featureKeys = store.$locals.entitlement?.featureKeys || [];
-    if (!featureKeys.includes('section.contact') || !store.contact?.showContactForm || !store.contact?.email) throw commerceError('La tienda no habilitó el formulario de contacto.', 404);
+    if (!store.contact?.showContactForm || !store.contact?.email) throw commerceError('La tienda no habilitó el formulario de contacto.', 404);
     if (input.website) return { message: 'Recibimos tu consulta.' };
     const name = text(input.name, 'Nombre', { required: true, max: 150 });
     const from = email(input.email);
@@ -343,15 +328,12 @@ export class CommerceService {
     const delivery = (store.deliveries || []).find(d => d.id === normalized.deliveryId && d.active);
     const payment = (store.payments || []).find(p => p.id === normalized.paymentId && p.active);
     if (!delivery || !payment) throw commerceError('Seleccioná una forma de entrega y un medio de pago disponibles.');
-    if (!featureKeys.includes(`payments.${payment.type}`)) throw commerceError('El plan de esta tienda no incluye el medio de pago seleccionado.', 403, 'PLAN_FEATURE_REQUIRED');
-    if (delivery.type !== 'pickup' && !featureKeys.includes('payments.delivery')) throw commerceError('El plan de esta tienda no incluye formas de entrega configurables.', 403, 'PLAN_FEATURE_REQUIRED');
+    if (payment.type === 'mercadopago' && !featureKeys.includes('payments.mercadopago')) throw commerceError('El plan de esta tienda no incluye Mercado Pago Checkout Pro.', 403, 'PLAN_FEATURE_REQUIRED');
     if (payment.deliveryIds?.length && !payment.deliveryIds.includes(delivery.id)) throw commerceError('El medio de pago no está disponible para la entrega seleccionada.', 422, 'PAYMENT_DELIVERY_MISMATCH');
     const products = await Product.find({ _id: { $in: normalized.items.map(i => i.productId) }, storeId: store._id, archived: { $ne: true }, ...(manual ? {} : { active: true }) }).select('+digitalUrl');
     const snapshots = normalized.items.map(item => {
       const product = products.find(p => same(p._id, item.productId));
       if (!product) throw commerceError('Uno de los productos ya no está disponible. Actualizá el carrito.', 409, 'PRODUCT_UNAVAILABLE');
-      if (product.type === 'digital' && !featureKeys.includes('products.digital')) throw commerceError(`El plan de esta tienda no incluye productos digitales.`, 403, 'PLAN_FEATURE_REQUIRED');
-      if (product.variants?.length && !featureKeys.includes('products.variants')) throw commerceError(`El plan de esta tienda no incluye variantes de producto.`, 403, 'PLAN_FEATURE_REQUIRED');
       const variant = item.variantId ? product.variants?.find(v => v.id === item.variantId) : null;
       if ((product.variants?.length && !variant) || (item.variantId && !variant)) throw commerceError(`Seleccioná una variante válida de ${product.name}.`);
       const unitPrice = money(variant?.price != null ? variant.price : product.price);

@@ -20,37 +20,35 @@ test('los planes guardan permisos reales y herencia de otro plan', async () => {
   assert.match(routes, /assertInheritance/);
 });
 
-test('el catálogo inicial cubre secciones y capacidades vendibles', async () => {
+test('el catálogo actual conserva migración de planes antiguos sin exponer permisos obsoletos', async () => {
   const service = await read('src/services/PlanFeatureService.js');
-  for (const key of [
-    'section.products','section.categories','section.stock','section.orders','section.payments','section.design','section.contact','section.domain','section.pwa',
-    'domain.subdomain','domain.custom','products.variants','products.digital','products.featured','products.related','orders.manual',
-    'payments.cash','payments.transfer','payments.mercadopago','payments.delivery','design.custom_sections','design.theme_modes','design.backgrounds','design.social_links','design.category_navigation','checkout.terms','contact.whatsapp',
-  ]) assert.match(service, new RegExp(key.replaceAll('.', '\\.')));
+  const catalog = service.slice(service.indexOf('PLAN_FEATURES'), service.indexOf('const featureMap'));
+  for (const key of ['dashboard.statistics','management.products','management.categories','management.stock','management.orders','design.limited','design.premium','design.enterprise','domain.subdomain','domain.custom','store.pwa','payments.mercadopago','contact.whatsapp','stores.transfer']) assert.match(catalog, new RegExp(key.replaceAll('.', '\\.')));
+  assert.match(service, /LEGACY_FEATURE_MAP/);
+  assert.match(service, /section\.products/);
+  assert.doesNotMatch(catalog, /products\.variants|payments\.cash|orders\.manual|design\.custom_sections/);
 });
 
-test('backend protege secciones y operaciones por permiso del plan', async () => {
+test('backend protege solamente las capacidades comerciales vigentes', async () => {
   const middleware = await read('src/middleware/core.js');
   const core = await read('src/routes/core.js');
   const commerceRoutes = await read('src/routes/commerce.js');
-  const commerce = await read('src/services/commerce.js');
   assert.match(middleware, /requireFeature/);
   assert.match(middleware, /PLAN_FEATURE_REQUIRED/);
-  for (const key of ['section.products','section.categories','section.design','section.contact','section.domain','section.pwa']) assert.match(core, new RegExp(`requireFeature\\('${key.replaceAll('.', '\\.')}'\\)`));
-  for (const key of ['section.stock','section.orders','orders.manual','payments.transfer','products.digital']) assert.match(commerceRoutes, new RegExp(`requireFeature\\('${key.replaceAll('.', '\\.')}'\\)`));
-  assert.match(commerce, /payments\.\$\{payment\.type\}/);
-  assert.match(commerce, /products\.digital/);
-  assert.match(commerce, /products\.variants/);
+  for (const key of ['management.products','management.categories','design.limited','store.pwa']) assert.match(core, new RegExp(key.replaceAll('.', '\\.')));
+  for (const key of ['dashboard.statistics','management.stock','management.orders']) assert.match(commerceRoutes, new RegExp(key.replaceAll('.', '\\.')));
+  assert.doesNotMatch(commerceRoutes, /orders\.manual|payments\.transfer|products\.digital/);
 });
 
-test('dominios, PWA y contacto público dejan de operar cuando el plan no los incluye', async () => {
+test('dominios, PWA y WhatsApp usan sus capacidades actuales', async () => {
   const domain = await read('src/services/DomainService.js');
   const core = await read('src/routes/core.js');
   const commerce = await read('src/services/commerce.js');
   assert.match(domain, /domain\.subdomain/);
   assert.match(domain, /domain\.custom/);
-  assert.match(domain, /section\.domain/);
+  assert.doesNotMatch(domain, /section\.domain/);
   assert.match(core, /PWA_NOT_AVAILABLE/);
-  assert.match(core, /section\.pwa/);
-  assert.match(commerce, /section\.contact/);
+  assert.match(core, /store\.pwa/);
+  assert.match(core, /contact\.whatsapp/);
+  assert.match(commerce, /contact\.whatsapp/);
 });

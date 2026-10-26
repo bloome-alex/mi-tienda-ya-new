@@ -10,42 +10,48 @@ const route=useRoute(),router=useRouter();
 const editing=computed(()=>!!route.params.id),loading=ref(true),saving=ref(false),error=ref('');
 const featureMeta=ref({groups:[],plans:[]});
 const form=reactive({name:'',icon:'store',previousPrice:0,price:0,durationDays:30,featureKeys:[],inheritsPlanId:null,maxStores:1,maxProducts:100,active:true,visible:true,featured:false,sortOrder:0});
+const presentation=reactive({});
 const availableParents=computed(()=>{const current=String(route.params.id||'');return featureMeta.value.plans.filter(plan=>String(plan._id)!==current&&!(plan.inheritanceChain||[]).some(parent=>String(parent._id)===current));});
 const parentPlan=computed(()=>availableParents.value.find(plan=>String(plan._id)===String(form.inheritsPlanId||''))||null);
 const inheritedKeys=computed(()=>new Set(parentPlan.value?.resolvedFeatureKeys||[]));
-const featureByKey=computed(()=>new Map(featureMeta.value.groups.flatMap(group=>group.features).map(feature=>[feature.key,feature])));
-const availableKeySet=computed(()=>new Set([...(parentPlan.value?.resolvedFeatureKeys||[]),...form.featureKeys]));
-function missingRequirements(feature){return (feature.requires||[]).filter(key=>!availableKeySet.value.has(key))}
-function requirementText(feature){return missingRequirements(feature).map(key=>featureByKey.value.get(key)?.label||key).join(', ')}
-const effectiveKeys=computed(()=>[...new Set([...(parentPlan.value?.resolvedFeatureKeys||[]),...form.featureKeys])]);
-const directPreview=computed(()=>form.featureKeys.filter(key=>!inheritedKeys.value.has(key)).map(key=>featureByKey.value.get(key)?.label||key));
+const features=computed(()=>featureMeta.value.groups.flatMap(group=>group.features));
+const featureByKey=computed(()=>new Map(features.value.map(feature=>[feature.key,feature])));
+function expand(keys){const result=new Set();const visit=key=>{if(result.has(key))return;result.add(key);for(const implied of featureByKey.value.get(key)?.implies||[])visit(implied)};for(const key of keys)visit(key);return result}
+const expandedDirectKeys=computed(()=>expand(form.featureKeys));
+const effectiveKeys=computed(()=>new Set([...inheritedKeys.value,...expandedDirectKeys.value]));
+function isImplied(key){return !form.featureKeys.includes(key)&&expandedDirectKeys.value.has(key)}
+function featureChecked(key){return effectiveKeys.value.has(key)}
+function ensurePresentation(key){const feature=featureByKey.value.get(key);if(!presentation[key])presentation[key]={title:feature?.label||key,description:feature?.description||''};return presentation[key]}
+const directPreview=computed(()=>form.featureKeys.filter(key=>!inheritedKeys.value.has(key)).map(key=>({key,...ensurePresentation(key)})));
 
-watch(()=>form.inheritsPlanId,()=>{
-  let direct=form.featureKeys.filter(key=>!inheritedKeys.value.has(key));
-  let changed=true;
-  while(changed){changed=false;const available=new Set([...(parentPlan.value?.resolvedFeatureKeys||[]),...direct]);const next=direct.filter(key=>(featureByKey.value.get(key)?.requires||[]).every(required=>available.has(required)));if(next.length!==direct.length){direct=next;changed=true}}
-  form.featureKeys=direct;
-});
+watch(()=>form.inheritsPlanId,()=>{form.featureKeys=form.featureKeys.filter(key=>!inheritedKeys.value.has(key));});
 
 onMounted(async()=>{
   try{
     const [meta,item]=await Promise.all([api.get('/admin/plan-features'),editing.value?api.get(`/admin/plans/${route.params.id}`):Promise.resolve(null)]);
     featureMeta.value=meta;
-    if(item) Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
+    for(const feature of meta.groups.flatMap(group=>group.features))presentation[feature.key]={title:feature.label,description:feature.description};
+    if(item){
+      Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
+      for(const entry of item.featurePresentation||[])presentation[entry.key]={title:entry.title||featureByKey.value.get(entry.key)?.label||entry.key,description:Object.prototype.hasOwnProperty.call(entry,'description')?entry.description:(featureByKey.value.get(entry.key)?.description||'')};
+    }
   }catch(e){error.value=e.message}finally{loading.value=false}
 });
 
 function toggleFeature(key,checked){
-  if(inheritedKeys.value.has(key))return;
+  if(inheritedKeys.value.has(key)||isImplied(key))return;
   const set=new Set(form.featureKeys);
-  if(checked)set.add(key);else{set.delete(key);for(const feature of featureByKey.value.values())if((feature.requires||[]).includes(key)&&!inheritedKeys.value.has(feature.key))set.delete(feature.key)}
+  if(checked){
+    set.add(key);ensurePresentation(key);
+    for(const implied of expand([key]))if(implied!==key)set.delete(implied);
+  }else set.delete(key);
   form.featureKeys=[...set];
 }
-function featureChecked(key){return inheritedKeys.value.has(key)||form.featureKeys.includes(key)}
 async function save(){
   saving.value=true;error.value='';
   try{
-    const payload={name:form.name,icon:form.icon,previousPrice:form.previousPrice,price:form.price,durationDays:form.durationDays,featureKeys:form.featureKeys,inheritsPlanId:form.inheritsPlanId||null,maxStores:form.maxStores,maxProducts:form.maxProducts,active:form.active,visible:form.visible,featured:form.featured,sortOrder:form.sortOrder};
+    const featurePresentation=form.featureKeys.map(key=>({key,title:ensurePresentation(key).title,description:ensurePresentation(key).description}));
+    const payload={name:form.name,icon:form.icon,previousPrice:form.previousPrice,price:form.price,durationDays:form.durationDays,featureKeys:form.featureKeys,featurePresentation,inheritsPlanId:form.inheritsPlanId||null,maxStores:form.maxStores,maxProducts:form.maxProducts,active:form.active,visible:form.visible,featured:form.featured,sortOrder:form.sortOrder};
     if(editing.value)await api.put(`/admin/plans/${route.params.id}`,payload);else await api.post('/admin/plans',payload);
     notify.success('Plan guardado.');router.push('/app/settings?tab=planes');
   }catch(e){error.value=e.message;notify.error(e.message)}finally{saving.value=false}
@@ -55,7 +61,7 @@ async function save(){
 <template>
 <div>
   <RouterLink to="/app/settings?tab=planes" class="p-back-link"><Icon name="back" :size="14"/>Volver a planes</RouterLink>
-  <header class="p-page-header"><div><h1>{{editing?'Editar plan':'Creá un plan para crecer'}}</h1><p>Los beneficios del plan son permisos reales de la aplicación. Podés partir de otro plan y sumar funcionalidades.</p></div></header>
+  <header class="p-page-header"><div><h1>{{editing?'Editar plan':'Creá un plan para crecer'}}</h1><p>Elegí los permisos reales del plan, heredá otro nivel y personalizá cómo se presenta cada beneficio en las cards públicas.</p></div></header>
   <div v-if="error" class="p-error">{{error}}</div>
   <div v-if="loading" class="p-loading-page"><span class="p-spinner"/></div>
   <form v-else class="p-form" @submit.prevent="save">
@@ -82,24 +88,30 @@ async function save(){
         </section>
 
         <section class="p-section-card">
-          <div class="p-section-title"><div><h2>Funcionalidades y permisos</h2><p>Cada selección habilita la función en el frontend y es validada nuevamente por la API.</p></div><span class="p-badge">{{effectiveKeys.length}} activas</span></div>
+          <div class="p-section-title"><div><h2>Funcionalidades y permisos</h2><p>Solo estas funcionalidades forman parte del sistema de planes. Los niveles de diseño son acumulativos.</p></div><span class="p-badge">{{effectiveKeys.size}} activas</span></div>
           <div class="p-field plan-inheritance">
             <label for="plan-parent">Heredar funcionalidades de otro plan</label>
             <select id="plan-parent" v-model="form.inheritsPlanId"><option :value="null">No heredar</option><option v-for="plan in availableParents" :key="plan._id" :value="plan._id">{{plan.name}}</option></select>
-            <small v-if="parentPlan">Este plan incluye todo lo de {{parentPlan.name}} y además las funciones que marques debajo.</small>
-            <small v-else>La herencia evita repetir permisos cuando armás niveles Básico → Pro → Premium.</small>
+            <small v-if="parentPlan">La card mostrará “Todo lo de {{parentPlan.name}}” y solo detallará los beneficios adicionales de este plan.</small>
+            <small v-else>La herencia evita repetir beneficios cuando armás niveles Básico → Pro → Premium.</small>
           </div>
           <div class="plan-feature-groups">
             <section v-for="group in featureMeta.groups" :key="group.name" class="plan-feature-group">
               <h3>{{group.name}}</h3>
-              <label v-for="feature in group.features" :key="feature.key" class="plan-feature-option" :class="{inherited:inheritedKeys.has(feature.key)}">
-                <input type="checkbox" :checked="featureChecked(feature.key)" :disabled="inheritedKeys.has(feature.key)||missingRequirements(feature).length>0" @change="toggleFeature(feature.key,$event.target.checked)"/>
-                <span><strong>{{feature.label}}</strong><small>{{feature.description}}</small><small v-if="missingRequirements(feature).length" class="feature-requirement">Requiere: {{requirementText(feature)}}</small></span>
-                <span v-if="inheritedKeys.has(feature.key)" class="p-badge">Heredada</span>
-              </label>
+              <div v-for="feature in group.features" :key="feature.key" class="plan-feature-row" :class="{inherited:inheritedKeys.has(feature.key)}">
+                <label class="plan-feature-option">
+                  <input type="checkbox" :checked="featureChecked(feature.key)" :disabled="inheritedKeys.has(feature.key)||isImplied(feature.key)" @change="toggleFeature(feature.key,$event.target.checked)"/>
+                  <span><strong>{{feature.label}}</strong><small>{{feature.description}}</small></span>
+                  <span v-if="inheritedKeys.has(feature.key)" class="p-badge">Heredada</span><span v-else-if="isImplied(feature.key)" class="p-badge">Incluida por nivel</span>
+                </label>
+                <div v-if="form.featureKeys.includes(feature.key)" class="plan-feature-copy">
+                  <div class="p-field"><label :for="`feature-title-${feature.key}`">Título en la card</label><input :id="`feature-title-${feature.key}`" v-model.trim="ensurePresentation(feature.key).title" maxlength="120" :placeholder="feature.label"/></div>
+                  <div class="p-field"><label :for="`feature-description-${feature.key}`">Descripción en la card</label><textarea :id="`feature-description-${feature.key}`" v-model.trim="ensurePresentation(feature.key).description" maxlength="500" rows="2" :placeholder="feature.description"/></div>
+                </div>
+              </div>
             </section>
           </div>
-          <div class="plan-state-options"><label class="p-check"><input v-model="form.active" type="checkbox"/>Plan disponible</label><label class="p-check"><input v-model="form.visible" type="checkbox"/>Visible públicamente</label><label class="p-check"><input v-model="form.featured" type="checkbox"/>Destacar como recomendado</label></div><p v-if="!form.visible" class="p-help">El plan puede asignarse desde Administración, pero no aparece en el home ni se ofrece a otros vendedores.</p>
+          <div class="plan-state-options"><label class="p-check"><input v-model="form.active" type="checkbox"/>Plan disponible</label><label class="p-check"><input v-model="form.visible" type="checkbox"/>Visible públicamente</label><label class="p-check"><input v-model="form.featured" type="checkbox"/>Destacar como recomendado</label></div><p v-if="!form.visible" class="p-help">El plan puede asignarse desde Administración, pero no aparece en el Home ni en la comparación pública.</p>
         </section>
       </div>
 
@@ -111,17 +123,17 @@ async function save(){
         <div class="plan-preview-price">{{money(form.price)}}</div>
         <p class="p-help">cada {{form.durationDays}} días</p><hr class="p-separator"/>
         <ul class="p-mini-list">
-          <li v-if="parentPlan"><Icon name="check" :size="14"/><strong>Todo lo de {{parentPlan.name}}</strong></li>
-          <li v-for="feature in directPreview" :key="feature"><Icon name="check" :size="14"/>{{feature}}</li>
+          <li v-if="parentPlan"><Icon name="check" :size="14"/><span><strong>Todo lo de {{parentPlan.name}}</strong><small>Incluye las funcionalidades del plan base.</small></span></li>
+          <li v-for="feature in directPreview" :key="feature.key"><Icon name="check" :size="14"/><span><strong>{{feature.title}}</strong><small v-if="feature.description">{{feature.description}}</small></span></li>
           <li v-if="!parentPlan&&!directPreview.length" class="p-muted">Todavía no seleccionaste funcionalidades.</li>
         </ul>
       </aside>
     </div>
-    <footer class="p-form-footer"><small>Los permisos se aplican al guardar el plan.</small><div class="p-form-actions"><RouterLink to="/app/settings?tab=planes" class="btn btn-secondary">Cancelar</RouterLink><button class="btn btn-primary" :disabled="saving">{{saving?'Guardando...':'Guardar plan'}}</button></div></footer>
+    <footer class="p-form-footer"><small>Los permisos y el texto comercial se aplican al guardar el plan.</small><div class="p-form-actions"><RouterLink to="/app/settings?tab=planes" class="btn btn-secondary">Cancelar</RouterLink><button class="btn btn-primary" :disabled="saving">{{saving?'Guardando...':'Guardar plan'}}</button></div></footer>
   </form>
 </div>
 </template>
 
 <style scoped>
-.plan-inheritance{max-width:620px;margin-bottom:22px}.plan-feature-groups{display:grid;gap:18px}.plan-feature-group{border:1px solid var(--line);border-radius:10px;overflow:hidden}.plan-feature-group h3{margin:0;padding:11px 14px;background:var(--surface-alt);font-size:12px}.plan-feature-option{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:start;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer;font-weight:400}.plan-feature-option:first-of-type{border-top:0}.plan-feature-option:hover{background:var(--surface-alt)}.plan-feature-option.inherited{cursor:default;background:color-mix(in srgb,var(--surface-alt) 65%,transparent)}.plan-feature-option input{margin-top:2px}.plan-feature-option strong{display:block;font-size:12px}.plan-feature-option small{display:block;color:var(--muted);font-size:10px;margin-top:3px;line-height:1.5}.plan-feature-option .feature-requirement{color:var(--danger);font-weight:600}.plan-state-options{display:flex;gap:22px;flex-wrap:wrap;margin-top:20px}.plan-preview-icon{margin:18px 0;color:var(--primary)}.plan-preview-price{font-size:28px;font-weight:700;color:var(--text)}@media(max-width:700px){.plan-feature-option{grid-template-columns:auto minmax(0,1fr)}.plan-feature-option>.p-badge{grid-column:2;justify-self:start}}
+.plan-inheritance{max-width:620px;margin-bottom:22px}.plan-feature-groups{display:grid;gap:18px}.plan-feature-group{border:1px solid var(--line);border-radius:10px;overflow:hidden}.plan-feature-group h3{margin:0;padding:11px 14px;background:var(--surface-alt);font-size:12px}.plan-feature-row{border-top:1px solid var(--line)}.plan-feature-row:first-of-type{border-top:0}.plan-feature-row.inherited{background:color-mix(in srgb,var(--surface-alt) 65%,transparent)}.plan-feature-option{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:start;padding:12px 14px;cursor:pointer;font-weight:400}.plan-feature-option:hover{background:var(--surface-alt)}.plan-feature-row.inherited .plan-feature-option{cursor:default}.plan-feature-option input{margin-top:2px}.plan-feature-option strong{display:block;font-size:12px}.plan-feature-option small{display:block;color:var(--muted);font-size:10px;margin-top:3px;line-height:1.5}.plan-feature-copy{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:12px;padding:0 14px 14px 39px}.plan-feature-copy .p-field{margin:0}.plan-state-options{display:flex;gap:22px;flex-wrap:wrap;margin-top:20px}.plan-preview-icon{margin:18px 0;color:var(--primary)}.plan-preview-price{font-size:28px;font-weight:700;color:var(--text)}.plan-preview li span{min-width:0}.plan-preview li small{display:block;color:var(--muted);font-weight:400;margin-top:3px;line-height:1.45}@media(max-width:700px){.plan-feature-option{grid-template-columns:auto minmax(0,1fr)}.plan-feature-option>.p-badge{grid-column:2;justify-self:start}.plan-feature-copy{grid-template-columns:1fr;padding-left:39px}}
 </style>

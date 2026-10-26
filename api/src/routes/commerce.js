@@ -16,34 +16,34 @@ const receiptLimit = rateLimit({ windowMs: 15 * 60000, limit: 10, standardHeader
 const verificationLimit = rateLimit({ windowMs: 15 * 60000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: rateMessage });
 const receiptUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 2 } });
 
-router.get('/stores/:storeId/dashboard', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await commerce.dashboard(req.store._id))));
+router.get('/stores/:storeId/dashboard', requireStoreAccess, requireFeature('dashboard.statistics'), asyncHandler(async (req, res) => ok(res, await commerce.dashboard(req.store._id))));
 
-router.get('/stores/:storeId/stock', requireStoreAccess, requireFeature('section.stock'), asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/stock', requireStoreAccess, requireFeature('management.stock'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = pagination({ ...req.query, limit: req.query.limit || 500 });
   const filter = { storeId: req.store._id, archived: { $ne: true } };
   if (typeof req.query.search === 'string' && req.query.search.trim()) filter.name = new RegExp(req.query.search.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   const [products, total] = await Promise.all([Product.find(filter).sort({ name: 1 }).skip(skip).limit(limit).lean(), Product.countDocuments(filter)]);
   ok(res, products.map(p => ({ ...safeProduct(p), stockVersion: p.stockVersion, reservedStock: (p.reservations || []).reduce((sum, r) => sum + r.quantity, 0) })), 200, { page, limit, total });
 }));
-router.put('/stores/:storeId/stock', requireStoreAccess, requireFeature('section.stock'), asyncHandler(async (req, res) => ok(res, await inventory.setStock(req.store._id, req.body, req.user._id))));
-router.get('/stores/:storeId/stock/movements', requireStoreAccess, requireFeature('section.stock'), asyncHandler(async (req, res) => {
+router.put('/stores/:storeId/stock', requireStoreAccess, requireFeature('management.stock'), asyncHandler(async (req, res) => ok(res, await inventory.setStock(req.store._id, req.body, req.user._id))));
+router.get('/stores/:storeId/stock/movements', requireStoreAccess, requireFeature('management.stock'), asyncHandler(async (req, res) => {
   const { page, limit, skip } = pagination(req.query), filter = { storeId: req.store._id };
   const [rows, total] = await Promise.all([StockMovement.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('productId', 'name').lean(), StockMovement.countDocuments(filter)]);
   ok(res, rows, 200, { page, limit, total });
 }));
 
-router.get('/stores/:storeId/orders', requireStoreAccess, requireFeature('section.orders'), asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/orders', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => {
   const result = await commerce.listOrders(req.store._id, req.query);
   ok(res, result.data, 200, result.meta);
 }));
-router.post('/stores/:storeId/orders', requireStoreAccess, requireFeature('section.orders'), requireFeature('orders.manual'), asyncHandler(async (req, res) => ok(res, await commerce.createOrder(req.store, req.body, { actorId: req.user._id, manual: true }), 201)));
-router.get('/stores/:storeId/orders/:id', requireStoreAccess, requireFeature('section.orders'), asyncHandler(async (req, res) => ok(res, safeOrder(await commerce.getOrder(req.store._id, req.params.id)))));
-router.put('/stores/:storeId/orders/:id/status', requireStoreAccess, requireFeature('section.orders'), asyncHandler(async (req, res) => ok(res, await commerce.changeStatus(req.store._id, req.params.id, req.body, req.user._id))));
-router.delete('/stores/:storeId/orders/:id', requireStoreAccess, requireFeature('section.orders'), asyncHandler(async (req, res) => ok(res, await commerce.changeStatus(req.store._id, req.params.id, { ...req.body, status: 'cancelled' }, req.user._id))));
-router.put('/stores/:storeId/orders/:id/fulfillment', requireStoreAccess, requireFeature('section.orders'), asyncHandler(async (req, res) => ok(res, await commerce.fulfillment(req.store._id, req.params.id, req.body, req.user._id))));
-router.post('/stores/:storeId/orders/:id/verify-payment', verificationLimit, requireStoreAccess, requireFeature('section.orders'), asyncHandler(async (req, res) => ok(res, await commerce.verifyPayment(req.store, req.params.id))));
-router.post('/stores/:storeId/orders/:id/resend-digital', requireStoreAccess, requireFeature('section.orders'), requireFeature('products.digital'), asyncHandler(async (req, res) => ok(res, await commerceWorker.retryDigital(req.store._id, req.params.id))));
-router.get('/stores/:storeId/orders/:id/receipt', requireStoreAccess, requireFeature('section.orders'), requireFeature('payments.transfer'), asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/orders', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, await commerce.createOrder(req.store, req.body, { actorId: req.user._id, manual: true }), 201)));
+router.get('/stores/:storeId/orders/:id', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, safeOrder(await commerce.getOrder(req.store._id, req.params.id)))));
+router.put('/stores/:storeId/orders/:id/status', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, await commerce.changeStatus(req.store._id, req.params.id, req.body, req.user._id))));
+router.delete('/stores/:storeId/orders/:id', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, await commerce.changeStatus(req.store._id, req.params.id, { ...req.body, status: 'cancelled' }, req.user._id))));
+router.put('/stores/:storeId/orders/:id/fulfillment', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, await commerce.fulfillment(req.store._id, req.params.id, req.body, req.user._id))));
+router.post('/stores/:storeId/orders/:id/verify-payment', verificationLimit, requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, await commerce.verifyPayment(req.store, req.params.id))));
+router.post('/stores/:storeId/orders/:id/resend-digital', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => ok(res, await commerceWorker.retryDigital(req.store._id, req.params.id))));
+router.get('/stores/:storeId/orders/:id/receipt', requireStoreAccess, requireFeature('management.orders'), asyncHandler(async (req, res) => {
   const file = await receipts.file(req.store._id, req.params.id);
   res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
   res.type(file.mimeType).attachment(file.name);

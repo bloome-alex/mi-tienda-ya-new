@@ -21,7 +21,7 @@ test('Textos centraliza copy, cabecera, páginas, carrusel y contenido anidado s
 test('las pestañas visuales ya no exponen editores duplicados para textos dinámicos',()=>{
   const designView=source('views/seller/DesignView.vue');
   assert.match(designView,/DesignCopyEditor[^>]+v-model="draft"/);
-  assert.match(designView,/group\.items\.filter\(item=>!\['text','textarea'\]\.includes\(item\.type\)\)/);
+  assert.match(designView,/group\.items\.filter\(item=>!\['text','textarea'\]\.includes\(item\.type\)/);
   assert.doesNotMatch(source('components/editor/DesignNavigationEditor.vue'),/v-model="item\.label"/);
   assert.doesNotMatch(source('components/editor/DesignSocialEditor.vue'),/v-model="item\.label"/);
   assert.doesNotMatch(source('components/editor/DesignSlidesEditor.vue'),/key:'title'.*type:'text'/);

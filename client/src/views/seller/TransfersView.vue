@@ -40,15 +40,13 @@ onMounted(load);
       <div class="p-section-title"><div><h2>Transferir una tienda</h2><p>El destinatario deberá ingresar con ese mismo email, tener una suscripción vigente y disponer de cupo.</p></div><Icon name="transfer" :size="19"/></div>
       <form class="p-form-grid" @submit.prevent="createTransfer"><div class="p-field"><label for="transfer-store">Tienda</label><select id="transfer-store" v-model="storeId" required><option disabled value="">Seleccionar tienda</option><option v-for="store in stores" :key="store._id" :value="store._id">{{store.name}}</option></select><small>Las tiendas con una transferencia pendiente no pueden iniciar otra.</small></div><div class="p-field"><label for="transfer-email">Email de la persona destinataria</label><input id="transfer-email" v-model.trim="recipientEmail" type="email" required maxlength="254" placeholder="persona@correo.com"/></div><div class="p-field full"><button class="btn btn-primary" :disabled="busy==='create'||!stores.length"><Icon name="transfer" :size="15"/>{{busy==='create'?'Creando...':'Iniciar transferencia'}}</button></div></form>
     </section>
-    <section v-else-if="!data.canTransfer" class="p-info"><strong>Tu plan no incluye transferencias de tiendas.</strong> Igualmente podés aceptar una tienda que otra persona te haya enviado o devolver una que hayas recibido.</section>
-
-    <section v-if="!useStoreAbm" class="p-section-card">
+    <section v-if="data.canTransfer&&!useStoreAbm" class="p-section-card">
       <div class="p-section-title"><div><h2>Transferencias pendientes que enviaste</h2><p>Hasta que la otra persona acepte, la tienda sigue perteneciendo a tu cuenta y podés seguir administrándola.</p></div></div>
       <div v-if="!data.pendingOutgoing.length" class="p-muted">No tenés transferencias salientes pendientes.</div>
       <div v-else class="transfer-list"><article v-for="item in data.pendingOutgoing" :key="item._id" class="p-nested-card"><header><div><strong>{{item.store.name}}</strong><small>Para {{item.recipientEmail}} · {{date(item.createdAt)}}</small></div><span class="p-badge orange">Pendiente</span></header><div class="p-inline"><button type="button" class="btn btn-secondary btn-small" :disabled="busy" @click="cancel(item)">Cancelar transferencia</button></div></article></div>
     </section>
 
-    <section class="p-section-card">
+    <section v-if="data.canTransfer" class="p-section-card">
       <div class="p-section-title"><div><h2>Historial</h2><p>Las tiendas que ya transferiste dejan de aparecer entre tus tiendas y quedan registradas acá.</p></div></div>
       <div v-if="!data.history.length" class="p-muted">Todavía no hay transferencias finalizadas.</div>
       <div v-else class="transfer-list"><article v-for="item in data.history" :key="item._id" class="p-nested-card"><header><div><strong>{{item.store.name}}</strong><small>{{item.from.email}} → {{item.to.email||item.recipientEmail}} · {{date(item.acceptedAt||item.cancelledAt||item.createdAt)}}</small></div><span class="p-badge" :class="item.status==='accepted'?'green':'orange'">{{statusLabel(item.status)}}</span></header><div v-if="item.canReturn" class="p-inline"><button type="button" class="btn btn-secondary btn-small" :disabled="busy" @click="returnStore(item)"><Icon name="back" :size="14"/>Devolver al dueño anterior</button></div></article></div>

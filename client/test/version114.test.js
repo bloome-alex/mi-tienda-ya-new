@@ -48,9 +48,9 @@ test('menú, rutas y editores respetan permisos del plan en frontend', () => {
   assert.match(auth, /canFeature/);
   assert.match(router, /meta\.feature/);
   assert.match(layout, /canFeature/);
-  assert.match(design, /design\.custom_sections/);
-  assert.match(design, /design\.theme_modes/);
-  assert.match(design, /checkout\.terms/);
+  assert.match(design, /design\.premium/);
+  assert.match(design, /design\.enterprise/);
+  assert.doesNotMatch(design, /design\.custom_sections|design\.theme_modes|checkout\.terms/);
 });
 
 test('botones secundarios tienen outline y elementos clickeables muestran cursor', () => {
@@ -67,7 +67,7 @@ test('navegación directa no recupera pestañas o medios de pago fuera del plan'
   const payments = source('views/seller/PaymentsView.vue');
   const method = source('views/seller/PaymentMethodFormView.vue');
   assert.match(payments, /normalizeTab/);
-  assert.match(payments, /payments\.delivery/);
+  assert.doesNotMatch(payments, /payments\.delivery/);
   assert.match(payments, /payments\.mercadopago/);
-  assert.match(method, /Object\.keys\(types\)\.find\(type=>canFeature/);
+  assert.match(method, /type!==['\"]mercadopago['\"]\|\|canFeature\(['\"]payments\.mercadopago/);
 });

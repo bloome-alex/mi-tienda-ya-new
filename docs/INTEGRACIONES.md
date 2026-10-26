@@ -83,13 +83,21 @@ El administrador define `subscriptionGraceDays`. Si vence el período pagado y l
 
 Cancelar desde **Mi suscripción** envía la cancelación al proveedor de inmediato para impedir futuros cargos y conserva el acceso hasta `planExpiresAt`. **Desvincular Mercado Pago** deja esa vinculación fuera de uso y permite iniciar posteriormente otra suscripción, incluso indicando otro email de pagador.
 
+Desde v1.19.0 la vinculación también se reconcilia frente a cambios hechos directamente en Mercado Pago. Si el proveedor cancela la autorización fuera de MiTiendaYa, **Mi suscripción** muestra un aviso de incidente con las acciones **Generar nueva vinculación** y **Cortar suscripción**. Si está pausada, permite reanudarla. Un cobro rechazado no crea automáticamente otra autorización: Mercado Pago documenta reintentos automáticos de la cuota y MiTiendaYa espera ese ciclo mientras conserva la política de deuda/cortesía. Los eventos se ordenan por fecha y la aplicación de períodos es idempotente para tolerar webhooks duplicados o fuera de orden.
+
+Cada alta usa un `external_reference` único por intento. Si la conexión se corta después de que Mercado Pago haya creado el `preapproval` pero antes de responder, MiTiendaYa consulta `/preapproval/search` por el email pagador y recupera únicamente la vinculación cuyo `external_reference` coincide. De esta forma la recuperación no depende de asumir soporte de idempotencia no documentado para `POST /preapproval`.
+
+Para notificaciones de plataforma deben habilitarse `subscription_preapproval`, `subscription_authorized_payment` y el tópico `payment`. Tanto `payment` como `subscription_authorized_payment` terminan aplicándose por la misma ruta idempotente de facturas autorizadas.
+
+Para validar este flujo sin credenciales reales ejecutá `npm run test:mock:subscriptions`. El detalle de todos los escenarios está en [PRUEBAS-INTEGRACIONES-1.19.0.md](PRUEBAS-INTEGRACIONES-1.19.0.md).
+
 Webhook de plataforma:
 
 ```text
 https://TU-DOMINIO/api/webhooks/platform/mercadopago
 ```
 
-La URL exacta también se muestra en Configuración → Suscripciones. Debe registrarse con los eventos de preapproval y pagos autorizados. Si la contratación automática se deshabilita desde Administración, no se crean nuevas suscripciones; las credenciales existentes siguen pudiendo usarse para sincronizar o cancelar vínculos ya creados.
+La URL exacta también se muestra en Configuración → Suscripciones. Debe registrarse con los eventos de preapproval, pagos autorizados y pagos. Si la contratación automática se deshabilita desde Administración, no se crean nuevas suscripciones; las credenciales existentes siguen pudiendo usarse para sincronizar o cancelar vínculos ya creados.
 
 ## Transferencias y efectivo
 
@@ -144,6 +152,29 @@ Desde **Configuración → WhatsApp**, iniciá la primera conexión y escaneá e
 La conexión administrativa se mantiene separada de los botones `wa.me` de cada vendedor. Esos botones usan el número y mensaje configurados en **Contacto**, sin necesitar un navegador conectado para cada tienda.
 
 `whatsapp-web.js` automatiza WhatsApp Web y depende de su compatibilidad con las versiones del sitio. No es la API empresarial oficial de Meta. La aplicación incluye el emparejamiento y el estado de conexión; no envía campañas masivas ni mensajes automáticos por WhatsApp.
+
+## Facebook Ads / Marketing API
+
+Desde v1.18.0 cada tienda puede conectar Facebook desde **Redes y anuncios**. La implementación usa OAuth para operación normal y admite de forma optativa un Marketing API Sandbox para pruebas. Los tokens se cifran antes de persistirse en MongoDB y nunca se exponen de vuelta al cliente.
+
+Variables de servidor:
+
+```dotenv
+META_APP_ID=
+META_APP_SECRET=
+META_GRAPH_VERSION=v26.0
+META_REDIRECT_URI=https://TU-DOMINIO/api/social/facebook/callback
+META_FACEBOOK_LOGIN_CONFIG_ID=
+META_SANDBOX_CONNECT_ENABLED=false
+```
+
+`META_APP_ID` y `META_APP_SECRET` provienen de la aplicación de Meta. `META_REDIRECT_URI` debe estar autorizada exactamente en la configuración de login. `META_FACEBOOK_LOGIN_CONFIG_ID` permite usar una configuración de Facebook Login for Business. El modo Sandbox manual debe habilitarse sólo en entornos controlados.
+
+La pantalla solicita permisos publicitarios y de Página, lista las cuentas/Páginas que devuelve Meta y permite seleccionar una combinación por tienda. El primer flujo disponible crea anuncios de tráfico hacia una ficha de producto, limitado a ubicaciones de Facebook. Campaña, conjunto y anuncio nacen en `PAUSED`; MiTiendaYa no activa ni publica campañas automáticamente.
+
+Para la prueba sin gasto, usá una cuenta publicitaria Sandbox y su token desde las herramientas de Marketing API de Meta. El detalle paso a paso está en [Cambios 1.18.0](CAMBIOS-1.18.0.md). Instagram, YouTube y TikTok se muestran como **Muy pronto** y no tienen integración activa en esta versión.
+
+Desde v1.19.0 el transporte Graph y la política de assets son inyectables. `npm run test:mock:facebook` levanta un Graph v26.0 local y prueba además el OAuth de producción completo (state, code, token corto, token largo, activos y permisos), cuentas publicitarias inactivas, payloads de campaña/conjunto/imagen/creativo/anuncio y rollback, sin realizar ninguna llamada a Meta. Pasar a QA/Producción sólo cambia el host inyectado por el Graph real y las credenciales/configuración; no existe un segundo camino de lógica de negocio exclusivo del mock.
 
 ## Fuentes oficiales consultadas
 

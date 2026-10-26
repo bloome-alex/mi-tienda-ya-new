@@ -66,8 +66,8 @@ async function remove(row){
   <template #cell-active="{row}"><span class="p-badge dot" :class="row.active?'green':'orange'">{{row.active?'Publicada':'En preparación'}}</span></template>
   <template #cell-transfer="{row}"><template v-if="pendingFor(row)"><span class="p-badge orange">Pendiente de aceptación</span><small class="transfer-recipient">Para {{pendingFor(row).recipientEmail}}</small></template><span v-else class="p-muted">Sin transferencia pendiente</span></template>
   <template #actions="{row}">
-    <button v-if="isAdmin||canFeature('section.design')" class="btn btn-secondary btn-small" @click="design(row)"><Icon name="palette" :size="13"/>Personalizar</button>
-    <button v-if="isAdmin||canFeature('section.domain')" class="p-icon-btn" title="Configurar dominio" @click="domain(row)"><Icon name="globe" :size="14"/></button>
+    <button v-if="isAdmin||canFeature('design.limited')" class="btn btn-secondary btn-small" @click="design(row)"><Icon name="palette" :size="13"/>Personalizar</button>
+    <button  class="p-icon-btn" title="Configurar dominio" @click="domain(row)"><Icon name="globe" :size="14"/></button>
     <RouterLink :to="`/app/stores/${row._id}`" class="p-icon-btn" title="Editar tienda"><Icon name="edit" :size="14"/></RouterLink>
     <a :href="row.publicUrl||`/t/${row.slug}`" class="p-icon-btn" target="_blank" rel="noopener" title="Abrir tienda"><Icon name="external" :size="14"/></a>
     <button v-if="!isAdmin&&pendingFor(row)" class="btn btn-secondary btn-small" :disabled="!!transferBusy" @click="cancelTransfer(row)"><Icon name="close" :size="13"/>Cancelar transferencia</button>

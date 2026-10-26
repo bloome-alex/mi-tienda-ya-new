@@ -51,6 +51,14 @@ export const config = {
   // Keep the explicit env switch for non-root/container deployments, but
   // automatically enable it when PM2/Node is actually running as root.
   whatsappNoSandbox: process.env.WHATSAPP_NO_SANDBOX === 'true' || (typeof process.getuid === 'function' && process.getuid() === 0),
+  facebookAds: {
+    appId: (process.env.META_APP_ID || '').trim(),
+    appSecret: (process.env.META_APP_SECRET || '').trim(),
+    graphVersion: (process.env.META_GRAPH_VERSION || 'v26.0').trim(),
+    redirectUri: (process.env.META_REDIRECT_URI || `${(process.env.APP_URL || 'http://localhost:5000').replace(/\/$/, '')}/api/social/facebook/callback`).trim(),
+    loginConfigId: (process.env.META_FACEBOOK_LOGIN_CONFIG_ID || '').trim(),
+    sandboxEnabled: process.env.META_SANDBOX_CONNECT_ENABLED === 'true' || ((process.env.NODE_ENV || 'development') !== 'production' && process.env.META_SANDBOX_CONNECT_ENABLED !== 'false'),
+  },
   orderReservationMinutes: number('ORDER_RESERVATION_MINUTES', 60),
   smtp: { host: process.env.SMTP_HOST, port: number('SMTP_PORT', 587), secure: process.env.SMTP_SECURE === 'true', user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS, from: process.env.SMTP_FROM || 'MiTiendaYa <no-reply@example.com>' },
 };
@@ -59,6 +67,12 @@ export function validateConfig() {
   if (config.rootPassword.length < 12 || Buffer.byteLength(config.rootPassword, 'utf8') > 72) throw new Error('ROOT_PASSWORD debe tener al menos 12 caracteres y hasta 72 bytes.');
   if (!/^[a-fA-F0-9]{64}$/.test(config.encryptionKey)) throw new Error('ENCRYPTION_KEY debe contener 64 caracteres hexadecimales (32 bytes).');
   if (!/^[\w-]+$/.test(config.whatsappClientId)) throw new Error('WHATSAPP_CLIENT_ID solo admite letras, números, guiones y guiones bajos.');
+  if (!/^v\d+\.0$/.test(config.facebookAds.graphVersion)) throw new Error('META_GRAPH_VERSION debe tener formato v26.0.');
+  if (Boolean(config.facebookAds.appId) !== Boolean(config.facebookAds.appSecret)) throw new Error('Configurá META_APP_ID y META_APP_SECRET juntos.');
+  if (config.facebookAds.appId && !/^\d+$/.test(config.facebookAds.appId)) throw new Error('META_APP_ID debe ser numérico.');
+  if (config.facebookAds.loginConfigId && !/^\d+$/.test(config.facebookAds.loginConfigId)) throw new Error('META_FACEBOOK_LOGIN_CONFIG_ID debe ser numérico.');
+  if (config.facebookAds.redirectUri && !/^https?:\/\//i.test(config.facebookAds.redirectUri)) throw new Error('META_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
+  if (config.isProduction && config.facebookAds.appId && !config.facebookAds.redirectUri.startsWith('https://')) throw new Error('META_REDIRECT_URI debe usar HTTPS en producción.');
   if (!Number.isInteger(config.bcryptRounds) || config.bcryptRounds < 10 || config.bcryptRounds > 14) throw new Error('BCRYPT_ROUNDS debe estar entre 10 y 14.');
   if (!Number.isInteger(config.sessionDays) || config.sessionDays < 1 || config.sessionDays > 90) throw new Error('SESSION_DAYS debe estar entre 1 y 90.');
   if (config.rootUser.length > 100) throw new Error('ROOT_USER no puede superar 100 caracteres.');

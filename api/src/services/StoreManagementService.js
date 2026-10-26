@@ -2,6 +2,7 @@ import { Store, StoreTransfer } from '../models/index.js';
 import { AppError } from '../middleware/core.js';
 import { EntitlementService } from './core.js';
 import { quotaService } from './QuotaService.js';
+import { planFeatureService } from './PlanFeatureService.js';
 import { domainService } from './DomainService.js';
 
 const present = { archived: { $ne: true } };
@@ -16,7 +17,7 @@ export class StoreManagementService {
   async entitlement(user) {
     if (!user || user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');
     const entitlement = await EntitlementService.forUser(user);
-    if (Number(entitlement.maxStores || 1) <= 1) throw new AppError('Tu plan no habilita la administración de múltiples tiendas.', 403, 'MULTI_STORE_REQUIRED');
+    if (!await planFeatureService.has(user, 'management.stores')) throw new AppError('Tu plan no incluye Gestión de Tiendas.', 403, 'PLAN_FEATURE_REQUIRED');
     return entitlement;
   }
 

@@ -7,7 +7,7 @@ const source = file => readFileSync(new URL('../src/'+file, import.meta.url),'ut
 test('panel incorpora una sección Dominio por tienda', () => {
   const layout=source('layouts/DashboardLayout.vue');
   const router=source('router.js');
-  assert.match(layout,/\['Dominio','\/app\/domain','globe'(?:,'section\.domain')?\]/);
+  assert.match(layout,/\['Dominio','\/app\/domain','globe',null\]/);
   assert.match(router,/path:'domain'.*DomainView\.vue/s);
 });
 

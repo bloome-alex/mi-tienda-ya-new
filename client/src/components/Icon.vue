@@ -50,7 +50,8 @@ const paths={
  filter:'M3 4h18l-7 8v8l-4-2v-6L3 4',
  star:'m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6',
  transfer:'M4 7h13m0 0-4-4m4 4-4 4M20 17H7m0 0 4 4m-4-4 4-4',
- link:'m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0M16 8l2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0'
+ link:'m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0M16 8l2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0',
+ megaphone:'M3 11v4h4l9 4V7l-9 4H3Zm13-1c2 0 4-2 4-4M16 16c2 0 4 2 4 4M7 15l1 6h4'
 };
 const aliases={'arrow-right':'arrow','arrow-left':'back','chevron-down':'chevron','chevron-right':'chevron','credit-card':'credit','external-link':'external','dashboard':'grid','log-out':'logout','copy':'receipt'};
 const path=computed(()=>paths[props.name] || paths[aliases[props.name]] || paths.grid);

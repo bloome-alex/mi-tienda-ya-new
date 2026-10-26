@@ -630,3 +630,20 @@ Las transferencias salientes se siguen ejecutando con `/api/me/store-transfers`,
 - `POST /api/me/store-transfers/:id/cancel`: cancela una transferencia saliente todavía pendiente.
 - `POST /api/me/store-transfers/:id/accept`: acepta una transferencia dirigida al email de la sesión. Exige suscripción vigente no-trial y cupo de tienda.
 - `POST /api/me/store-transfers/:id/return`: inicia una devolución al dueño anterior a partir de una transferencia ya aceptada.
+
+
+## Redes sociales y anuncios (v1.18.0)
+
+Todos los endpoints de tienda exigen acceso a la tienda indicada. Los secretos de Facebook no se devuelven en las respuestas.
+
+- `GET /stores/:storeId/social`: redes visibles y estado seguro de Facebook.
+- `POST /stores/:storeId/social/facebook/connect`: inicia OAuth y devuelve la URL de autorización.
+- `GET /social/facebook/callback`: callback OAuth autenticado.
+- `POST /stores/:storeId/social/facebook/sandbox`: conecta credenciales de Marketing API Sandbox cuando el servidor lo permite.
+- `POST /stores/:storeId/social/facebook/refresh`: vuelve a consultar activos de Meta.
+- `PUT /stores/:storeId/social/facebook/assets`: elige cuenta publicitaria y Página.
+- `DELETE /stores/:storeId/social/facebook`: desconecta Facebook de la tienda.
+- `GET /stores/:storeId/social/facebook/products`: productos activos elegibles para anuncios.
+- `POST /stores/:storeId/social/facebook/ads`: crea campaña, conjunto, creativo y anuncio de tráfico, todos pausados.
+
+Administración incorpora además `GET /admin/custom-plan-requests/:id` para la vista dedicada de una solicitud de plan.

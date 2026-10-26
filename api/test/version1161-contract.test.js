@@ -11,7 +11,7 @@ test('seller multi-store management is owner scoped and quota driven',()=>{
   const service=read('src/services/StoreManagementService.js');
   const routes=read('src/routes/core.js');
   assert.match(service,/class StoreManagementService/);
-  assert.match(service,/Number\(entitlement\.maxStores \|\| 1\) <= 1/);
+  assert.match(service,/management\.stores/);
   assert.match(service,/ownerId: user\._id/);
   assert.match(service,/quotaService\.createStore/);
   assert.match(service,/quotaService\.saveStore/);

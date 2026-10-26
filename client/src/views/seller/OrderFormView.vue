@@ -4,6 +4,7 @@ import { ref,reactive,computed,onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../../services/api.js';
 import { workspace } from '../../services/workspace.js';
+import { canFeature } from '../../services/auth.js';
 import { notify } from '../../services/notifications.js';
 import { fetchAll,money } from '../../services/panel.js';
 import Icon from '../../components/Icon.vue';
@@ -11,7 +12,7 @@ const router=useRouter(),products=ref([]),store=ref(null),loading=ref(true),savi
 const form=reactive({customer:{name:'',email:'',phone:'',address:'',city:'',postalCode:'',notes:''},items:[{productId:'',variantId:'',quantity:1}],deliveryId:'',paymentId:'',idempotencyKey:uniqueKey()});
 const digitalOnly=computed(()=>form.items.length>0&&form.items.every(i=>product(i)?.type==='digital'));
 const deliveries=computed(()=>store.value?.deliveries?.filter(d=>d.active&&(digitalOnly.value||d.type!=='digital'))||[]);
-const payments=computed(()=>store.value?.payments?.filter(p=>p.active&&(!p.deliveryIds?.length||p.deliveryIds.includes(form.deliveryId)))||[]);
+const payments=computed(()=>store.value?.payments?.filter(p=>p.active&&(p.type!=='mercadopago'||canFeature('payments.mercadopago'))&&(!p.deliveryIds?.length||p.deliveryIds.includes(form.deliveryId)))||[]);
 const delivery=computed(()=>deliveries.value.find(d=>d.id===form.deliveryId));
 const subtotal=computed(()=>form.items.reduce((sum,i)=>sum+price(i)*Number(i.quantity||0),0));
 function product(i){return products.value.find(p=>p._id===i.productId)}
