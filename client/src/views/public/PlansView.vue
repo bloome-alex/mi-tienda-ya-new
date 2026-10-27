@@ -18,6 +18,8 @@ const featureRows = computed(() => (config.value?.planFeatures || []).flatMap(gr
 const comparisonRows = computed(() => [
   { key: '__stores', label: 'Cantidad de tiendas', description: 'Cantidad máxima de tiendas que puede tener el plan.', type: 'capacity' },
   { key: '__products', label: 'Productos por tienda', description: 'Cantidad máxima de productos disponibles en cada tienda.', type: 'capacity' },
+  { key: '__payments', label: 'Formas de pago por tienda', description: 'Cantidad máxima de opciones de cobro configurables en cada tienda.', type: 'capacity' },
+  { key: '__deliveries', label: 'Formas de entrega por tienda', description: 'Cantidad máxima de opciones de entrega configurables en cada tienda.', type: 'capacity' },
   ...featureRows.value.map(feature => ({ ...feature, type: 'feature' })),
 ]);
 
@@ -32,6 +34,8 @@ async function load() {
 function capacity(plan, key) {
   if (key === '__stores') return Number(plan.maxStores || 1).toLocaleString('es-AR');
   if (key === '__products') return Number(plan.maxProducts || 0) === 0 ? 'Ilimitados' : Number(plan.maxProducts).toLocaleString('es-AR');
+  if (key === '__payments') return Number(plan.maxPaymentMethods ?? 0) === 0 ? 'Sin límite' : Number(plan.maxPaymentMethods).toLocaleString('es-AR');
+  if (key === '__deliveries') return Number(plan.maxDeliveryMethods ?? 0) === 0 ? 'Sin límite' : Number(plan.maxDeliveryMethods).toLocaleString('es-AR');
   return '';
 }
 function included(plan, key) { return Array.isArray(plan.resolvedFeatureKeys) && plan.resolvedFeatureKeys.includes(key); }

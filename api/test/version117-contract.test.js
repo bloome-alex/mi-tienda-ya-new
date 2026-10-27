@@ -11,13 +11,14 @@ const read=relative=>fs.readFileSync(path.join(root,relative),'utf8');
 const expectedFeatures = [
   'dashboard.statistics','management.products','management.stores','management.stock','management.categories','management.orders',
   'design.limited','design.premium','design.enterprise','domain.subdomain','domain.custom','store.pwa','payments.mercadopago','contact.whatsapp','stores.transfer',
+  'ads.limited','ads.premium','ads.enterprise',
 ];
 
-test('plan catalog is limited to the 15 current commercial capabilities',()=>{
+test('plan catalog contains the current commercial capabilities',()=>{
   const service=read('src/services/PlanFeatureService.js');
   const catalogBlock=service.slice(service.indexOf('PLAN_FEATURES'), service.indexOf('const featureMap'));
   for(const key of expectedFeatures) assert.match(catalogBlock,new RegExp(key.replaceAll('.','\\.')));
-  assert.equal((catalogBlock.match(/\{ key: '/g)||[]).length,15);
+  assert.equal((catalogBlock.match(/\{ key: '/g)||[]).length,18);
   for(const removed of ['products.variants','products.digital','products.featured','products.related','orders.manual','payments.cash','payments.transfer','payments.delivery','design.custom_sections','design.theme_modes','design.backgrounds','design.social_links','checkout.terms']) assert.doesNotMatch(catalogBlock,new RegExp(removed.replaceAll('.','\\.')));
 });
 

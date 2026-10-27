@@ -99,6 +99,7 @@ export function safeOrder(order, { publicView = false } = {}) {
     checkoutUrl: !FINAL_STATUSES.includes(o.status) ? o.checkoutUrl : undefined,
   };
   if (!publicView) Object.assign(result, { history: o.history || [], paymentId: o.paymentId, paymentProviderStatus: o.paymentProviderStatus, paymentIssue: o.paymentIssue, digitalDeliveryError: o.digitalDeliveryError });
+  if (publicView && result.payment?.mercadoPagoAccountId) { result.payment = { ...result.payment }; delete result.payment.mercadoPagoAccountId; }
   return result;
 }
 
@@ -125,7 +126,7 @@ export async function assertPublicStoreAllowed(store, { status = 404 } = {}) {
 export class CatalogService {
   async storeBySlug(slug, { allowInactive = false } = {}) {
     if (typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]{1,79}$/.test(slug)) throw commerceError('La tienda no existe.', 404, 'STORE_NOT_FOUND');
-    const store = await Store.findOne({ slug, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+    const store = await Store.findOne({ slug, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
     if (!store || (!allowInactive && !store.active)) throw commerceError('Esta tienda no está disponible por el momento.', 404, 'STORE_UNAVAILABLE');
     if (!allowInactive) store.$locals.entitlement = await assertPublicStoreAllowed(store);
     return store;
@@ -348,7 +349,7 @@ export class CommerceService {
     const deliveryCost = money(delivery.price || 0);
     const total = money((subtotalCents + cents(deliveryCost)) / 100);
     if (payment.type === 'mercadopago' && total <= 0) throw commerceError('Mercado Pago requiere un importe mayor a cero.');
-    if (payment.type === 'mercadopago') this.mercadoPago.credentials(store);
+    if (payment.type === 'mercadopago') this.mercadoPago.credentials(store, payment.mercadoPagoAccountId);
     const orderId = new mongoose.Types.ObjectId();
     const token = this.token(orderId, normalized.idempotencyKey);
     const minutes = Math.max(15, Math.min(1440, Number(config.orderReservationMinutes) || 60));
@@ -357,7 +358,7 @@ export class CommerceService {
       order = await Order.create({
         _id: orderId, storeId: store._id, number: `MT-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(orderId).slice(-12).toUpperCase()}`,
         customer: normalized.customer, termsAcceptance, items: snapshots, subtotal: subtotalCents / 100, deliveryCost, total,
-        payment: { id: payment.id, type: payment.type, name: payment.name, instructions: payment.instructions || '', bank: payment.type === 'transfer' ? plain(payment.bank || {}) : undefined },
+        payment: { id: payment.id, type: payment.type, name: payment.name, instructions: payment.instructions || '', mercadoPagoAccountId: payment.type === 'mercadopago' ? String(payment.mercadoPagoAccountId || '') : '', bank: payment.type === 'transfer' ? plain(payment.bank || {}) : undefined },
         delivery: { id: delivery.id, type: delivery.type, name: delivery.name, description: delivery.description || '', price: deliveryCost },
         idempotencyHash, requestHash, accessTokenHash: hash(token), accessTokenEncrypted: encryptSecret(token),
         digitalDeliveryStatus: snapshots.some(i => i.type === 'digital') ? 'pending' : 'not_applicable',
@@ -476,6 +477,7 @@ export class CommerceService {
 
   async reconcilePayment(store, order, payment) {
     if (!same(payment.external_reference, order._id) || !same(payment.metadata?.store_id, store._id) || !same(payment.metadata?.order_id, order._id)) throw commerceError('El pago no corresponde a este pedido.', 422, 'PAYMENT_MISMATCH');
+    if (order.payment?.mercadoPagoAccountId && payment.metadata?.mercado_pago_account_id && !same(payment.metadata.mercado_pago_account_id, order.payment.mercadoPagoAccountId)) throw commerceError('El pago corresponde a otra cuenta de Mercado Pago.', 422, 'PAYMENT_ACCOUNT_MISMATCH');
     if (order.payment.type !== 'mercadopago' || (order.collectorId && !same(payment.collector_id, order.collectorId))) throw commerceError('El destinatario del pago no coincide.', 422, 'PAYMENT_MISMATCH');
     const providerStatus = String(payment.status || '').slice(0, 100);
     await Order.updateOne({ _id: order._id }, { $set: { paymentProviderStatus: providerStatus, providerCheckedAt: new Date() } });
@@ -502,24 +504,25 @@ export class CommerceService {
   async verifyPayment(store, orderId) {
     let order = await this.getOrder(store._id, orderId);
     if (order.payment.type !== 'mercadopago') throw commerceError('Este pedido no usa Mercado Pago.');
-    const payments = order.paymentId ? [await this.mercadoPago.payment(store, order.paymentId)] : await this.mercadoPago.findPayments(store, order._id);
+    const accountId = order.payment?.mercadoPagoAccountId || '';
+    const payments = order.paymentId ? [await this.mercadoPago.payment(store, order.paymentId, accountId)] : await this.mercadoPago.findPayments(store, order._id, accountId);
     for (const payment of payments) { await this.reconcilePayment(store, order, payment); order = await this.getOrder(store._id, orderId); }
     await Order.updateOne({ _id: order._id }, { $set: { providerCheckedAt: new Date() } });
     return safeOrder(await this.getOrder(store._id, orderId));
   }
 
-  async webhook(storeId, request) {
-    const store = await Store.findById(id(storeId, 'Tienda')).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+  async webhook(storeId, request, accountId = '') {
+    const store = await Store.findById(id(storeId, 'Tienda')).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
     if (!store) throw commerceError('La tienda no existe.', 404);
     const dataId = request.query?.['data.id'];
-    const { webhookSecret } = this.mercadoPago.credentials(store);
-    if (!this.mercadoPago.verifySignature({ signature: request.headers['x-signature'], requestId: request.headers['x-request-id'], dataId }, webhookSecret)) throw commerceError('Firma de notificación inválida.', 401, 'INVALID_WEBHOOK_SIGNATURE');
+    const credentials = this.mercadoPago.webhookCredentials(store, request, accountId);
     if (request.body?.data?.id && !same(request.body.data.id, dataId)) throw commerceError('La notificación contiene identificadores incompatibles.', 400);
     if ((request.body?.type || request.query?.type) !== 'payment') return { received: true };
-    const payment = await this.mercadoPago.payment(store, dataId);
+    const payment = await this.mercadoPago.payment(store, dataId, credentials.id);
     if (!/^[a-f\d]{24}$/i.test(String(payment.external_reference || ''))) return { received: true };
     const order = await Order.findOne({ _id: payment.external_reference, storeId: store._id });
     if (!order) return { received: true };
+    if (order.payment?.mercadoPagoAccountId && String(order.payment.mercadoPagoAccountId) !== String(credentials.id)) throw commerceError('La notificación corresponde a otra cuenta de Mercado Pago.', 422, 'PAYMENT_ACCOUNT_MISMATCH');
     await this.reconcilePayment(store, order, payment);
     return { received: true };
   }
@@ -623,7 +626,7 @@ export class CommerceWorker {
     const expired = await Order.find({ status: { $in: ACTIVE_STATUSES }, 'payment.type': 'mercadopago', reservationExpiresAt: { $lt: new Date() }, $or: [{ providerCheckedAt: { $lt: new Date(Date.now() - 120000) } }, { providerCheckedAt: { $exists: false } }] }).limit(10);
     for (const order of expired) {
       try {
-        const store = await Store.findById(order.storeId).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+        const store = await Store.findById(order.storeId).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
         if (!store) continue;
         const checked = await this.commerce.verifyPayment(store, String(order._id));
         if (ACTIVE_STATUSES.includes(checked.status)) await this.commerce.changeStatus(store._id, String(order._id), { status: 'cancelled', confirmFinal: true, note: 'La reserva de Mercado Pago venció sin un pago aprobado.' });

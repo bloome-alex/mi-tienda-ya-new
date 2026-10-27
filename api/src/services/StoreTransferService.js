@@ -132,7 +132,7 @@ export class StoreTransferService {
     if (!claim.modifiedCount) throw new AppError('La transferencia está siendo procesada en otra sesión.', 409, 'TRANSFER_BUSY');
     try {
       transfer = await StoreTransfer.findById(transfer._id);
-      const store = await Store.findOne({ _id: transfer.storeId, ownerId: transfer.fromUserId, ...pendingStore }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+      const store = await Store.findOne({ _id: transfer.storeId, ownerId: transfer.fromUserId, ...pendingStore }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
       if (!store) throw new AppError('La tienda cambió de propietario o ya no está disponible.', 409, 'TRANSFER_STORE_CHANGED');
       store.ownerId = user._id;
       const saved = await quotaService.saveStore(store, { ownerChanged: true });

@@ -75,7 +75,7 @@ router.get('/public/orders/:id', asyncHandler(async (req, res) => {
 }));
 router.post('/public/orders/:id/verify-payment', verificationLimit, asyncHandler(async (req, res) => {
   const order = await commerce.publicOrder(req.params.id, req.query.token);
-  const store = await Store.findById(order.storeId).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+  const store = await Store.findById(order.storeId).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
   await commerce.verifyPayment(store, String(order._id));
   ok(res, safeOrder(await commerce.getOrder(store._id, String(order._id)), { publicView: true }));
 }));
@@ -84,6 +84,7 @@ router.post('/public/orders/:id/receipt', receiptLimit, asyncHandler(async (req,
   next();
 }), receiptUpload.single('file'), asyncHandler(async (req, res) => ok(res, { order: await receipts.store(req.order, req.file) })));
 
+router.post('/webhooks/mercadopago/:storeId/:accountId', asyncHandler(async (req, res) => ok(res, await commerce.webhook(req.params.storeId, req, req.params.accountId))));
 router.post('/webhooks/mercadopago/:storeId', asyncHandler(async (req, res) => ok(res, await commerce.webhook(req.params.storeId, req))));
 
 export default router;

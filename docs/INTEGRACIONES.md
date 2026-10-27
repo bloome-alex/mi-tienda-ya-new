@@ -303,3 +303,13 @@ npm run test:mock:integrations
 ```
 
 El detalle de escenarios se encuentra en `docs/PRUEBAS-PUBLICIDAD-1.21.0.md`.
+
+## Acceso publicitario por plan (v1.22.0)
+
+Desde v1.22.0 el acceso a Redes y anuncios se controla con tres niveles acumulativos de plan:
+
+- **Publicidad y Anuncios Limitado** (`ads.limited`): Facebook e Instagram.
+- **Publicidad y Anuncios Premium** (`ads.premium`): suma Google Ads.
+- **Publicidad y Anuncios Empresarial** (`ads.enterprise`): suma YouTube Ads y TikTok Ads.
+
+El backend valida el nivel en conexión, actualización de activos, consulta de productos, creación de anuncios, desconexión y callback OAuth. El frontend utiliza el mismo entitlement para ocultar el acceso general y sólo renderiza las redes que devuelve la API.

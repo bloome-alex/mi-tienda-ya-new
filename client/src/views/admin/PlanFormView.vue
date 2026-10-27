@@ -9,7 +9,7 @@ import Icon from '../../components/Icon.vue';
 const route=useRoute(),router=useRouter();
 const editing=computed(()=>!!route.params.id),loading=ref(true),saving=ref(false),error=ref('');
 const featureMeta=ref({groups:[],plans:[]});
-const form=reactive({name:'',icon:'store',previousPrice:0,price:0,durationDays:30,featureKeys:[],inheritsPlanId:null,maxStores:1,maxProducts:100,active:true,visible:true,featured:false,sortOrder:0});
+const form=reactive({name:'',icon:'store',previousPrice:0,price:0,durationDays:30,featureKeys:[],inheritsPlanId:null,maxStores:1,maxProducts:100,maxPaymentMethods:3,maxDeliveryMethods:3,active:true,visible:true,featured:false,sortOrder:0});
 const presentation=reactive({});
 const availableParents=computed(()=>{const current=String(route.params.id||'');return featureMeta.value.plans.filter(plan=>String(plan._id)!==current&&!(plan.inheritanceChain||[]).some(parent=>String(parent._id)===current));});
 const parentPlan=computed(()=>availableParents.value.find(plan=>String(plan._id)===String(form.inheritsPlanId||''))||null);
@@ -32,7 +32,7 @@ onMounted(async()=>{
     featureMeta.value=meta;
     for(const feature of meta.groups.flatMap(group=>group.features))presentation[feature.key]={title:feature.label,description:feature.description};
     if(item){
-      Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
+      Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,maxPaymentMethods:item.maxPaymentMethods??20,maxDeliveryMethods:item.maxDeliveryMethods??20,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
       for(const entry of item.featurePresentation||[])presentation[entry.key]={title:entry.title||featureByKey.value.get(entry.key)?.label||entry.key,description:Object.prototype.hasOwnProperty.call(entry,'description')?entry.description:(featureByKey.value.get(entry.key)?.description||'')};
     }
   }catch(e){error.value=e.message}finally{loading.value=false}
@@ -51,7 +51,7 @@ async function save(){
   saving.value=true;error.value='';
   try{
     const featurePresentation=form.featureKeys.map(key=>({key,title:ensurePresentation(key).title,description:ensurePresentation(key).description}));
-    const payload={name:form.name,icon:form.icon,previousPrice:form.previousPrice,price:form.price,durationDays:form.durationDays,featureKeys:form.featureKeys,featurePresentation,inheritsPlanId:form.inheritsPlanId||null,maxStores:form.maxStores,maxProducts:form.maxProducts,active:form.active,visible:form.visible,featured:form.featured,sortOrder:form.sortOrder};
+    const payload={name:form.name,icon:form.icon,previousPrice:form.previousPrice,price:form.price,durationDays:form.durationDays,featureKeys:form.featureKeys,featurePresentation,inheritsPlanId:form.inheritsPlanId||null,maxStores:form.maxStores,maxProducts:form.maxProducts,maxPaymentMethods:form.maxPaymentMethods,maxDeliveryMethods:form.maxDeliveryMethods,active:form.active,visible:form.visible,featured:form.featured,sortOrder:form.sortOrder};
     if(editing.value)await api.put(`/admin/plans/${route.params.id}`,payload);else await api.post('/admin/plans',payload);
     notify.success('Plan guardado.');router.push('/app/settings?tab=planes');
   }catch(e){error.value=e.message;notify.error(e.message)}finally{saving.value=false}
@@ -84,11 +84,13 @@ async function save(){
           <div class="p-form-grid">
             <div class="p-field"><label for="plan-stores">Cantidad de tiendas *</label><input id="plan-stores" v-model.number="form.maxStores" type="number" min="1" max="1000" step="1" required/></div>
             <div class="p-field"><label for="plan-products">Productos por tienda *</label><input id="plan-products" v-model.number="form.maxProducts" type="number" min="0" step="1" required/><small>0 significa productos ilimitados.</small></div>
+            <div class="p-field"><label for="plan-payment-methods">Formas de pago por tienda *</label><input id="plan-payment-methods" v-model.number="form.maxPaymentMethods" type="number" min="0" max="20" step="1" required/><small>0 significa sin límite del plan (máximo técnico: 20).</small></div>
+            <div class="p-field"><label for="plan-delivery-methods">Formas de entrega por tienda *</label><input id="plan-delivery-methods" v-model.number="form.maxDeliveryMethods" type="number" min="0" max="20" step="1" required/><small>0 significa sin límite del plan (máximo técnico: 20).</small></div>
           </div>
         </section>
 
         <section class="p-section-card">
-          <div class="p-section-title"><div><h2>Funcionalidades y permisos</h2><p>Solo estas funcionalidades forman parte del sistema de planes. Los niveles de diseño son acumulativos.</p></div><span class="p-badge">{{effectiveKeys.size}} activas</span></div>
+          <div class="p-section-title"><div><h2>Funcionalidades y permisos</h2><p>Solo estas funcionalidades forman parte del sistema de planes. Los niveles de diseño y publicidad son acumulativos.</p></div><span class="p-badge">{{effectiveKeys.size}} activas</span></div>
           <div class="p-field plan-inheritance">
             <label for="plan-parent">Heredar funcionalidades de otro plan</label>
             <select id="plan-parent" v-model="form.inheritsPlanId"><option :value="null">No heredar</option><option v-for="plan in availableParents" :key="plan._id" :value="plan._id">{{plan.name}}</option></select>

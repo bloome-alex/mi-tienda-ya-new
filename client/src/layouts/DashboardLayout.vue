@@ -22,7 +22,7 @@ const initials=computed(()=>(auth.user?.name||auth.user?.email||'A').slice(0,2).
 const appVersion=appMetadata.versionLabel;
 const adminLinks=[['Resumen','/app/dashboard','grid'],['Usuarios','/app/users','users'],['Tiendas','/app/stores','store'],['Solicitudes de planes','/app/custom-plan-requests','mail'],['Emails','/app/emails','mail'],['Configuración','/app/settings','settings'],['Auditoría','/app/audit','shield']];
 const sellerLinks=[['Resumen','/app/dashboard','grid','dashboard.statistics'],['Tiendas','/app/stores','store','management.stores'],['Productos','/app/products','package','management.products'],['Categorías','/app/categories','tag','management.categories'],['Stock','/app/stock','stock','management.stock'],['Pedidos','/app/orders','receipt','management.orders']];
-const storeLinks=[['Diseño de la tienda','/app/design','palette','design.limited'],['Dominio','/app/domain','globe',null],['Aplicación PWA','/app/pwa','phone','store.pwa'],['Cobros y entregas','/app/payments','credit',null],['Contacto','/app/contact','phone',null],['Redes y anuncios','/app/social','megaphone',null]];
+const storeLinks=[['Diseño de la tienda','/app/design','palette','design.limited'],['Dominio','/app/domain','globe',null],['Aplicación PWA','/app/pwa','phone','store.pwa'],['Cobros y entregas','/app/payments','credit',null],['Contacto','/app/contact','phone',null],['Redes y anuncios','/app/social','megaphone','ads.limited']];
 const visibleSellerLinks=computed(()=>{
   if(isAdmin.value)return sellerLinks;
   const links=[...sellerLinks.slice(0,2),['Historial de Transferencias','/app/transfer-history','transfer','stores.transfer'],...sellerLinks.slice(2)];

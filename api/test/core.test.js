@@ -109,7 +109,8 @@ test('expired trial prevents publishing but allows seller to keep editing produc
 test('credentials are encrypted at rest, omitted from owner read, and cross-origin writes are rejected', async () => {
   const configuration = await put(seller, `/api/stores/${seller.store._id}/payments`, { payments: [], deliveries: [], mercadopago: { accessToken: 'TEST-secret-token', webhookSecret: 'secret-for-webhook', sandbox: true } });
   assert.equal(configuration.status, 200, JSON.stringify(configuration.body)); assert.equal(configuration.body.data.integrations.mercadopago.hasAccessToken, true); assert.equal(configuration.body.data.integrations.mercadopago.accessToken, undefined);
-  const store = await Store.findById(seller.store._id).select('+integrations.mercadopago.accessToken'); assert.match(store.integrations.mercadopago.accessToken, /^v1:/); assert.equal(decryptSecret(store.integrations.mercadopago.accessToken), 'TEST-secret-token');
+  const store = await Store.findById(seller.store._id).select('+integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
+  const mpAccount = store.integrations.mercadopago.accounts[0]; assert.ok(mpAccount); assert.match(mpAccount.accessToken, /^v1:/); assert.equal(decryptSecret(mpAccount.accessToken), 'TEST-secret-token');
   const rejection = await seller.agent.put(`/api/stores/${seller.store._id}`).set('Origin', 'https://attacker.example').set('X-CSRF-Token', seller.csrfToken).send({ name: 'Intrusión' }); assert.equal(rejection.status, 403);
 });
 

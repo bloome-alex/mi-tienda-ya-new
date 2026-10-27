@@ -60,7 +60,7 @@ function syncAssets(provider){
 function syncInstagramIdentity(){const page=instagram.value?.integration?.pages?.find(item=>item.id===assets.instagram.pageId);assets.instagram.instagramUserId=page?.instagramUserId||'';}
 function tiktokIdentityPayload(){const [identityType='',...rest]=String(assets.tiktok.identityKey||'').split('::');return {identityType,identityId:rest.join('::')};}
 async function loadProducts(provider){if(!data.value?.[provider]?.integration){products[provider]=[];return;}products[provider]=await api.get(`/stores/${workspace.activeStoreId}/social/${provider}/products`);}
-async function load(){loading.value=true;error.value='';try{data.value=await api.get(`/stores/${workspace.activeStoreId}/social`);providers.forEach(syncAssets);await Promise.all(providers.map(loadProducts));}catch(e){error.value=e.message}finally{loading.value=false}}
+async function load(){loading.value=true;error.value='';try{data.value=await api.get(`/stores/${workspace.activeStoreId}/social`);const allowed=(data.value?.networks||[]).map(item=>item.key);if(!allowed.includes(activeNetwork.value))activeNetwork.value=allowed[0]||'facebook';providers.forEach(provider=>{syncAssets(provider);if(!allowed.includes(provider))products[provider]=[]});await Promise.all(allowed.map(loadProducts));}catch(e){error.value=e.message}finally{loading.value=false}}
 onMounted(async()=>{
   if(providers.includes(String(route.query.network||'')))activeNetwork.value=String(route.query.network);
   for(const provider of providers){if(route.query[provider]==='connected')notify.success(`${labels[provider]} quedó conectado a esta tienda.`);if(route.query[provider]==='error')notify.error(String(route.query.message||`No se pudo conectar ${labels[provider]}.`));}

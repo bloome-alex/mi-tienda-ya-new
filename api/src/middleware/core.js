@@ -50,7 +50,7 @@ export const requireStoreAccess = asyncHandler(async (req, res, next) => {
   await new Promise((resolve, reject) => requireAuth(req, res, error => error ? reject(error) : resolve()));
   const id = req.params.storeId;
   if (!mongoose.isValidObjectId(id)) throw new AppError('Tienda no encontrada.', 404, 'NOT_FOUND');
-  const store = await Store.findOne({ _id: id, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+  const store = await Store.findOne({ _id: id, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
   if (!store || (req.user.role !== 'admin' && String(store.ownerId) !== String(req.user._id))) throw new AppError('Tienda no encontrada.', 404, 'NOT_FOUND');
   req.store = store;
   next();

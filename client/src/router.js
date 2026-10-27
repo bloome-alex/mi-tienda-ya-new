@@ -57,7 +57,7 @@ const platformRoutes=[
     {path:'payments/deliveries/new',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Nueva forma de entrega'}},
     {path:'payments/deliveries/:id',component:()=>import('./views/seller/DeliveryFormView.vue'),meta:{title:'Editar forma de entrega'}},
     {path:'contact',component:()=>import('./views/seller/ContactView.vue'),meta:{title:'Contacto'}},
-    {path:'social',component:()=>import('./views/seller/SocialAdsView.vue'),meta:{title:'Redes y anuncios'}},
+    {path:'social',component:()=>import('./views/seller/SocialAdsView.vue'),meta:{title:'Redes y anuncios',feature:'ads.limited'}},
     {path:'domain',component:()=>import('./views/seller/DomainView.vue'),meta:{title:'Dominio'}},
     {path:'pwa',component:()=>import('./views/seller/StorePwaView.vue'),meta:{title:'Aplicación PWA',feature:'store.pwa'}},
     {path:'plan',redirect:'/app/subscription'},

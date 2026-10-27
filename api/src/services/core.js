@@ -10,6 +10,8 @@ import { databaseIndexService } from './DatabaseIndexService.js';
 import { domainService } from './DomainService.js';
 import { subscriptionService } from './SubscriptionService.js';
 import { planFeatureService } from './PlanFeatureService.js';
+import { mercadoPagoAccountService } from './MercadoPagoAccountService.js';
+import { commercePlanLimitService } from './CommercePlanLimitService.js';
 export { AuditService, auditService };
 
 export const defaultHome = {
@@ -29,8 +31,8 @@ export class SettingsService {
 export class EntitlementService {
   async forUser(input) {
     const user = input && typeof input === 'object' && typeof input.role === 'string' ? input : await User.findById(input?._id || input);
-    if (!user || !user.active) return { allowed: false, trial: false, expiresAt: null, maxStores: 1, maxProducts: 0, featureKeys: [], reason: 'Usuario inactivo.' };
-    if (user.role === 'admin') return { allowed: true, trial: false, expiresAt: null, maxStores: 1000, maxProducts: 0, featureKeys: planFeatureService.allKeys(), reason: 'Administración' };
+    if (!user || !user.active) return { allowed: false, trial: false, expiresAt: null, maxStores: 1, maxProducts: 0, maxPaymentMethods: 0, maxDeliveryMethods: 0, featureKeys: [], reason: 'Usuario inactivo.' };
+    if (user.role === 'admin') return { allowed: true, trial: false, expiresAt: null, maxStores: 1000, maxProducts: 0, maxPaymentMethods: 20, maxDeliveryMethods: 20, featureKeys: planFeatureService.allKeys(), reason: 'Administración' };
     const planId = user.planId?._id || user.planId;
     const plan = planId ? await Plan.findById(planId) : null;
     const now = new Date();
@@ -39,16 +41,16 @@ export class EntitlementService {
       const paidExpiry = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
       const manualExpiry = user.subscriptionManualAccessUntil ? new Date(user.subscriptionManualAccessUntil) : null;
       const effectiveExpiry = [paidExpiry, manualExpiry].filter(Boolean).sort((a, b) => b - a)[0] || null;
-      if (effectiveExpiry && effectiveExpiry > now) return { allowed: true, trial: false, expiresAt: effectiveExpiry, paidThrough: paidExpiry, manualAccessUntil: manualExpiry, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: manualExpiry && manualExpiry >= effectiveExpiry ? 'Habilitación manual de suscripción' : plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
+      if (effectiveExpiry && effectiveExpiry > now) return { allowed: true, trial: false, expiresAt: effectiveExpiry, paidThrough: paidExpiry, manualAccessUntil: manualExpiry, maxStores: plan.maxStores, maxProducts: plan.maxProducts, maxPaymentMethods: plan.maxPaymentMethods ?? 20, maxDeliveryMethods: plan.maxDeliveryMethods ?? 20, featureKeys, reason: manualExpiry && manualExpiry >= effectiveExpiry ? 'Habilitación manual de suscripción' : plan.name, billing: { inGrace: false, debtAmount: 0, periodsDue: 0 } };
     }
     if (plan) {
       const [settings, subscription] = await Promise.all([SettingsService.get(), subscriptionService.current(user._id)]);
       const billing = subscriptionService.billingState({ user, subscription, settings, now });
-      if (billing.inGrace) return { allowed: true, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: 'Período de cortesía', billing };
-      if (billing.graceExpired) return { allowed: false, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, featureKeys, reason: 'El período de cortesía finalizó.', billing };
+      if (billing.inGrace) return { allowed: true, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, maxPaymentMethods: plan.maxPaymentMethods ?? 20, maxDeliveryMethods: plan.maxDeliveryMethods ?? 20, featureKeys, reason: 'Período de cortesía', billing };
+      if (billing.graceExpired) return { allowed: false, trial: false, expiresAt: billing.graceUntil, paidThrough: user.planExpiresAt, maxStores: plan.maxStores, maxProducts: plan.maxProducts, maxPaymentMethods: plan.maxPaymentMethods ?? 20, maxDeliveryMethods: plan.maxDeliveryMethods ?? 20, featureKeys, reason: 'El período de cortesía finalizó.', billing };
     }
-    if (user.trialEndsAt && new Date(user.trialEndsAt) > now) return { allowed: true, trial: true, expiresAt: user.trialEndsAt, maxStores: 1, maxProducts: 0, featureKeys, reason: 'Período de prueba' };
-    return { allowed: false, trial: false, expiresAt: user.planExpiresAt || user.trialEndsAt || null, maxStores: plan?.maxStores || 1, maxProducts: plan?.maxProducts || 0, featureKeys, reason: plan ? 'Tu plan venció.' : 'Tu prueba finalizó. Elegí un plan para publicar.' };
+    if (user.trialEndsAt && new Date(user.trialEndsAt) > now) return { allowed: true, trial: true, expiresAt: user.trialEndsAt, maxStores: 1, maxProducts: 0, maxPaymentMethods: 3, maxDeliveryMethods: 3, featureKeys, reason: 'Período de prueba' };
+    return { allowed: false, trial: false, expiresAt: user.planExpiresAt || user.trialEndsAt || null, maxStores: plan?.maxStores || 1, maxProducts: plan?.maxProducts || 0, maxPaymentMethods: plan?.maxPaymentMethods ?? 3, maxDeliveryMethods: plan?.maxDeliveryMethods ?? 3, featureKeys, reason: plan ? 'Tu plan venció.' : 'Tu prueba finalizó. Elegí un plan para publicar.' };
   }
   static forUser(user) { return entitlementService.forUser(user); }
 }
@@ -71,7 +73,8 @@ export function safeStore(store) {
   const data = store?.toObject ? store.toObject() : JSON.parse(JSON.stringify(store));
   delete data.ownerSlot; delete data.publicationSlot;
   const mp = data.integrations?.mercadopago || {};
-  data.integrations = { mercadopago: { sandbox: mp.sandbox ?? true, hasAccessToken: Boolean(mp.accessToken), hasWebhookSecret: Boolean(mp.webhookSecret) } };
+  const accounts = mercadoPagoAccountService.safeAccounts({ integrations: { mercadopago: mp } });
+  data.integrations = { mercadopago: { accounts, sandbox: accounts[0]?.sandbox ?? mp.sandbox ?? true, hasAccessToken: accounts.some(item => item.hasAccessToken) || Boolean(mp.accessToken), hasWebhookSecret: accounts.some(item => item.hasWebhookSecret) || Boolean(mp.webhookSecret) } };
   data.domain = domainService.publicDomain(data);
   data.publicUrl = data.domain.publicUrl;
   data.pathUrl = data.domain.pathUrl;
@@ -164,6 +167,8 @@ export async function bootstrap() {
   await databaseIndexService.reconcileUploadedImageObjectKeyIndex();
   await databaseIndexService.reconcileCategoryUniquenessIndex();
   await planFeatureService.initializeLegacyPlans();
+  await commercePlanLimitService.initializeLegacyPlanLimits();
+  await mercadoPagoAccountService.initializeLegacyStores();
   await Promise.all([User.init(), Plan.init(), Store.init(), Category.init(), CategoryHierarchy.init(), Product.init(), Settings.init(), AuditLog.init(), UploadedImage.init(), StorageCleanup.init(), Subscription.init(), SubscriptionCharge.init(), SubscriptionSupportRequest.init(), CustomPlanRequest.init(), SocialOAuthState.init(), SocialIntegration.init(), SocialAd.init(), StoreTransfer.init(), Session.init(), MagicLink.init()]);
   if (!await User.exists({ role: 'admin' })) {
     try { await User.create({ role: 'admin', username: config.rootUser, name: 'Administración', passwordHash: await bcrypt.hash(config.rootPassword, config.bcryptRounds), mustChangePassword: true }); }

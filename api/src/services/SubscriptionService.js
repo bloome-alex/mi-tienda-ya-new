@@ -16,7 +16,7 @@ const pendingPaymentStatuses = new Set(['pending', 'scheduled', 'in_process', 'w
 const failedPaymentStatuses = new Set(['rejected', 'cancelled', 'canceled', 'refunded', 'charged_back']);
 
 function snapshot(plan) {
-  return { name: plan.name, price: finiteMoney(plan.price), durationDays: Number(plan.durationDays), maxStores: Number(plan.maxStores), maxProducts: Number(plan.maxProducts) };
+  return { name: plan.name, price: finiteMoney(plan.price), durationDays: Number(plan.durationDays), maxStores: Number(plan.maxStores), maxProducts: Number(plan.maxProducts), maxPaymentMethods: Number(plan.maxPaymentMethods ?? 20), maxDeliveryMethods: Number(plan.maxDeliveryMethods ?? 20) };
 }
 
 function validDate(...values) {

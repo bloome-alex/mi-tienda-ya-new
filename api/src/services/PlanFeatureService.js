@@ -2,15 +2,15 @@ import { Plan } from '../models/index.js';
 
 const planFeatureError = (message, code) => Object.assign(new Error(message), { status: 422, statusCode: 422, code });
 
-export const PLAN_FEATURE_SCHEMA_VERSION = 2;
+export const PLAN_FEATURE_SCHEMA_VERSION = 3;
 
 /**
  * Catálogo único de funcionalidades comerciales.
  *
  * Las claves son contratos técnicos estables. El título/descripción comercial
  * puede personalizarse por plan sin modificar los permisos que consume la app.
- * Los niveles de diseño se expanden de forma acumulativa para mantener la regla
- * Limitado -> Premium -> Empresarial en un solo lugar (OOP / responsabilidad única).
+ * Los niveles de diseño y publicidad se expanden de forma acumulativa para mantener
+ * la regla Limitado -> Premium -> Empresarial en un solo lugar (OOP / responsabilidad única).
  */
 export const PLAN_FEATURES = Object.freeze([
   { key: 'dashboard.statistics', group: 'Administración', label: 'Dashboard de estadísticas', description: 'Habilita ver la sección Administrar / Resumen.' },
@@ -30,6 +30,10 @@ export const PLAN_FEATURES = Object.freeze([
   { key: 'payments.mercadopago', group: 'Publicación e integraciones', label: 'Integración con Mercado Pago Checkout Pro', description: 'Habilita Mercado Pago Checkout Pro y su uso en la sección de Cobros.' },
   { key: 'contact.whatsapp', group: 'Publicación e integraciones', label: 'Contacto y Whatsapp directo en tu tienda', description: 'Habilita configurar WhatsApp y mostrar el botón flotante en la tienda.' },
   { key: 'stores.transfer', group: 'Publicación e integraciones', label: 'Transferencia de Tiendas', description: 'Habilita transferir tiendas propias a otros usuarios.' },
+
+  { key: 'ads.limited', group: 'Publicidad y anuncios', label: 'Publicidad y Anuncios Limitado', description: 'Habilita Facebook Ads e Instagram Ads.' },
+  { key: 'ads.premium', group: 'Publicidad y anuncios', label: 'Publicidad y Anuncios Premium', description: 'Incluye Publicidad Limitada y suma Google Ads.', implies: ['ads.limited'] },
+  { key: 'ads.enterprise', group: 'Publicidad y anuncios', label: 'Publicidad y Anuncios Empresarial', description: 'Incluye Publicidad Premium y suma YouTube Ads y TikTok Ads.', implies: ['ads.premium', 'ads.limited'] },
 ]);
 
 const featureMap = new Map(PLAN_FEATURES.map(item => [item.key, item]));
@@ -221,10 +225,21 @@ export class PlanFeatureService {
     return (await this.keysForUser(user)).includes(key);
   }
 
+  legacyAdvertisingKey(row) {
+    const name = String(row?.name || '').trim().toLocaleLowerCase('es-AR');
+    if (name.includes('emprendedor')) return 'ads.limited';
+    if (name.includes('profesional')) return 'ads.premium';
+    if (name.includes('empresarial') || name.includes('creador')) return 'ads.enterprise';
+    // Antes de v3 el módulo publicitario no estaba limitado por plan. Para planes
+    // personalizados/desconocidos se conserva el acceso completo al migrar.
+    return 'ads.enterprise';
+  }
+
   legacyKeys(row) {
     const source = Array.isArray(row.featureKeys) ? row.featureKeys.map(String) : [];
     if (!Array.isArray(row.featureKeys)) return this.allKeys();
     const next = new Set(['dashboard.statistics']); // Resumen era visible para todos los planes anteriores.
+    next.add(this.legacyAdvertisingKey(row));
     if (Number(row.maxStores || 1) > 1) next.add('management.stores');
     for (const key of source) {
       if (this.isKnown(key)) next.add(key);

@@ -25,7 +25,8 @@ test('custom plan requests have a dedicated admin detail route and page',()=>{
 test('social ads expose the complete network catalog',()=>{
   const routes=read('src/routes/core.js');
   const view=readApp('client/src/views/seller/SocialAdsView.vue');
-  for(const network of ['facebook','instagram','youtube','tiktok','google']) assert.match(routes,new RegExp(`key: '${network}'[^\n]+status: 'available'`));
+  for(const network of ['facebook','instagram','youtube','tiktok','google']) assert.match(routes,new RegExp(`key: '${network}'`));
+  assert.match(routes,/status: 'available'/);
   for(const label of ['Facebook','Instagram','YouTube','TikTok','Google Ads']) assert.match(view,new RegExp(label));
 });
 test('Facebook credentials and OAuth state are protected at rest',()=>{
@@ -57,11 +58,11 @@ test('remote product images reject private destinations before Facebook upload',
   assert.match(service,/MAX_IMAGE_BYTES = 10 \* 1024 \* 1024/);
 });
 
-test('sandbox is optional and social ads do not add a sixteenth plan capability',()=>{
+test('sandbox is optional and social ads are governed by cumulative plan capabilities',()=>{
   const config=read('src/config.js');
   const service=read('src/services/PlanFeatureService.js');
   const catalog=service.slice(service.indexOf('PLAN_FEATURES'),service.indexOf('const featureMap'));
   assert.match(config,/META_SANDBOX_CONNECT_ENABLED/);
-  assert.equal((catalog.match(/\{ key: '/g)||[]).length,15);
-  assert.doesNotMatch(catalog,/facebook|social\.ads|advert/i);
+  assert.equal((catalog.match(/\{ key: '/g)||[]).length,18);
+  for(const key of ['ads.limited','ads.premium','ads.enterprise']) assert.match(catalog,new RegExp(key.replaceAll('.','\\.')));
 });

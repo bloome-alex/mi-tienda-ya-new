@@ -58,7 +58,7 @@ export class QuotaService {
       try {
         const store = await Store.create({ ...data, _id: documentId, ownerSlot, ...(data.active ? { publicationSlot } : {}) });
         await this.reconcilePublications(store.ownerId);
-        return Store.findById(store._id).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+        return Store.findById(store._id).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
       } catch (error) {
         if (reuseSlug && error.code === 11000) {
           const existing = await Store.findOne({ slug: data.slug, ownerId: data.ownerId, ...present });
@@ -91,7 +91,7 @@ export class QuotaService {
       try {
         await store.save();
         if (ownerChanged || activating) await this.reconcilePublications(store.ownerId);
-        return Store.findById(store._id).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret');
+        return Store.findById(store._id).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
       } catch (error) { if (!quotaDuplicate(error)) throw error; }
     }
     throw new AppError('La cuota de tiendas cambió. Actualizá e intentá nuevamente.', 409, 'QUOTA_BUSY');

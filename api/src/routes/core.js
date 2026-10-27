@@ -19,7 +19,7 @@ import { domainService } from '../services/DomainService.js';
 import { subscriptionService } from '../services/SubscriptionService.js';
 import { subscriptionSupportService } from '../services/SubscriptionSupportService.js';
 import { sellerMailService } from '../services/SellerMailService.js';
-import { planFeatureService } from '../services/PlanFeatureService.js';
+import { planFeatureService, PLAN_FEATURE_SCHEMA_VERSION } from '../services/PlanFeatureService.js';
 import { storeTransferService } from '../services/StoreTransferService.js';
 import { storeManagementService } from '../services/StoreManagementService.js';
 import { customPlanRequestService } from '../services/CustomPlanRequestService.js';
@@ -28,6 +28,8 @@ import { instagramAdsService } from '../services/InstagramAdsService.js';
 import { googleAdsService } from '../services/GoogleAdsService.js';
 import { youtubeAdsService } from '../services/YouTubeAdsService.js';
 import { tiktokAdsService } from '../services/TikTokAdsService.js';
+import { mercadoPagoAccountService } from '../services/MercadoPagoAccountService.js';
+import { commercePlanLimitService } from '../services/CommercePlanLimitService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -107,7 +109,7 @@ const planSchema = z.object({
   durationDays: integer(3660).refine(n => n > 0).default(30), featureKeys: z.array(featureKey).max(50).default([]),
   featurePresentation: z.array(z.object({ key: featureKey, title: text(120).default(''), description: text(500).default('') })).max(50).default([]),
   inheritsPlanId: objectId.nullable().optional().default(null), maxStores: integer(1000).refine(n => n > 0).default(1),
-  maxProducts: integer().default(100), active: trueBoolean.default(true), visible: trueBoolean.default(true), featured: trueBoolean.default(false),
+  maxProducts: integer().default(100), maxPaymentMethods: integer(20).default(3), maxDeliveryMethods: integer(20).default(3), active: trueBoolean.default(true), visible: trueBoolean.default(true), featured: trueBoolean.default(false),
   sortOrder: z.coerce.number().int().min(-1000).max(1000).default(0),
 });
 const planPayload = body => {
@@ -115,7 +117,7 @@ const planPayload = body => {
   if (Object.prototype.hasOwnProperty.call(body, 'featureKeys')) {
     payload.featureKeys = planFeatureService.normalize(body.featureKeys);
     payload.features = payload.featureKeys.map(key => planFeatureService.label(key));
-    payload.featureSchemaVersion = 2;
+    payload.featureSchemaVersion = PLAN_FEATURE_SCHEMA_VERSION;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'featurePresentation')) payload.featurePresentation = planFeatureService.normalizePresentation(body.featurePresentation, payload.featureKeys || body.featureKeys);
   return payload;
@@ -309,6 +311,22 @@ router.get('/admin/whatsapp/status', requireAdmin, (_req, res) => ok(res, whatsa
 router.post('/admin/whatsapp/connect', requireAdmin, asyncHandler(async (req, res) => { const result = await whatsappService.connect(); await audit(req, 'whatsapp.connect', 'integration', 'whatsapp'); ok(res, result); }));
 router.post('/admin/whatsapp/disconnect', requireAdmin, asyncHandler(async (req, res) => { const result = await whatsappService.disconnect(); await audit(req, 'whatsapp.disconnect', 'integration', 'whatsapp'); ok(res, result); }));
 
+const SOCIAL_AD_FEATURES = Object.freeze({
+  facebook: 'ads.limited',
+  instagram: 'ads.limited',
+  google: 'ads.premium',
+  youtube: 'ads.enterprise',
+  tiktok: 'ads.enterprise',
+});
+const SOCIAL_AD_NETWORKS = Object.freeze([
+  { key: 'facebook', label: 'Facebook', featureKey: SOCIAL_AD_FEATURES.facebook, service: facebookAdsService },
+  { key: 'instagram', label: 'Instagram', featureKey: SOCIAL_AD_FEATURES.instagram, service: instagramAdsService },
+  { key: 'google', label: 'Google Ads', featureKey: SOCIAL_AD_FEATURES.google, service: googleAdsService },
+  { key: 'youtube', label: 'YouTube', featureKey: SOCIAL_AD_FEATURES.youtube, service: youtubeAdsService },
+  { key: 'tiktok', label: 'TikTok', featureKey: SOCIAL_AD_FEATURES.tiktok, service: tiktokAdsService },
+]);
+const socialFeature = provider => SOCIAL_AD_FEATURES[provider];
+
 router.get('/social/facebook/callback', requireAuth, asyncHandler(async (req, res) => {
   const target = new URL('/app/social', config.appUrl);
   if (req.query.error) {
@@ -318,6 +336,7 @@ router.get('/social/facebook/callback', requireAuth, asyncHandler(async (req, re
   }
   try {
     const body = z.object({ code: z.string().min(1), state: z.string().min(1) }).parse(req.query);
+    await assertPlanFeature(req.user, socialFeature('facebook'));
     const store = await facebookAdsService.completeOAuth({ ...body, user: req.user });
     await AuditService.log({ actorId: req.user._id, actor: req.user, storeId: store._id, store, action: 'social.facebook.connected', entity: 'integration', entityId: 'facebook', details: { mode: 'oauth' } });
     target.searchParams.set('facebook', 'connected');
@@ -338,6 +357,7 @@ router.get('/social/instagram/callback', requireAuth, asyncHandler(async (req, r
   }
   try {
     const body = z.object({ code: z.string().min(1), state: z.string().min(1) }).parse(req.query);
+    await assertPlanFeature(req.user, socialFeature('instagram'));
     const store = await instagramAdsService.completeOAuth({ ...body, user: req.user });
     await AuditService.log({ actorId: req.user._id, actor: req.user, storeId: store._id, store, action: 'social.instagram.connected', entity: 'integration', entityId: 'instagram', details: { mode: 'oauth' } });
     target.searchParams.set('instagram', 'connected');
@@ -360,6 +380,7 @@ const socialOAuthCallback = (provider, service, label, { codeParam = 'code' } = 
     const state = z.string().min(1).parse(req.query.state);
     const rawCode = req.query[codeParam] || req.query.code || req.query.auth_code;
     const code = z.string().min(1).parse(rawCode);
+    await assertPlanFeature(req.user, socialFeature(provider));
     const store = await service.completeOAuth({ state, code, authCode: code, user: req.user });
     await AuditService.log({ actorId: req.user._id, actor: req.user, storeId: store._id, store, action: `social.${provider}.connected`, entity: 'integration', entityId: provider, details: { mode: 'oauth' } });
     target.searchParams.set(provider, 'connected');
@@ -378,10 +399,10 @@ const storeSchema = z.object({ ownerId: objectId, name: text(120).min(1), slug: 
 async function validateStoreOwner(ownerId) { const user = await User.findOne({ _id: ownerId, role: 'vendedor', active: true }); if (!user) throw new AppError('Seleccioná un vendedor activo.', 422); return user; }
 router.get('/admin/stores', requireAdmin, asyncHandler(async (req, res) => {
   const { page, limit } = pagination(req.query); const filter = { archived: { $ne: true }, ...searchFilter(req.query, ['name', 'slug']) };
-  const [items, total] = await Promise.all([Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret').populate('ownerId', 'name email').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit), Store.countDocuments(filter)]);
+  const [items, total] = await Promise.all([Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret').populate('ownerId', 'name email').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit), Store.countDocuments(filter)]);
   ok(res, items.map(safeStore), 200, { page, limit, total });
 }));
-router.get('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Store.findOne({ _id: req.params.id, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret'); if (!item) throw new AppError('Tienda no encontrada.', 404); ok(res, safeStore(item)); }));
+router.get('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Store.findOne({ _id: req.params.id, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret'); if (!item) throw new AppError('Tienda no encontrada.', 404); ok(res, safeStore(item)); }));
 router.post('/admin/stores', requireAdmin, asyncHandler(async (req, res) => {
   const body = storeSchema.parse(req.body); const owner = await validateStoreOwner(body.ownerId);
   const item = await quotaService.createStore({ ...body, contact: { email: owner.email }, payments: [{ id: 'cash', type: 'cash', name: 'Efectivo', deliveryIds: ['pickup'], active: true }] });
@@ -397,7 +418,7 @@ async function updateStore(req, item, body) {
   await audit(req, 'store.updated', 'store', saved._id, { changes: AuditService.changes(before, safeStore(saved), Object.keys(body)) }, saved._id);
   return safeStore(saved);
 }
-router.put('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Store.findOne({ _id: req.params.id, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret'); if (!item) throw new AppError('Tienda no encontrada.', 404); ok(res, await updateStore(req, item, parsePatch(storeSchema, req.body))); }));
+router.put('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => { const item = await Store.findOne({ _id: req.params.id, archived: { $ne: true } }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret'); if (!item) throw new AppError('Tienda no encontrada.', 404); ok(res, await updateStore(req, item, parsePatch(storeSchema, req.body))); }));
 router.delete('/admin/stores/:id', requireAdmin, asyncHandler(async (req, res) => {
   const before = await Store.findByIdAndUpdate(req.params.id, { $set: { active: false, archived: true }, $inc: { __v: 1 } }, { returnDocument: 'before' });
   if (!before) throw new AppError('Tienda no encontrada.', 404);
@@ -434,7 +455,7 @@ router.delete('/me/stores/:id', requireAuth, asyncHandler(async (req, res) => {
 
 router.get('/stores', requireAuth, asyncHandler(async (req, res) => {
   const filter = { archived: { $ne: true }, ...(req.user.role === 'admin' ? {} : { ownerId: req.user._id }) };
-  const items = await Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret').sort({ createdAt: 1 }); ok(res, items.map(safeStore));
+  const items = await Store.find(filter).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret').sort({ createdAt: 1 }); ok(res, items.map(safeStore));
 }));
 router.get('/stores/:storeId', requireStoreAccess, (req, res) => ok(res, safeStore(req.store)));
 router.get('/stores/:storeId/domain', requireStoreAccess, (req, res) => ok(res, domainService.publicDomain(req.store)));
@@ -495,60 +516,62 @@ router.put('/stores/:storeId/design', requireStoreAccess, requireFeature('design
   await audit(req, 'store.design.updated', 'store', req.store._id, { changes: AuditService.changes({ design: before }, { design: validated }) });
   ok(res, safeStore(req.store));
 }));
-router.get('/stores/:storeId/social', requireStoreAccess, asyncHandler(async (req, res) => {
-  const [facebook, instagram, google, youtube, tiktok] = await Promise.all([
-    facebookAdsService.status(req.store._id), instagramAdsService.status(req.store._id), googleAdsService.status(req.store._id), youtubeAdsService.status(req.store._id), tiktokAdsService.status(req.store._id),
-  ]);
-  ok(res, { networks: [{ key: 'facebook', label: 'Facebook', status: 'available' }, { key: 'instagram', label: 'Instagram', status: 'available' }, { key: 'youtube', label: 'YouTube', status: 'available' }, { key: 'tiktok', label: 'TikTok', status: 'available' }, { key: 'google', label: 'Google Ads', status: 'available' }], facebook, instagram, google, youtube, tiktok });
+router.get('/stores/:storeId/social', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
+  const featureKeys = req.user.role === 'admin' ? planFeatureService.allKeys() : await planFeatureService.keysForUser(req.user);
+  const allowed = SOCIAL_AD_NETWORKS.filter(network => featureKeys.includes(network.featureKey));
+  const statuses = await Promise.all(allowed.map(network => network.service.status(req.store._id)));
+  const payload = { networks: allowed.map(({ key, label, featureKey }) => ({ key, label, status: 'available', featureKey })) };
+  allowed.forEach((network, index) => { payload[network.key] = statuses[index]; });
+  ok(res, payload);
 }));
-router.post('/stores/:storeId/social/facebook/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await facebookAdsService.createOAuthUrl(req.store, req.user))));
+router.post('/stores/:storeId/social/facebook/connect', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => ok(res, await facebookAdsService.createOAuthUrl(req.store, req.user))));
 router.post('/stores/:storeId/social/facebook/sandbox', requireAdmin, requireStoreAccess, asyncHandler(async (req, res) => {
   const body = z.object({ accessToken: z.string().trim().min(20).max(4096), adAccountId: text(80).min(1), pageId: text(80).min(1) }).parse(req.body);
   const integration = await facebookAdsService.connectSandbox(req.store, req.user, body);
   await audit(req, 'social.facebook.connected', 'integration', 'facebook', { mode: 'sandbox', adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId });
   ok(res, integration);
 }));
-router.post('/stores/:storeId/social/facebook/refresh', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await facebookAdsService.refresh(req.store._id))));
-router.put('/stores/:storeId/social/facebook/assets', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/facebook/refresh', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => ok(res, await facebookAdsService.refresh(req.store._id))));
+router.put('/stores/:storeId/social/facebook/assets', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
   const body = z.object({ adAccountId: text(80).min(1), pageId: text(80).min(1) }).parse(req.body);
   const integration = await facebookAdsService.selectAssets(req.store._id, body);
   await audit(req, 'social.facebook.assets.updated', 'integration', 'facebook', { adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId });
   ok(res, integration);
 }));
-router.delete('/stores/:storeId/social/facebook', requireStoreAccess, asyncHandler(async (req, res) => {
+router.delete('/stores/:storeId/social/facebook', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
   const result = await facebookAdsService.disconnect(req.store._id);
   await audit(req, 'social.facebook.disconnected', 'integration', 'facebook');
   ok(res, result);
 }));
-router.get('/stores/:storeId/social/facebook/products', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await facebookAdsService.products(req.store))));
-router.post('/stores/:storeId/social/facebook/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/social/facebook/products', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => ok(res, await facebookAdsService.products(req.store))));
+router.post('/stores/:storeId/social/facebook/ads', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
   const body = z.object({ productId: objectId, name: text(120).min(1), primaryText: text(1000).min(1), headline: text(255).min(1), dailyBudget: z.coerce.number().finite().positive().max(999999999), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default('AR') }).parse(req.body);
   const item = await facebookAdsService.createTrafficAd(req.store, req.user, body);
   await audit(req, 'social.facebook.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status });
   ok(res, item, 201);
 }));
 
-router.post('/stores/:storeId/social/instagram/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.createOAuthUrl(req.store, req.user))));
+router.post('/stores/:storeId/social/instagram/connect', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => ok(res, await instagramAdsService.createOAuthUrl(req.store, req.user))));
 router.post('/stores/:storeId/social/instagram/sandbox', requireAdmin, requireStoreAccess, asyncHandler(async (req, res) => {
   const body = z.object({ accessToken: z.string().trim().min(20).max(4096), adAccountId: text(80).min(1), pageId: text(80).min(1), instagramUserId: text(80).min(1) }).parse(req.body);
   const integration = await instagramAdsService.connectSandbox(req.store, req.user, body);
   await audit(req, 'social.instagram.connected', 'integration', 'instagram', { mode: 'sandbox', adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId, instagramUserId: integration.selectedInstagramUserId });
   ok(res, integration);
 }));
-router.post('/stores/:storeId/social/instagram/refresh', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.refresh(req.store._id))));
-router.put('/stores/:storeId/social/instagram/assets', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/instagram/refresh', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => ok(res, await instagramAdsService.refresh(req.store._id))));
+router.put('/stores/:storeId/social/instagram/assets', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
   const body = z.object({ adAccountId: text(80).min(1), pageId: text(80).min(1), instagramUserId: text(80).min(1) }).parse(req.body);
   const integration = await instagramAdsService.selectAssets(req.store._id, body);
   await audit(req, 'social.instagram.assets.updated', 'integration', 'instagram', { adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId, instagramUserId: integration.selectedInstagramUserId });
   ok(res, integration);
 }));
-router.delete('/stores/:storeId/social/instagram', requireStoreAccess, asyncHandler(async (req, res) => {
+router.delete('/stores/:storeId/social/instagram', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
   const result = await instagramAdsService.disconnect(req.store._id);
   await audit(req, 'social.instagram.disconnected', 'integration', 'instagram');
   ok(res, result);
 }));
-router.get('/stores/:storeId/social/instagram/products', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.products(req.store))));
-router.post('/stores/:storeId/social/instagram/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+router.get('/stores/:storeId/social/instagram/products', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => ok(res, await instagramAdsService.products(req.store))));
+router.post('/stores/:storeId/social/instagram/ads', requireStoreAccess, requireFeature('ads.limited'), asyncHandler(async (req, res) => {
   const body = z.object({ productId: objectId, name: text(120).min(1), primaryText: text(1000).min(1), headline: text(255).min(1), dailyBudget: z.coerce.number().finite().positive().max(999999999), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default('AR') }).parse(req.body);
   const item = await instagramAdsService.createTrafficAd(req.store, req.user, body);
   await audit(req, 'social.instagram.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status });
@@ -557,37 +580,38 @@ router.post('/stores/:storeId/social/instagram/ads', requireStoreAccess, asyncHa
 
 const commonProductAdSchema = z.object({ productId: objectId, name: text(120).min(1), primaryText: text(1000).min(1), headline: text(255).min(1), dailyBudget: z.coerce.number().finite().positive().max(999999999), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default('AR') });
 const registerGoogleLikeRoutes = (provider, service) => {
-  router.post(`/stores/:storeId/social/${provider}/connect`, requireStoreAccess, asyncHandler(async (req, res) => ok(res, await service.createOAuthUrl(req.store, req.user))));
-  router.post(`/stores/:storeId/social/${provider}/refresh`, requireStoreAccess, asyncHandler(async (req, res) => ok(res, await service.refresh(req.store._id))));
-  router.put(`/stores/:storeId/social/${provider}/assets`, requireStoreAccess, asyncHandler(async (req, res) => {
+  const feature = socialFeature(provider);
+  router.post(`/stores/:storeId/social/${provider}/connect`, requireStoreAccess, requireFeature(feature), asyncHandler(async (req, res) => ok(res, await service.createOAuthUrl(req.store, req.user))));
+  router.post(`/stores/:storeId/social/${provider}/refresh`, requireStoreAccess, requireFeature(feature), asyncHandler(async (req, res) => ok(res, await service.refresh(req.store._id))));
+  router.put(`/stores/:storeId/social/${provider}/assets`, requireStoreAccess, requireFeature(feature), asyncHandler(async (req, res) => {
     const body = z.object({ adAccountId: text(80).min(1) }).parse(req.body); const integration = await service.selectAssets(req.store._id, body);
     await audit(req, `social.${provider}.assets.updated`, 'integration', provider, { adAccountId: integration.selectedAdAccountId, managerCustomerId: integration.selectedManagerCustomerId || '' }); ok(res, integration);
   }));
-  router.delete(`/stores/:storeId/social/${provider}`, requireStoreAccess, asyncHandler(async (req, res) => { const result = await service.disconnect(req.store._id); await audit(req, `social.${provider}.disconnected`, 'integration', provider); ok(res, result); }));
-  router.get(`/stores/:storeId/social/${provider}/products`, requireStoreAccess, asyncHandler(async (req, res) => ok(res, await service.products(req.store))));
+  router.delete(`/stores/:storeId/social/${provider}`, requireStoreAccess, requireFeature(feature), asyncHandler(async (req, res) => { const result = await service.disconnect(req.store._id); await audit(req, `social.${provider}.disconnected`, 'integration', provider); ok(res, result); }));
+  router.get(`/stores/:storeId/social/${provider}/products`, requireStoreAccess, requireFeature(feature), asyncHandler(async (req, res) => ok(res, await service.products(req.store))));
 };
 registerGoogleLikeRoutes('google', googleAdsService);
 registerGoogleLikeRoutes('youtube', youtubeAdsService);
-router.post('/stores/:storeId/social/google/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/google/ads', requireStoreAccess, requireFeature('ads.premium'), asyncHandler(async (req, res) => {
   const item = await googleAdsService.createTrafficAd(req.store, req.user, commonProductAdSchema.parse(req.body));
   await audit(req, 'social.google.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status }); ok(res, item, 201);
 }));
-router.post('/stores/:storeId/social/youtube/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/youtube/ads', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => {
   const body = commonProductAdSchema.extend({ youtubeVideo: text(2048).min(1), logoUrl: z.union([z.string().trim().max(2048).regex(/^https?:\/\//i, 'Usá una URL HTTP/HTTPS.'), z.literal('')]).optional().default('') }).parse(req.body);
   const item = await youtubeAdsService.createTrafficAd(req.store, req.user, body);
   await audit(req, 'social.youtube.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status }); ok(res, item, 201);
 }));
 
-router.post('/stores/:storeId/social/tiktok/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await tiktokAdsService.createOAuthUrl(req.store, req.user))));
-router.post('/stores/:storeId/social/tiktok/refresh', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await tiktokAdsService.refresh(req.store._id))));
-router.put('/stores/:storeId/social/tiktok/assets', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/tiktok/connect', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => ok(res, await tiktokAdsService.createOAuthUrl(req.store, req.user))));
+router.post('/stores/:storeId/social/tiktok/refresh', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => ok(res, await tiktokAdsService.refresh(req.store._id))));
+router.put('/stores/:storeId/social/tiktok/assets', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => {
   const body = z.object({ adAccountId: text(80).min(1), identityId: text(160).optional().default(''), identityType: text(80).optional().default('') }).parse(req.body);
   const integration = await tiktokAdsService.selectAssets(req.store._id, body);
   await audit(req, 'social.tiktok.assets.updated', 'integration', 'tiktok', { adAccountId: integration.selectedAdAccountId, identityId: integration.selectedIdentityId, identityType: integration.selectedIdentityType }); ok(res, integration);
 }));
-router.delete('/stores/:storeId/social/tiktok', requireStoreAccess, asyncHandler(async (req, res) => { const result = await tiktokAdsService.disconnect(req.store._id); await audit(req, 'social.tiktok.disconnected', 'integration', 'tiktok'); ok(res, result); }));
-router.get('/stores/:storeId/social/tiktok/products', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await tiktokAdsService.products(req.store))));
-router.post('/stores/:storeId/social/tiktok/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+router.delete('/stores/:storeId/social/tiktok', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => { const result = await tiktokAdsService.disconnect(req.store._id); await audit(req, 'social.tiktok.disconnected', 'integration', 'tiktok'); ok(res, result); }));
+router.get('/stores/:storeId/social/tiktok/products', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => ok(res, await tiktokAdsService.products(req.store))));
+router.post('/stores/:storeId/social/tiktok/ads', requireStoreAccess, requireFeature('ads.enterprise'), asyncHandler(async (req, res) => {
   const body = commonProductAdSchema.extend({ videoId: text(160).min(1) }).parse(req.body); const item = await tiktokAdsService.createTrafficAd(req.store, req.user, body);
   await audit(req, 'social.tiktok.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status }); ok(res, item, 201);
 }));
@@ -605,32 +629,72 @@ router.put('/stores/:storeId/contact', requireStoreAccess, asyncHandler(async (r
   ok(res, safeStore(req.store));
 }));
 const deliverySchema = z.object({ id: text(60).min(1), type: z.enum(['pickup', 'shipping', 'digital', 'custom']), name: text(120).min(1), description: text(1000).default(''), price: money.default(0), active: trueBoolean.default(true) });
-const paymentSchema = z.object({ id: text(60).min(1), type: z.enum(['cash', 'transfer', 'mercadopago']), name: text(120).min(1), instructions: text(4000).default(''), deliveryIds: z.array(text(60)).max(20).default([]), active: trueBoolean.default(true), bank: z.object({ holder: text(180).optional(), bank: text(180).optional(), cbu: text(40).optional(), alias: text(60).optional(), cuit: text(30).optional() }).optional() });
+const paymentSchema = z.object({ id: text(60).min(1), type: z.enum(['cash', 'transfer', 'mercadopago']), name: text(120).min(1), instructions: text(4000).default(''), deliveryIds: z.array(text(60)).max(20).default([]), active: trueBoolean.default(true), mercadoPagoAccountId: text(80).default(''), bank: z.object({ holder: text(180).optional(), bank: text(180).optional(), cbu: text(40).optional(), alias: text(60).optional(), cuit: text(30).optional() }).optional() });
+const mercadoPagoAccountCreateSchema = z.object({ name: text(120).min(1), accessToken: text(1000).min(1).optional(), webhookSecret: text(1000).min(1).optional(), sandbox: trueBoolean.default(true) });
+const mercadoPagoAccountUpdateSchema = z.object({ name: text(120).min(1).optional(), accessToken: text(1000).min(1).optional(), webhookSecret: text(1000).min(1).optional(), sandbox: trueBoolean.optional(), clearCredentials: trueBoolean.optional() }).refine(value => Object.keys(value).length > 0, 'No hay cambios para guardar.');
+
+router.post('/stores/:storeId/mercadopago/accounts', requireStoreAccess, requireFeature('payments.mercadopago'), asyncHandler(async (req, res) => {
+  const before = safeStore(req.store);
+  const item = await mercadoPagoAccountService.create(req.store, mercadoPagoAccountCreateSchema.parse(req.body));
+  await audit(req, 'store.mercadopago.account.created', 'store', req.store._id, { accountId: item.id, accountName: item.name, changes: AuditService.changes(before, safeStore(req.store), ['integrations']) });
+  ok(res, item, 201);
+}));
+router.put('/stores/:storeId/mercadopago/accounts/:accountId', requireStoreAccess, requireFeature('payments.mercadopago'), asyncHandler(async (req, res) => {
+  const before = safeStore(req.store);
+  const item = await mercadoPagoAccountService.update(req.store, req.params.accountId, mercadoPagoAccountUpdateSchema.parse(req.body));
+  await audit(req, 'store.mercadopago.account.updated', 'store', req.store._id, { accountId: item.id, accountName: item.name, credentialsUpdated: Boolean(req.body.accessToken || req.body.webhookSecret || req.body.clearCredentials), changes: AuditService.changes(before, safeStore(req.store), ['integrations']) });
+  ok(res, item);
+}));
+router.delete('/stores/:storeId/mercadopago/accounts/:accountId', requireStoreAccess, requireFeature('payments.mercadopago'), asyncHandler(async (req, res) => {
+  const before = safeStore(req.store);
+  const result = await mercadoPagoAccountService.remove(req.store, req.params.accountId);
+  await audit(req, 'store.mercadopago.account.removed', 'store', req.store._id, { accountId: req.params.accountId, changes: AuditService.changes(before, safeStore(req.store), ['integrations']) });
+  ok(res, result);
+}));
+
 router.put('/stores/:storeId/payments', requireStoreAccess, asyncHandler(async (req, res) => {
   const body = z.object({ expectedUpdatedAt: z.string().datetime().optional(), payments: z.array(paymentSchema).max(20), deliveries: z.array(deliverySchema).max(20), mercadopago: z.object({ accessToken: text(1000).optional(), webhookSecret: text(1000).optional(), sandbox: trueBoolean.optional(), clearCredentials: trueBoolean.optional() }).optional() }).parse(req.body);
   if (body.expectedUpdatedAt && new Date(body.expectedUpdatedAt).getTime() !== req.store.updatedAt.getTime()) throw new AppError('La configuración de la tienda cambió. Recargá e intentá nuevamente.', 409, 'STORE_CONFLICT');
   if (new Set(body.payments.map(item => item.id)).size !== body.payments.length || new Set(body.deliveries.map(item => item.id)).size !== body.deliveries.length) throw new AppError('Los identificadores de cobros y entregas deben ser únicos.', 422);
   const deliveryIds = new Set(body.deliveries.map(item => item.id));
   if (body.payments.some(payment => payment.deliveryIds.some(id => !deliveryIds.has(id)))) throw new AppError('Un medio de pago referencia una entrega que no existe.', 422);
+
+  const entitlement = await EntitlementService.forUser(req.user);
+  commercePlanLimitService.assertUpdate({ currentPayments: req.store.payments || [], currentDeliveries: req.store.deliveries || [], nextPayments: body.payments, nextDeliveries: body.deliveries, entitlement });
+
   const currentPayments = (req.store.payments || []).map(item => item.toObject ? item.toObject() : item);
   const currentMercadoPago = currentPayments.filter(item => item.type === 'mercadopago');
   const nextMercadoPago = body.payments.filter(item => item.type === 'mercadopago');
   const credentialsChanged = Boolean(body.mercadopago && (body.mercadopago.clearCredentials || body.mercadopago.accessToken || body.mercadopago.webhookSecret || body.mercadopago.sandbox !== undefined));
-  const mercadoPagoChanged = !jsonSame(currentMercadoPago, nextMercadoPago) || credentialsChanged;
-  if (mercadoPagoChanged) await assertPlanFeature(req.user, 'payments.mercadopago');
+  // Un downgrade nunca debe dejar al vendedor atrapado: quitar/convertir una forma
+  // Checkout Pro o simplemente deshabilitarla sigue permitido. Crear, reactivar o
+  // modificar una forma que use Mercado Pago sí requiere la funcionalidad del plan.
+  const mercadoPagoRequiresFeature = credentialsChanged || nextMercadoPago.some(next => {
+    const current = currentMercadoPago.find(item => item.id === next.id);
+    if (!current) return true;
+    if (jsonSame(current, next)) return false;
+    const disabledOnly = current.active === true && next.active === false && jsonSame({ ...current, active: false }, next);
+    return !disabledOnly;
+  });
+  if (mercadoPagoRequiresFeature) await assertPlanFeature(req.user, 'payments.mercadopago');
+
   const before = safeStore(req.store);
-  req.store.payments = body.payments; req.store.deliveries = body.deliveries;
-  if (body.mercadopago) {
-    const mp = req.store.integrations?.mercadopago || {};
-    if (body.mercadopago.clearCredentials) { mp.accessToken = ''; mp.webhookSecret = ''; }
-    if (body.mercadopago.accessToken) mp.accessToken = encryptSecret(body.mercadopago.accessToken);
-    if (body.mercadopago.webhookSecret) mp.webhookSecret = encryptSecret(body.mercadopago.webhookSecret);
-    if (body.mercadopago.sandbox !== undefined) mp.sandbox = body.mercadopago.sandbox;
-    req.store.integrations = { mercadopago: mp };
+  req.store.payments = body.payments;
+  req.store.deliveries = body.deliveries;
+  if (body.mercadopago) await mercadoPagoAccountService.applyLegacyPayload(req.store, body.mercadopago);
+
+  const accounts = mercadoPagoAccountService.safeAccounts(req.store);
+  for (const payment of req.store.payments || []) {
+    if (payment.type !== 'mercadopago') { payment.mercadoPagoAccountId = ''; continue; }
+    if (!payment.mercadoPagoAccountId && accounts.length === 1) payment.mercadoPagoAccountId = accounts[0].id;
+    if (!payment.mercadoPagoAccountId) throw new AppError('Seleccioná una cuenta de Mercado Pago para cada forma de pago Checkout Pro.', 422, 'MP_ACCOUNT_REQUIRED');
+    if (!accounts.some(account => account.id === String(payment.mercadoPagoAccountId))) throw new AppError('La cuenta de Mercado Pago seleccionada no existe.', 422, 'MP_ACCOUNT_NOT_FOUND');
+    if (payment.active && !mercadoPagoAccountService.configured(req.store, payment.mercadoPagoAccountId)) throw new AppError('La cuenta de Mercado Pago seleccionada no está completamente configurada.', 422, 'MP_NOT_CONFIGURED');
   }
-  const canUseMercadoPago = req.user.role === 'admin' || await planFeatureService.has(req.user, 'payments.mercadopago');
-  if (canUseMercadoPago && body.payments.some(payment => payment.type === 'mercadopago' && payment.active) && (!req.store.integrations?.mercadopago?.accessToken || !req.store.integrations?.mercadopago?.webhookSecret)) throw new AppError('Configurá Access Token y secreto de Webhooks para habilitar Mercado Pago.', 422, 'MP_NOT_CONFIGURED');
-  await req.store.save(); await audit(req, 'store.payments.updated', 'store', req.store._id, { changes: AuditService.changes(before, safeStore(req.store), ['payments', 'deliveries', 'integrations']), credentialsUpdated: Boolean(body.mercadopago?.clearCredentials || body.mercadopago?.accessToken || body.mercadopago?.webhookSecret) }); ok(res, safeStore(req.store));
+
+  await req.store.save();
+  await audit(req, 'store.payments.updated', 'store', req.store._id, { changes: AuditService.changes(before, safeStore(req.store), ['payments', 'deliveries', 'integrations']), credentialsUpdated: credentialsChanged });
+  ok(res, safeStore(req.store));
 }));
 async function sellerSubscriptionPayload(user, { sync = false } = {}) {
   if (user.role !== 'vendedor') throw new AppError('Esta sección corresponde a vendedores.', 403, 'FORBIDDEN');

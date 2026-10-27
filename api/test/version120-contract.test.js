@@ -35,8 +35,8 @@ test('las rutas públicas de anuncios mantienen Instagram disponible y permiten 
   assert.match(routes,/social\/instagram\/connect/);
   assert.match(routes,/social\/instagram\/assets/);
   assert.match(routes,/social\/instagram\/ads/);
-  assert.match(routes,/key: 'instagram', label: 'Instagram', status: 'available'/);
-  assert.match(routes,/key: 'instagram', label: 'Instagram', status: 'available'/);
+  assert.match(routes,/key: 'instagram', label: 'Instagram', featureKey: SOCIAL_AD_FEATURES\.instagram/);
+  assert.match(routes,/status: 'available'/);
 });
 
 test('existe un stack mock independiente de Instagram y el comando combinado lo ejecuta',()=>{

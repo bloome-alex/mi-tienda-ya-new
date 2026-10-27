@@ -258,3 +258,15 @@ Cualquier capacidad vendible nueva debe agregarse al catálogo central y tener u
 - **Transferencia de tiendas:** el permiso `stores.transfer` permite iniciar una transferencia por email. Mientras esté pendiente la tienda continúa siendo del remitente y puede cancelarse.
 - **Aceptación:** exige una suscripción vigente y un cupo libre en `maxStores`; una prueba gratuita no alcanza para aceptar una tienda.
 - **Historial y devolución:** las tiendas transferidas permanecen en un historial y el receptor puede iniciar una devolución al dueño anterior mediante el mismo flujo pendiente/aceptación.
+
+## Publicidad y anuncios por plan
+
+Desde v1.22.0 el módulo **Redes y anuncios** se habilita por niveles acumulativos:
+
+| Nivel | Redes incluidas |
+|---|---|
+| Publicidad y Anuncios Limitado | Facebook Ads, Instagram Ads |
+| Publicidad y Anuncios Premium | Todo Limitado + Google Ads |
+| Publicidad y Anuncios Empresarial | Todo Premium + YouTube Ads, TikTok Ads |
+
+Un vendedor sin `ads.limited` no ve el acceso a Redes y anuncios. La API devuelve únicamente las redes habilitadas por el plan efectivo y cada endpoint vuelve a validar el permiso correspondiente. Administración conserva acceso completo.
