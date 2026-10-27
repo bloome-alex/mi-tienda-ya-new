@@ -85,6 +85,7 @@ export class DomainService {
       provisioningError: domain.provisioningError || '',
       provisioningEnabled: typeof this.provisioner?.enabled === 'function' ? this.provisioner.enabled() : true,
       publicUrl: this.publicUrl(store),
+      pathUrl: this.pathUrl(store),
       baseDomain: this.baseDomain(),
       cnameTarget: this.storefront.cnameTarget,
       verification: domain.customDomain && domain.verificationToken ? {

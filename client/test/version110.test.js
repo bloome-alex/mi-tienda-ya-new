@@ -16,7 +16,7 @@ test('pantalla de dominio permite URL clásica, subdominio y dominio propio', ()
   assert.match(view,/value="path"/);
   assert.match(view,/value="subdomain"/);
   assert.match(view,/value="custom"/);
-  assert.match(view,/Verificación DNS/);
+  assert.match(view,/Verificación (?:DNS|del dominio)/);
   assert.match(view,/\/domain\/verify/);
   assert.match(view,/CNAME \/ ALIAS/);
 });

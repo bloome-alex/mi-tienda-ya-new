@@ -25,6 +25,9 @@ import { storeManagementService } from '../services/StoreManagementService.js';
 import { customPlanRequestService } from '../services/CustomPlanRequestService.js';
 import { facebookAdsService } from '../services/FacebookAdsService.js';
 import { instagramAdsService } from '../services/InstagramAdsService.js';
+import { googleAdsService } from '../services/GoogleAdsService.js';
+import { youtubeAdsService } from '../services/YouTubeAdsService.js';
+import { tiktokAdsService } from '../services/TikTokAdsService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -345,6 +348,31 @@ router.get('/social/instagram/callback', requireAuth, asyncHandler(async (req, r
   return res.redirect(303, target.toString());
 }));
 
+const socialOAuthCallback = (provider, service, label, { codeParam = 'code' } = {}) => asyncHandler(async (req, res) => {
+  const target = new URL('/app/social', config.appUrl);
+  target.searchParams.set('network', provider);
+  if (req.query.error || req.query.error_code) {
+    target.searchParams.set(provider, 'error');
+    target.searchParams.set('message', String(req.query.error_description || req.query.error || `${label} canceló la autorización.`).slice(0, 300));
+    return res.redirect(303, target.toString());
+  }
+  try {
+    const state = z.string().min(1).parse(req.query.state);
+    const rawCode = req.query[codeParam] || req.query.code || req.query.auth_code;
+    const code = z.string().min(1).parse(rawCode);
+    const store = await service.completeOAuth({ state, code, authCode: code, user: req.user });
+    await AuditService.log({ actorId: req.user._id, actor: req.user, storeId: store._id, store, action: `social.${provider}.connected`, entity: 'integration', entityId: provider, details: { mode: 'oauth' } });
+    target.searchParams.set(provider, 'connected');
+  } catch (error) {
+    target.searchParams.set(provider, 'error');
+    target.searchParams.set('message', String(error.message || `No se pudo conectar ${label}.`).slice(0, 300));
+  }
+  return res.redirect(303, target.toString());
+});
+router.get('/social/google/callback', requireAuth, socialOAuthCallback('google', googleAdsService, 'Google Ads'));
+router.get('/social/youtube/callback', requireAuth, socialOAuthCallback('youtube', youtubeAdsService, 'YouTube Ads'));
+router.get('/social/tiktok/callback', requireAuth, socialOAuthCallback('tiktok', tiktokAdsService, 'TikTok Ads', { codeParam: 'auth_code' }));
+
 
 const storeSchema = z.object({ ownerId: objectId, name: text(120).min(1), slug: text(80).min(3).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Usá minúsculas, números y guiones.'), description: text(5000).default(''), active: trueBoolean.default(false) });
 async function validateStoreOwner(ownerId) { const user = await User.findOne({ _id: ownerId, role: 'vendedor', active: true }); if (!user) throw new AppError('Seleccioná un vendedor activo.', 422); return user; }
@@ -468,11 +496,13 @@ router.put('/stores/:storeId/design', requireStoreAccess, requireFeature('design
   ok(res, safeStore(req.store));
 }));
 router.get('/stores/:storeId/social', requireStoreAccess, asyncHandler(async (req, res) => {
-  const [facebook, instagram] = await Promise.all([facebookAdsService.status(req.store._id), instagramAdsService.status(req.store._id)]);
-  ok(res, { networks: [{ key: 'facebook', label: 'Facebook', status: 'available' }, { key: 'instagram', label: 'Instagram', status: 'available' }, { key: 'youtube', label: 'YouTube', status: 'soon' }, { key: 'tiktok', label: 'TikTok', status: 'soon' }, { key: 'google', label: 'Google Ads', status: 'soon' }], facebook, instagram });
+  const [facebook, instagram, google, youtube, tiktok] = await Promise.all([
+    facebookAdsService.status(req.store._id), instagramAdsService.status(req.store._id), googleAdsService.status(req.store._id), youtubeAdsService.status(req.store._id), tiktokAdsService.status(req.store._id),
+  ]);
+  ok(res, { networks: [{ key: 'facebook', label: 'Facebook', status: 'available' }, { key: 'instagram', label: 'Instagram', status: 'available' }, { key: 'youtube', label: 'YouTube', status: 'available' }, { key: 'tiktok', label: 'TikTok', status: 'available' }, { key: 'google', label: 'Google Ads', status: 'available' }], facebook, instagram, google, youtube, tiktok });
 }));
 router.post('/stores/:storeId/social/facebook/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await facebookAdsService.createOAuthUrl(req.store, req.user))));
-router.post('/stores/:storeId/social/facebook/sandbox', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/facebook/sandbox', requireAdmin, requireStoreAccess, asyncHandler(async (req, res) => {
   const body = z.object({ accessToken: z.string().trim().min(20).max(4096), adAccountId: text(80).min(1), pageId: text(80).min(1) }).parse(req.body);
   const integration = await facebookAdsService.connectSandbox(req.store, req.user, body);
   await audit(req, 'social.facebook.connected', 'integration', 'facebook', { mode: 'sandbox', adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId });
@@ -499,7 +529,7 @@ router.post('/stores/:storeId/social/facebook/ads', requireStoreAccess, asyncHan
 }));
 
 router.post('/stores/:storeId/social/instagram/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.createOAuthUrl(req.store, req.user))));
-router.post('/stores/:storeId/social/instagram/sandbox', requireStoreAccess, asyncHandler(async (req, res) => {
+router.post('/stores/:storeId/social/instagram/sandbox', requireAdmin, requireStoreAccess, asyncHandler(async (req, res) => {
   const body = z.object({ accessToken: z.string().trim().min(20).max(4096), adAccountId: text(80).min(1), pageId: text(80).min(1), instagramUserId: text(80).min(1) }).parse(req.body);
   const integration = await instagramAdsService.connectSandbox(req.store, req.user, body);
   await audit(req, 'social.instagram.connected', 'integration', 'instagram', { mode: 'sandbox', adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId, instagramUserId: integration.selectedInstagramUserId });
@@ -523,6 +553,43 @@ router.post('/stores/:storeId/social/instagram/ads', requireStoreAccess, asyncHa
   const item = await instagramAdsService.createTrafficAd(req.store, req.user, body);
   await audit(req, 'social.instagram.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status });
   ok(res, item, 201);
+}));
+
+const commonProductAdSchema = z.object({ productId: objectId, name: text(120).min(1), primaryText: text(1000).min(1), headline: text(255).min(1), dailyBudget: z.coerce.number().finite().positive().max(999999999), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default('AR') });
+const registerGoogleLikeRoutes = (provider, service) => {
+  router.post(`/stores/:storeId/social/${provider}/connect`, requireStoreAccess, asyncHandler(async (req, res) => ok(res, await service.createOAuthUrl(req.store, req.user))));
+  router.post(`/stores/:storeId/social/${provider}/refresh`, requireStoreAccess, asyncHandler(async (req, res) => ok(res, await service.refresh(req.store._id))));
+  router.put(`/stores/:storeId/social/${provider}/assets`, requireStoreAccess, asyncHandler(async (req, res) => {
+    const body = z.object({ adAccountId: text(80).min(1) }).parse(req.body); const integration = await service.selectAssets(req.store._id, body);
+    await audit(req, `social.${provider}.assets.updated`, 'integration', provider, { adAccountId: integration.selectedAdAccountId, managerCustomerId: integration.selectedManagerCustomerId || '' }); ok(res, integration);
+  }));
+  router.delete(`/stores/:storeId/social/${provider}`, requireStoreAccess, asyncHandler(async (req, res) => { const result = await service.disconnect(req.store._id); await audit(req, `social.${provider}.disconnected`, 'integration', provider); ok(res, result); }));
+  router.get(`/stores/:storeId/social/${provider}/products`, requireStoreAccess, asyncHandler(async (req, res) => ok(res, await service.products(req.store))));
+};
+registerGoogleLikeRoutes('google', googleAdsService);
+registerGoogleLikeRoutes('youtube', youtubeAdsService);
+router.post('/stores/:storeId/social/google/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+  const item = await googleAdsService.createTrafficAd(req.store, req.user, commonProductAdSchema.parse(req.body));
+  await audit(req, 'social.google.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status }); ok(res, item, 201);
+}));
+router.post('/stores/:storeId/social/youtube/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = commonProductAdSchema.extend({ youtubeVideo: text(2048).min(1), logoUrl: z.union([z.string().trim().max(2048).regex(/^https?:\/\//i, 'Usá una URL HTTP/HTTPS.'), z.literal('')]).optional().default('') }).parse(req.body);
+  const item = await youtubeAdsService.createTrafficAd(req.store, req.user, body);
+  await audit(req, 'social.youtube.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status }); ok(res, item, 201);
+}));
+
+router.post('/stores/:storeId/social/tiktok/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await tiktokAdsService.createOAuthUrl(req.store, req.user))));
+router.post('/stores/:storeId/social/tiktok/refresh', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await tiktokAdsService.refresh(req.store._id))));
+router.put('/stores/:storeId/social/tiktok/assets', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = z.object({ adAccountId: text(80).min(1), identityId: text(160).optional().default(''), identityType: text(80).optional().default('') }).parse(req.body);
+  const integration = await tiktokAdsService.selectAssets(req.store._id, body);
+  await audit(req, 'social.tiktok.assets.updated', 'integration', 'tiktok', { adAccountId: integration.selectedAdAccountId, identityId: integration.selectedIdentityId, identityType: integration.selectedIdentityType }); ok(res, integration);
+}));
+router.delete('/stores/:storeId/social/tiktok', requireStoreAccess, asyncHandler(async (req, res) => { const result = await tiktokAdsService.disconnect(req.store._id); await audit(req, 'social.tiktok.disconnected', 'integration', 'tiktok'); ok(res, result); }));
+router.get('/stores/:storeId/social/tiktok/products', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await tiktokAdsService.products(req.store))));
+router.post('/stores/:storeId/social/tiktok/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = commonProductAdSchema.extend({ videoId: text(160).min(1) }).parse(req.body); const item = await tiktokAdsService.createTrafficAd(req.store, req.user, body);
+  await audit(req, 'social.tiktok.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status }); ok(res, item, 201);
 }));
 
 const sellerContactSchema = contactSchema.extend({ message: text(1500).default('¡Hola! Quisiera hacer una consulta.'), showWhatsapp: trueBoolean.default(true), showContactForm: trueBoolean.default(false) });

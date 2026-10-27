@@ -108,7 +108,7 @@ El script sube primero cada archivo, actualiza sus referencias en MongoDB y sól
 
 Cada tienda puede elegir desde **Tu tienda → Dominio** entre tres direcciones:
 
-- **URL clásica**: `APP_URL/t/slug`. Siempre queda disponible como respaldo.
+- **URL clásica**: `APP_URL/t/slug`. Siempre queda disponible, incluso si la tienda usa un subdominio o dominio propio; esas direcciones son accesos adicionales y no reemplazan el path clásico.
 - **Subdominio administrado**: por ejemplo `mi-marca.mitiendaya.com.ar`. Requiere que `*.STOREFRONT_BASE_DOMAIN` llegue al mismo proxy/CDN que la aplicación y tenga HTTPS válido.
 - **Dominio propio**: por ejemplo `tienda.marca.com`. La aplicación entrega un TXT de verificación y el destino `STOREFRONT_CNAME_TARGET`. Una vez verificado el TXT, usa ese hostname como URL pública.
 
@@ -212,7 +212,7 @@ Los datos bancarios y la URL digital de la demostración son ejemplos identifica
 
 **Transferencias y efectivo.** Se pueden limitar a determinadas formas de entrega. Un comprobante bancario adjunto queda disponible para el vendedor y el administrador; adjuntarlo no confirma el pago. Los comprobantes se almacenan en el bucket privado `R2_RECEIPTS_BUCKET_NAME` y se descargan únicamente a través de la API autenticada. El vendedor verifica el cobro y cambia el estado manualmente.
 
-**Facebook Ads.** Cada tienda dispone de **Redes y anuncios**. En v1.18.0 Facebook permite conectar una Página y una cuenta publicitaria mediante OAuth y crear anuncios de tráfico de productos en estado `PAUSED`. Instagram, YouTube y TikTok se muestran como **Muy pronto**. Para desarrollo se puede habilitar una conexión de Marketing API Sandbox. Los tokens se cifran con `ENCRYPTION_KEY` antes de persistirse en MongoDB. La configuración y una prueba sin gasto se detallan en [Cambios 1.18.0](docs/CAMBIOS-1.18.0.md) y [Integraciones](docs/INTEGRACIONES.md).
+**Redes y anuncios.** Cada tienda puede conectar de forma independiente **Facebook Ads, Instagram Ads, Google Ads, YouTube Ads y TikTok Ads**. Todos los anuncios creados por MiTiendaYa nacen pausados o deshabilitados para revisión antes de gastar. Los tokens se cifran antes de persistirse en MongoDB. Google Ads crea campañas Search de tráfico; YouTube usa Demand Gen limitado a inventario de YouTube; TikTok crea campañas Traffic limitadas a TikTok. La configuración y los comandos de prueba mock se detallan en [Cambios 1.21.0](docs/CAMBIOS-1.21.0.md), [Pruebas de publicidad 1.21.0](docs/PRUEBAS-PUBLICIDAD-1.21.0.md) e [Integraciones](docs/INTEGRACIONES.md).
 
 **WhatsApp.** La conexión de administración utiliza `whatsapp-web.js`, `LocalAuth`, un `WHATSAPP_CLIENT_ID` exclusivo y consultas periódicas del estado del QR. La primera vinculación se inicia desde **Conectar**; si existe una sesión persistida y no fue desconectada manualmente, la API intenta reconectarla automáticamente después de quedar escuchando. El botón flotante de cada tienda abre un enlace `wa.me` con el mensaje elegido y funciona de manera independiente de esa sesión.
 

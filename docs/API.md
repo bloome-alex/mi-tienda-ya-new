@@ -609,6 +609,8 @@ Ejemplos de configuración:
 
 En modo `custom`, la respuesta incluye el TXT de verificación y el destino CNAME/ALIAS. `POST .../verify` consulta DNS y, cuando el TXT contiene el token exacto, ejecuta el aprovisionamiento automático de Nginx/Certbot. El dominio sólo queda `verified` después de que `nginx -t`, la emisión SSL y la recarga final terminan correctamente. Si falla infraestructura, permanece `pending` y se puede reintentar.
 
+Desde v1.21.1 la respuesta de dominio incluye además `pathUrl`, que siempre apunta a `APP_URL/t/:slug`. `publicUrl` continúa siendo la dirección preferida (dominio/subdominio cuando corresponde), pero `pathUrl` nunca se deshabilita y puede utilizarse simultáneamente.
+
 `GET /api/public/host-store` resuelve la tienda correspondiente al hostname de la petición y se utiliza como endpoint auxiliar de diagnóstico/integración. La tienda compilada normalmente recibe esta resolución directamente en el HTML servido por Express.
 
 ## ABM de tiendas del vendedor · v1.16.1

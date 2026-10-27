@@ -38,6 +38,7 @@ export function createApp() {
     app.get('/{*path}', asyncHandler(async (req, res, next) => {
       if (path.extname(req.path)) return next(new AppError('Archivo no encontrado.', 404, 'NOT_FOUND'));
       let store = await domainService.resolveStoreByHost(req.hostname, { allowInactive: true });
+      const resolvedByHostname = Boolean(store);
       if (!store) {
         const match = req.path.match(/^\/t\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/i);
         if (match) store = await Store.findOne({ slug: match[1].toLowerCase(), archived: { $ne: true } }).lean();
@@ -47,7 +48,7 @@ export function createApp() {
         const manifestHref = `/api/public/stores/${store.slug}/manifest.webmanifest`;
         html = html.replace(/<link\s+rel=["']manifest["'][^>]*>/i, `<link rel="manifest" href="${manifestHref}">`);
         if (store.pwa?.icon192Url) html = html.replace(/<link\s+rel=["']apple-touch-icon["'][^>]*>/i, `<link rel="apple-touch-icon" href="${store.pwa.icon192Url}">`);
-        const meta = `<meta name="mty-store-slug" content="${store.slug}"><meta name="mty-store-url" content="${domainService.publicUrl(store)}"><meta name="mty-platform-url" content="${config.appUrl}">`;
+        const meta = `<meta name="mty-store-slug" content="${store.slug}"><meta name="mty-store-url" content="${domainService.publicUrl(store)}"><meta name="mty-store-path-url" content="${domainService.pathUrl(store)}"><meta name="mty-store-hosted" content="${resolvedByHostname ? '1' : '0'}"><meta name="mty-platform-url" content="${config.appUrl}">`;
         html = html.replace('</head>', `${meta}</head>`);
       }
       res.set('Cache-Control', 'no-cache').type('html').send(html);

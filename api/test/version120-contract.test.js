@@ -13,7 +13,7 @@ const readApp=relative=>fs.readFileSync(path.join(appRoot,relative),'utf8');
 test('Instagram Ads usa una integración propia sobre Meta y persiste una identidad profesional por tienda',()=>{
   const models=read('src/models/index.js');
   const service=read('src/services/InstagramAdsService.js');
-  assert.match(models,/enum: \['facebook', 'instagram'\]/);
+  assert.match(models,/enum: \['facebook', 'instagram', 'google', 'youtube', 'tiktok'\]/);
   assert.match(models,/selectedInstagramUserId/);
   assert.match(service,/class InstagramAdsService extends FacebookAdsService/);
   assert.match(service,/provider: 'instagram'/);
@@ -29,22 +29,21 @@ test('Instagram crea anuncios pausados sólo para placements de Instagram y cons
   assert.doesNotMatch(service,/instagram_actor_id/);
 });
 
-test('las rutas públicas de anuncios exponen Instagram y Google Ads queda sólo como próximo',()=>{
+test('las rutas públicas de anuncios mantienen Instagram disponible y permiten que versiones posteriores amplíen proveedores',()=>{
   const routes=read('src/routes/core.js');
   assert.match(routes,/social\/instagram\/callback/);
   assert.match(routes,/social\/instagram\/connect/);
   assert.match(routes,/social\/instagram\/assets/);
   assert.match(routes,/social\/instagram\/ads/);
   assert.match(routes,/key: 'instagram', label: 'Instagram', status: 'available'/);
-  assert.match(routes,/key: 'google', label: 'Google Ads', status: 'soon'/);
-  assert.doesNotMatch(routes,/social\/google\/connect/);
+  assert.match(routes,/key: 'instagram', label: 'Instagram', status: 'available'/);
 });
 
 test('existe un stack mock independiente de Instagram y el comando combinado lo ejecuta',()=>{
   const pkg=JSON.parse(readApp('package.json'));
   const mock=readApp('scripts/test-instagram-ads-mock.mjs');
   assert.equal(pkg.scripts['test:mock:instagram'],'node --test --test-concurrency=1 scripts/test-instagram-ads-mock.mjs');
-  assert.match(pkg.scripts['test:mock:integrations'],/test:mock:instagram/);
+  assert.match(pkg.scripts['test:mock:ads'],/test:mock:instagram/);
   assert.match(mock,/MockMetaInstagramServer/);
   assert.match(mock,/instagram_user_id/);
   assert.match(mock,/publisher_platforms/);

@@ -1,6 +1,6 @@
 {
   "name": "@mi-tienda-ya/client",
-  "version": "1.20.0",
+  "version": "1.21.1",
   "type": "module",
   "private": true,
   "scripts": {

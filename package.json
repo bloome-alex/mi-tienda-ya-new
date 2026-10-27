@@ -1,6 +1,6 @@
 {
   "name": "mi-tienda-ya-2",
-  "version": "1.20.0",
+  "version": "1.21.1",
   "private": true,
   "description": "Plataforma de tiendas online PWA con Vue, Express y MongoDB",
   "type": "module",
@@ -21,8 +21,12 @@
     "migrate:r2": "node scripts/migrate-r2.mjs",
     "test:mock:subscriptions": "node --test --test-concurrency=1 scripts/test-subscriptions-mock.mjs",
     "test:mock:facebook": "node --test --test-concurrency=1 scripts/test-facebook-ads-mock.mjs",
-    "test:mock:integrations": "npm run test:mock:subscriptions && npm run test:mock:facebook && npm run test:mock:instagram",
-    "test:mock:instagram": "node --test --test-concurrency=1 scripts/test-instagram-ads-mock.mjs"
+    "test:mock:integrations": "npm run test:mock:subscriptions && npm run test:mock:ads",
+    "test:mock:instagram": "node --test --test-concurrency=1 scripts/test-instagram-ads-mock.mjs",
+    "test:mock:google": "node --test --test-concurrency=1 scripts/test-google-ads-mock.mjs",
+    "test:mock:youtube": "node --test --test-concurrency=1 scripts/test-youtube-ads-mock.mjs",
+    "test:mock:tiktok": "node --test --test-concurrency=1 scripts/test-tiktok-ads-mock.mjs",
+    "test:mock:ads": "npm run test:mock:facebook && npm run test:mock:instagram && npm run test:mock:google && npm run test:mock:youtube && npm run test:mock:tiktok"
   },
   "devDependencies": {
     "mongodb-memory-server": "11.3.0",

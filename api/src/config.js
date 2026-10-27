@@ -60,6 +60,20 @@ export const config = {
     loginConfigId: (process.env.META_FACEBOOK_LOGIN_CONFIG_ID || '').trim(),
     sandboxEnabled: process.env.META_SANDBOX_CONNECT_ENABLED === 'true' || ((process.env.NODE_ENV || 'development') !== 'production' && process.env.META_SANDBOX_CONNECT_ENABLED !== 'false'),
   },
+  googleAds: {
+    clientId: (process.env.GOOGLE_ADS_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.GOOGLE_ADS_CLIENT_SECRET || '').trim(),
+    apiVersion: (process.env.GOOGLE_ADS_API_VERSION || 'v26').trim(),
+    redirectUri: (process.env.GOOGLE_ADS_REDIRECT_URI || `${(process.env.APP_URL || 'http://localhost:5000').replace(/\/$/, '')}/api/social/google/callback`).trim(),
+    youtubeRedirectUri: (process.env.GOOGLE_YOUTUBE_ADS_REDIRECT_URI || `${(process.env.APP_URL || 'http://localhost:5000').replace(/\/$/, '')}/api/social/youtube/callback`).trim(),
+  },
+  tiktokAds: {
+    appId: (process.env.TIKTOK_APP_ID || '').trim(),
+    appSecret: (process.env.TIKTOK_APP_SECRET || '').trim(),
+    apiVersion: (process.env.TIKTOK_ADS_API_VERSION || 'v2.0').trim(),
+    redirectUri: (process.env.TIKTOK_ADS_REDIRECT_URI || `${(process.env.APP_URL || 'http://localhost:5000').replace(/\/$/, '')}/api/social/tiktok/callback`).trim(),
+    authorizationUrl: (process.env.TIKTOK_ADS_AUTHORIZATION_URL || '').trim(),
+  },
   orderReservationMinutes: number('ORDER_RESERVATION_MINUTES', 60),
   smtp: { host: process.env.SMTP_HOST, port: number('SMTP_PORT', 587), secure: process.env.SMTP_SECURE === 'true', user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS, from: process.env.SMTP_FROM || 'MiTiendaYa <no-reply@example.com>' },
 };
@@ -76,6 +90,16 @@ export function validateConfig() {
   if (config.facebookAds.instagramRedirectUri && !/^https?:\/\//i.test(config.facebookAds.instagramRedirectUri)) throw new Error('META_INSTAGRAM_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
   if (config.isProduction && config.facebookAds.appId && !config.facebookAds.redirectUri.startsWith('https://')) throw new Error('META_REDIRECT_URI debe usar HTTPS en producción.');
   if (config.isProduction && config.facebookAds.appId && !config.facebookAds.instagramRedirectUri.startsWith('https://')) throw new Error('META_INSTAGRAM_REDIRECT_URI debe usar HTTPS en producción.');
+  if (Boolean(config.googleAds.clientId) !== Boolean(config.googleAds.clientSecret)) throw new Error('Configurá GOOGLE_ADS_CLIENT_ID y GOOGLE_ADS_CLIENT_SECRET juntos.');
+  if (!/^v\d+$/.test(config.googleAds.apiVersion)) throw new Error('GOOGLE_ADS_API_VERSION debe tener formato v26.');
+  if (config.googleAds.redirectUri && !/^https?:\/\//i.test(config.googleAds.redirectUri)) throw new Error('GOOGLE_ADS_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
+  if (config.googleAds.youtubeRedirectUri && !/^https?:\/\//i.test(config.googleAds.youtubeRedirectUri)) throw new Error('GOOGLE_YOUTUBE_ADS_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
+  if (config.isProduction && config.googleAds.clientId && !config.googleAds.redirectUri.startsWith('https://')) throw new Error('GOOGLE_ADS_REDIRECT_URI debe usar HTTPS en producción.');
+  if (config.isProduction && config.googleAds.clientId && !config.googleAds.youtubeRedirectUri.startsWith('https://')) throw new Error('GOOGLE_YOUTUBE_ADS_REDIRECT_URI debe usar HTTPS en producción.');
+  if (Boolean(config.tiktokAds.appId) !== Boolean(config.tiktokAds.appSecret)) throw new Error('Configurá TIKTOK_APP_ID y TIKTOK_APP_SECRET juntos.');
+  if (config.tiktokAds.apiVersion && !/^v\d+(?:\.\d+)?$/.test(config.tiktokAds.apiVersion)) throw new Error('TIKTOK_ADS_API_VERSION debe tener formato v2.0.');
+  if (config.tiktokAds.redirectUri && !/^https?:\/\//i.test(config.tiktokAds.redirectUri)) throw new Error('TIKTOK_ADS_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
+  if (config.isProduction && config.tiktokAds.appId && !config.tiktokAds.redirectUri.startsWith('https://')) throw new Error('TIKTOK_ADS_REDIRECT_URI debe usar HTTPS en producción.');
   if (!Number.isInteger(config.bcryptRounds) || config.bcryptRounds < 10 || config.bcryptRounds > 14) throw new Error('BCRYPT_ROUNDS debe estar entre 10 y 14.');
   if (!Number.isInteger(config.sessionDays) || config.sessionDays < 1 || config.sessionDays > 90) throw new Error('SESSION_DAYS debe estar entre 1 y 90.');
   if (config.rootUser.length > 100) throw new Error('ROOT_USER no puede superar 100 caracteres.');

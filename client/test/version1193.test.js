@@ -12,5 +12,5 @@ test('Facebook usa una sola columna completa para vendedores y conserva dos colu
   assert.match(view, /class="facebook-connect-grid" :class="\{'facebook-connect-grid-seller':!isAdmin\}"/);
   assert.match(view, /\.facebook-connect-grid\{display:grid;grid-template-columns:1fr 1fr;gap:16px\}/);
   assert.match(view, /\.facebook-connect-grid-seller\{grid-template-columns:1fr\}/);
-  assert.match(view, /<details v-if="isAdmin&&facebook\.sandboxAllowed"/);
+  assert.match(view, /<details v-if="isAdmin&&current\.sandboxAllowed"/);
 });

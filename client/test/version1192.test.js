@@ -11,10 +11,10 @@ test('Redes y anuncios reserva la ayuda técnica y el Sandbox para administrador
   const view = src('views/seller/SocialAdsView.vue');
   assert.match(view, /const isAdmin=computed\(\(\)=>auth\.user\?\.role==='admin'\)/);
   assert.match(view, /<section v-if="isAdmin" class="p-section-card setup-help">/);
-  assert.match(view, /<details v-if="isAdmin&&facebook\.sandboxAllowed"/);
+  assert.match(view, /<details v-if="isAdmin&&current\.sandboxAllowed"/);
   assert.doesNotMatch(view, /El servidor todavía necesita META_APP_ID y META_APP_SECRET/);
   assert.doesNotMatch(view, /El token se envía únicamente al backend/);
-  assert.match(view, /La conexión con Facebook todavía no está disponible\. Contactá a la administración\./);
+  assert.match(view, /La conexión con \$\{providerLabel\} todavía no está disponible\. Contactá a la administración\./);
 });
 
 test('las pantallas del vendedor no explican infraestructura interna en sus ayudas', () => {

@@ -22,16 +22,12 @@ test('custom plan requests have a dedicated admin detail route and page',()=>{
   assert.doesNotMatch(detail,/<[^>]*modal/i);
 });
 
-test('social ads expose the current available and upcoming networks',()=>{
+test('social ads expose the complete network catalog',()=>{
   const routes=read('src/routes/core.js');
   const view=readApp('client/src/views/seller/SocialAdsView.vue');
-  for(const network of ['facebook','instagram']) assert.match(routes,new RegExp(`key: '${network}'[^\n]+status: 'available'`));
-  for(const network of ['youtube','tiktok','google']) assert.match(routes,new RegExp(`key: '${network}'[^\n]+status: 'soon'`));
-  assert.match(view,/Muy pronto/);
-  assert.match(view,/Facebook Ads/);
-  assert.match(view,/Instagram Ads/);
+  for(const network of ['facebook','instagram','youtube','tiktok','google']) assert.match(routes,new RegExp(`key: '${network}'[^\n]+status: 'available'`));
+  for(const label of ['Facebook','Instagram','YouTube','TikTok','Google Ads']) assert.match(view,new RegExp(label));
 });
-
 test('Facebook credentials and OAuth state are protected at rest',()=>{
   const models=read('src/models/index.js');
   const service=read('src/services/FacebookAdsService.js');

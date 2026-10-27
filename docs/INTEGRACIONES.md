@@ -172,7 +172,7 @@ META_SANDBOX_CONNECT_ENABLED=false
 
 La pantalla solicita permisos publicitarios y de Página, lista las cuentas/Páginas que devuelve Meta y permite seleccionar una combinación por tienda. El primer flujo disponible crea anuncios de tráfico hacia una ficha de producto, limitado a ubicaciones de Facebook. Campaña, conjunto y anuncio nacen en `PAUSED`; MiTiendaYa no activa ni publica campañas automáticamente.
 
-Para la prueba sin gasto, usá una cuenta publicitaria Sandbox y su token desde las herramientas de Marketing API de Meta. El detalle paso a paso está en [Cambios 1.18.0](CAMBIOS-1.18.0.md). Instagram, YouTube y TikTok se muestran como **Muy pronto** y no tienen integración activa en esta versión.
+Para la prueba sin gasto de Facebook, usá una cuenta publicitaria Sandbox y su token desde las herramientas de Marketing API de Meta. El detalle paso a paso está en [Cambios 1.18.0](CAMBIOS-1.18.0.md). Esa sección describe el estado histórico de v1.18.0; desde v1.20.0/v1.21.0 Instagram, Google Ads, YouTube Ads y TikTok Ads también tienen integración activa.
 
 Desde v1.19.0 el transporte Graph y la política de assets son inyectables. `npm run test:mock:facebook` levanta un Graph v26.0 local y prueba además el OAuth de producción completo (state, code, token corto, token largo, activos y permisos), cuentas publicitarias inactivas, payloads de campaña/conjunto/imagen/creativo/anuncio y rollback, sin realizar ninguna llamada a Meta. Pasar a QA/Producción sólo cambia el host inyectado por el Graph real y las credenciales/configuración; no existe un segundo camino de lógica de negocio exclusivo del mock.
 
@@ -187,6 +187,11 @@ Desde v1.19.0 el transporte Graph y la política de assets son inyectables. `npm
 - [whatsapp-web.js: LocalAuth](https://docs.wwebjs.dev/LocalAuth.html).
 - [Cloudflare R2: S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/).
 - [Cloudflare R2: public buckets and custom domains](https://developers.cloudflare.com/r2/buckets/public-buckets/).
+- [Google Ads API: release notes (v26)](https://developers.google.com/google-ads/api/docs/release-notes).
+- [Google Ads API: Demand Gen](https://developers.google.com/google-ads/api/docs/demand-gen/overview).
+- [Google Ads API: Demand Gen channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls).
+- [TikTok API for Business: Marketing API v2.0](https://business-api.tiktok.com/portal/docs/marketing-api/v2.0).
+- [TikTok API for Business: Identities](https://business-api.tiktok.com/portal/docs/identities/v1.3).
 
 Estas integraciones requieren credenciales y cuentas propias. Las pruebas automatizadas del proyecto comprueban la lógica con servicios controlados; no sustituyen una compra de prueba con tus credenciales, un envío SMTP real ni el emparejamiento de tu cuenta de WhatsApp.
 
@@ -248,3 +253,53 @@ Para validar la integración sin credenciales reales:
 ```bash
 npm run test:mock:instagram
 ```
+
+## Google Ads, YouTube Ads y TikTok Ads (v1.21.0)
+
+Desde v1.21.0 **Redes y anuncios** queda completo con Facebook, Instagram, Google Ads, YouTube Ads y TikTok Ads. Cada proveedor mantiene su propia conexión por tienda y sus secretos se guardan cifrados en MongoDB.
+
+### Google Ads
+
+MiTiendaYa usa OAuth multiusuario con el scope `https://www.googleapis.com/auth/adwords` y acceso offline. La versión predeterminada es `v26`. Google Ads y YouTube comparten las credenciales OAuth de la aplicación pero usan callbacks e integraciones independientes.
+
+```env
+GOOGLE_ADS_CLIENT_ID=
+GOOGLE_ADS_CLIENT_SECRET=
+GOOGLE_ADS_API_VERSION=v26
+GOOGLE_ADS_REDIRECT_URI=https://TU-DOMINIO/api/social/google/callback
+GOOGLE_YOUTUBE_ADS_REDIRECT_URI=https://TU-DOMINIO/api/social/youtube/callback
+```
+
+Desde el 9 de septiembre de 2026 Google administra los niveles de acceso de Google Ads API por proyecto de Google Cloud; MiTiendaYa no necesita enviar un developer token. Habilitá Google Ads API en el mismo proyecto que posee estas credenciales OAuth y solicitá el nivel de acceso que corresponda antes de usar cuentas de producción.
+
+Google Ads crea anuncios Search de tráfico hacia productos. YouTube Ads crea campañas Demand Gen restringidas por channel controls a YouTube In-feed, In-stream y Shorts. Ambos flujos crean recursos en estado `PAUSED`.
+
+### TikTok Ads
+
+La integración usa TikTok API for Business / Marketing API y queda configurada por defecto en `v2.0`.
+
+```env
+TIKTOK_APP_ID=
+TIKTOK_APP_SECRET=
+TIKTOK_ADS_API_VERSION=v2.0
+TIKTOK_ADS_REDIRECT_URI=https://TU-DOMINIO/api/social/tiktok/callback
+TIKTOK_ADS_AUTHORIZATION_URL=
+```
+
+La URL de autorización se obtiene desde **TikTok for Business → My Apps → aplicación → Advertiser authorization URL**. El vendedor sigue esa autorización, y MiTiendaYa obtiene únicamente los anunciantes que ese usuario permitió administrar.
+
+Después de seleccionar anunciante se cargan las identidades publicitarias no-Spark (`CUSTOMIZED_USER`) y los videos de su biblioteca. Este flujo usa `video_id`; las identidades Spark se excluyen porque TikTok las vincula a publicaciones mediante `tiktok_item_id`. MiTiendaYa crea campañas `TRAFFIC`, con `PLACEMENT_TIKTOK`, y fuerza campaña/grupo/anuncio a `DISABLE` hasta que el vendedor revise y active el contenido en TikTok Ads Manager.
+
+### Gate de publicidad
+
+```bash
+npm run test:mock:ads
+```
+
+Para incluir además el stack de suscripciones de Mercado Pago:
+
+```bash
+npm run test:mock:integrations
+```
+
+El detalle de escenarios se encuentra en `docs/PRUEBAS-PUBLICIDAD-1.21.0.md`.
