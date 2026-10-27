@@ -12,6 +12,7 @@ import { subscriptionService } from './SubscriptionService.js';
 import { planFeatureService } from './PlanFeatureService.js';
 import { mercadoPagoAccountService } from './MercadoPagoAccountService.js';
 import { commercePlanLimitService } from './CommercePlanLimitService.js';
+import { legalDocumentService, defaultLegalDocuments, LEGAL_DOCUMENT_SCHEMA_VERSION } from './LegalDocumentService.js';
 export { AuditService, auditService };
 
 export const defaultHome = {
@@ -25,7 +26,22 @@ export const defaultHome = {
 };
 
 export class SettingsService {
-  async get() { return Settings.findOneAndUpdate({ key: 'global' }, { $setOnInsert: { key: 'global', trialDays: 15, magicLinkMinutes: 15, subscriptionGraceDays: 7, subscriptionPendingLinkHours: 24, platformBilling: { enabled: false, mercadopago: { sandbox: true } }, home: defaultHome, contact: { email: '', phone: '', whatsapp: '' } } }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }); }
+  async get() {
+    const settings = await Settings.findOneAndUpdate(
+      { key: 'global' },
+      { $setOnInsert: { key: 'global', trialDays: 15, magicLinkMinutes: 15, subscriptionGraceDays: 7, subscriptionPendingLinkHours: 24, platformBilling: { enabled: false, mercadopago: { sandbox: true } }, home: defaultHome, legal: defaultLegalDocuments, contact: { email: '', phone: '', whatsapp: '' } } },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+    );
+    const previousLegalVersion = Number(settings.legal?.schemaVersion || 1);
+    const normalizedLegal = legalDocumentService.normalize(settings.legal);
+    if (!settings.legal?.privacy?.sections?.length || !settings.legal?.terms?.sections?.length || previousLegalVersion < LEGAL_DOCUMENT_SCHEMA_VERSION) {
+      if (previousLegalVersion < LEGAL_DOCUMENT_SCHEMA_VERSION) normalizedLegal.privacy.updatedAt = new Date().toISOString().slice(0, 10);
+      settings.legal = normalizedLegal;
+      settings.markModified('legal');
+      await settings.save();
+    }
+    return settings;
+  }
   static get() { return settingsService.get(); }
 }
 export class EntitlementService {

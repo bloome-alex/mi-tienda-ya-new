@@ -80,11 +80,12 @@ test('la limpieza de R2 conserva adjuntos mientras el reporte exista',()=>{
   assert.match(cleanup,/attachments\.objectKey/);
 });
 
-test('la versión distribuida es 1.24.0',()=>{
+test('la distribución conserva como mínimo la línea 1.24',()=>{
   const rootPackage=JSON.parse(readApp('package.json'));
   const apiPackage=JSON.parse(read('package.json'));
   const clientPackage=JSON.parse(readApp('client/package.json'));
-  assert.equal(rootPackage.version,'1.24.0');
-  assert.equal(apiPackage.version,'1.24.0');
-  assert.equal(clientPackage.version,'1.24.0');
+  const versions=[rootPackage.version,apiPackage.version,clientPackage.version];
+  assert.equal(new Set(versions).size,1);
+  const [major,minor]=versions[0].split('.').map(Number);
+  assert.ok(major>1 || (major===1 && minor>=24));
 });

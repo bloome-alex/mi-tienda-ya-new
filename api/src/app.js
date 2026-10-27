@@ -11,7 +11,9 @@ import { AppError, asyncHandler, loadAuth, errorHandler } from './middleware/cor
 import coreRouter from './routes/core.js';
 import commerceRouter from './routes/commerce.js';
 import { domainService } from './services/DomainService.js';
-import { Store } from './models/index.js';
+import { Store, Settings } from './models/index.js';
+import { legalDocumentService } from './services/LegalDocumentService.js';
+import { legalPageRenderer } from './services/LegalPageRenderer.js';
 
 export function createApp() {
   const app = express();
@@ -31,6 +33,17 @@ export function createApp() {
   app.use('/api', (_req, _res, next) => next(new AppError('La ruta solicitada no existe.', 404, 'NOT_FOUND')));
   app.use('/uploads/images', express.static(path.join(config.uploadDir, 'images'), { maxAge: '30d', immutable: true, dotfiles: 'deny', setHeaders(res) { res.set('X-Content-Type-Options', 'nosniff'); } }));
   // Los comprobantes nunca se exponen por express.static; se sirven mediante rutas autenticadas.
+  const renderLegalPage = kind => asyncHandler(async (_req, res) => {
+    const settings = await Settings.findOne({ key: 'global' }).lean();
+    const document = legalDocumentService.get(settings?.legal, kind);
+    if (!document?.enabled) throw new AppError('El documento solicitado no está publicado.', 404, 'LEGAL_DOCUMENT_NOT_PUBLISHED');
+    res.set('Cache-Control', 'no-cache').type('html').send(legalPageRenderer.render({ kind, document, contact: settings?.contact || {}, appUrl: config.appUrl }));
+  });
+  app.get('/privacidad', (_req, res) => res.redirect(301, '/politica-de-privacidad'));
+  app.get('/terminos', (_req, res) => res.redirect(301, '/condiciones-del-servicio'));
+  app.get('/politica-de-privacidad', renderLegalPage('privacy'));
+  app.get('/condiciones-del-servicio', renderLegalPage('terms'));
+
   const clientDirectory = path.join(config.projectRoot, 'client', 'dist');
   if (fs.existsSync(path.join(clientDirectory, 'index.html'))) {
     const indexTemplate = fs.readFileSync(path.join(clientDirectory, 'index.html'), 'utf8');

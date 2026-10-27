@@ -32,6 +32,7 @@ import { mercadoPagoAccountService } from '../services/MercadoPagoAccountService
 import { commercePlanLimitService } from '../services/CommercePlanLimitService.js';
 import { bugReportService } from '../services/BugReportService.js';
 import { adminDashboardService } from '../services/AdminDashboardService.js';
+import { legalDocumentService, LEGAL_DOCUMENT_SCHEMA_VERSION } from '../services/LegalDocumentService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -61,7 +62,15 @@ router.get('/public/config', asyncHandler(async (_req, res) => {
   const settings = await SettingsService.get();
   const rows = await Plan.find({ active: true, visible: { $ne: false } }).sort({ sortOrder: 1, price: 1 }).lean();
   const plans = await planFeatureService.presentMany(rows);
-  ok(res, { trialDays: settings.trialDays, contact: settings.contact, home: settings.home, plans, planFeatures: planFeatureService.catalog() });
+  const legal = legalDocumentService.normalize(settings.legal);
+  ok(res, { trialDays: settings.trialDays, contact: settings.contact, home: settings.home, plans, planFeatures: planFeatureService.catalog(), legal: { privacyEnabled: legal.privacy.enabled, termsEnabled: legal.terms.enabled } });
+}));
+router.get('/public/legal/:kind', asyncHandler(async (req, res) => {
+  const kind = z.enum(['privacy', 'terms']).parse(req.params.kind);
+  const settings = await SettingsService.get();
+  const document = legalDocumentService.get(settings.legal, kind);
+  if (!document?.enabled) throw new AppError('El documento solicitado no está publicado.', 404, 'LEGAL_DOCUMENT_NOT_PUBLISHED');
+  ok(res, { ...document, contact: settings.contact || {} });
 }));
 router.post('/public/custom-plan-requests', customPlanRequestLimiter, asyncHandler(async (req, res) => {
   const body = z.object({ email, whatsapp: text(60).min(6), description: text(5000).min(10) }).parse(req.body);
@@ -266,16 +275,21 @@ const contactSchema = z.object({ email: maybeEmail.default(''), phone: text(40).
 const homeSchema = z.object({ eyebrow: text(150), title: text(240), subtitle: text(1000), ctaText: text(80), heroImage: url, benefits: z.array(z.object({ icon: text(60), title: text(150), description: text(1000) })).max(20), testimonials: z.array(z.object({ name: text(100), business: text(150), quote: text(1500) })).max(30), faq: z.array(z.object({ question: text(300), answer: text(2000) })).max(30) }).partial();
 async function adminSettingsPayload() {
   let settings = await Settings.findOne({ key: 'global' }).select('+platformBilling.mercadopago.accessToken +platformBilling.mercadopago.webhookSecret');
-  if (!settings) { await SettingsService.get(); settings = await Settings.findOne({ key: 'global' }).select('+platformBilling.mercadopago.accessToken +platformBilling.mercadopago.webhookSecret'); }
+  if (!settings || !settings.legal?.privacy?.sections?.length || !settings.legal?.terms?.sections?.length || Number(settings.legal?.schemaVersion || 1) < LEGAL_DOCUMENT_SCHEMA_VERSION) { await SettingsService.get(); settings = await Settings.findOne({ key: 'global' }).select('+platformBilling.mercadopago.accessToken +platformBilling.mercadopago.webhookSecret'); }
   const data = settings.toObject(); const mp = data.platformBilling?.mercadopago || {};
   data.platformBilling = { enabled: Boolean(data.platformBilling?.enabled), mercadopago: { sandbox: mp.sandbox !== false, hasAccessToken: Boolean(mp.accessToken), hasWebhookSecret: Boolean(mp.webhookSecret) } };
+  data.legal = legalDocumentService.normalize(data.legal);
   data.subscriptionWebhookUrl = `${config.appUrl}/api/webhooks/platform/mercadopago`;
+  data.legalUrls = { privacy: `${config.appUrl}/politica-de-privacidad`, terms: `${config.appUrl}/condiciones-del-servicio` };
   return { settings, data };
 }
 router.get('/admin/settings', requireAdmin, asyncHandler(async (_req, res) => { const { data } = await adminSettingsPayload(); ok(res, data); }));
 router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
   const billingSchema = z.object({ enabled: trueBoolean.optional(), mercadopago: z.object({ accessToken: text(1200).optional(), webhookSecret: text(1200).optional(), sandbox: trueBoolean.optional(), clearCredentials: trueBoolean.optional() }).optional() }).optional();
-  const body = z.object({ trialDays: integer(365).optional(), magicLinkMinutes: integer(1440).refine(n => n >= 1).optional(), subscriptionGraceDays: integer(3650).optional(), subscriptionPendingLinkHours: integer(720).refine(n => n >= 1).optional(), platformBilling: billingSchema, contact: contactSchema.partial().optional(), home: homeSchema.optional() }).parse(req.body);
+  const legalSectionSchema = z.object({ title: text(220).min(1), content: text(15000).min(1) });
+  const legalDocumentSchema = z.object({ enabled: trueBoolean.optional(), title: text(240).min(1), intro: text(5000).min(1), sections: z.array(legalSectionSchema).min(1).max(40) });
+  const legalSchema = z.object({ privacy: legalDocumentSchema.optional(), terms: legalDocumentSchema.optional() }).refine(value => Boolean(value.privacy || value.terms), 'Indicá al menos un documento legal.').optional();
+  const body = z.object({ trialDays: integer(365).optional(), magicLinkMinutes: integer(1440).refine(n => n >= 1).optional(), subscriptionGraceDays: integer(3650).optional(), subscriptionPendingLinkHours: integer(720).refine(n => n >= 1).optional(), platformBilling: billingSchema, contact: contactSchema.partial().optional(), home: homeSchema.optional(), legal: legalSchema }).parse(req.body);
   const { settings } = await adminSettingsPayload(); const beforeSafe = (await adminSettingsPayload()).data;
   if (body.trialDays !== undefined) settings.trialDays = body.trialDays;
   if (body.magicLinkMinutes !== undefined) settings.magicLinkMinutes = body.magicLinkMinutes;
@@ -283,6 +297,7 @@ router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
   if (body.subscriptionPendingLinkHours !== undefined) settings.subscriptionPendingLinkHours = body.subscriptionPendingLinkHours;
   if (body.contact) settings.contact = { ...settings.contact.toObject(), ...Object.fromEntries(Object.keys(req.body.contact).filter(key => Object.hasOwn(body.contact, key)).map(key => [key, body.contact[key]])) };
   if (body.home) { settings.home = { ...settings.home, ...body.home }; settings.markModified('home'); }
+  if (body.legal) { settings.legal = legalDocumentService.merge(settings.legal, body.legal); settings.markModified('legal'); }
   let billingCredentialsUpdated = false;
   if (body.platformBilling) {
     settings.platformBilling ||= {}; settings.platformBilling.mercadopago ||= {};
@@ -298,7 +313,9 @@ router.put('/admin/settings', requireAdmin, asyncHandler(async (req, res) => {
   }
   if (settings.platformBilling?.enabled && (!settings.platformBilling?.mercadopago?.accessToken || !settings.platformBilling?.mercadopago?.webhookSecret)) throw new AppError('Para habilitar suscripciones configurá el Access Token y la clave secreta de Webhooks de Mercado Pago.', 422, 'SUBSCRIPTIONS_NOT_CONFIGURED');
   await settings.save(); const afterSafe = (await adminSettingsPayload()).data;
-  await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(beforeSafe, afterSafe, ['trialDays', 'magicLinkMinutes', 'subscriptionGraceDays', 'subscriptionPendingLinkHours', 'contact', 'home', 'platformBilling']), billingCredentialsUpdated });
+  const legalComparable = document => JSON.stringify({ enabled: document?.enabled !== false, title: document?.title || '', intro: document?.intro || '', sections: document?.sections || [] });
+  const legalDocumentsUpdated = body.legal ? Object.keys(body.legal).filter(key => legalComparable(beforeSafe.legal?.[key]) !== legalComparable(afterSafe.legal?.[key])) : [];
+  await audit(req, 'settings.updated', 'settings', settings._id, { changes: AuditService.changes(beforeSafe, afterSafe, ['trialDays', 'magicLinkMinutes', 'subscriptionGraceDays', 'subscriptionPendingLinkHours', 'contact', 'home', 'platformBilling']), billingCredentialsUpdated, legalDocumentsUpdated });
   ok(res, afterSafe);
 }));
 router.get('/admin/subscription-support', requireAdmin, asyncHandler(async (_req, res) => ok(res, await subscriptionSupportService.listPending())));

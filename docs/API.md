@@ -649,3 +649,39 @@ Todos los endpoints de tienda exigen acceso a la tienda indicada. Los secretos d
 - `POST /stores/:storeId/social/facebook/ads`: crea campaña, conjunto, creativo y anuncio de tráfico, todos pausados.
 
 Administración incorpora además `GET /admin/custom-plan-requests/:id` para la vista dedicada de una solicitud de plan.
+
+## Documentos legales globales · v1.25.0
+
+Documentos públicos de la aplicación MiTiendaYa:
+
+- `GET /api/public/legal/privacy`: Política de privacidad publicada.
+- `GET /api/public/legal/terms`: Condiciones del servicio publicadas.
+
+Si un documento está despublicado, el endpoint responde 404 `LEGAL_DOCUMENT_NOT_PUBLISHED`.
+
+Administración utiliza `GET /api/admin/settings` y `PUT /api/admin/settings`. El bloque `legal` tiene esta forma:
+
+```json
+{
+  "legal": {
+    "privacy": {
+      "enabled": true,
+      "title": "Política de Privacidad de MiTiendaYa",
+      "intro": "...",
+      "sections": [
+        { "title": "1. Alcance", "content": "..." }
+      ]
+    },
+    "terms": {
+      "enabled": true,
+      "title": "Condiciones del Servicio de MiTiendaYa",
+      "intro": "...",
+      "sections": [
+        { "title": "1. Aceptación", "content": "..." }
+      ]
+    }
+  }
+}
+```
+
+La fecha `updatedAt` es administrada por el servidor al guardar y se muestra en la página pública.
