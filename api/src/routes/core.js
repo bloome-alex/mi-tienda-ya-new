@@ -24,6 +24,7 @@ import { storeTransferService } from '../services/StoreTransferService.js';
 import { storeManagementService } from '../services/StoreManagementService.js';
 import { customPlanRequestService } from '../services/CustomPlanRequestService.js';
 import { facebookAdsService } from '../services/FacebookAdsService.js';
+import { instagramAdsService } from '../services/InstagramAdsService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
@@ -324,6 +325,27 @@ router.get('/social/facebook/callback', requireAuth, asyncHandler(async (req, re
   return res.redirect(303, target.toString());
 }));
 
+router.get('/social/instagram/callback', requireAuth, asyncHandler(async (req, res) => {
+  const target = new URL('/app/social', config.appUrl);
+  target.searchParams.set('network', 'instagram');
+  if (req.query.error) {
+    target.searchParams.set('instagram', 'error');
+    target.searchParams.set('message', String(req.query.error_description || 'Instagram canceló la autorización.').slice(0, 300));
+    return res.redirect(303, target.toString());
+  }
+  try {
+    const body = z.object({ code: z.string().min(1), state: z.string().min(1) }).parse(req.query);
+    const store = await instagramAdsService.completeOAuth({ ...body, user: req.user });
+    await AuditService.log({ actorId: req.user._id, actor: req.user, storeId: store._id, store, action: 'social.instagram.connected', entity: 'integration', entityId: 'instagram', details: { mode: 'oauth' } });
+    target.searchParams.set('instagram', 'connected');
+  } catch (error) {
+    target.searchParams.set('instagram', 'error');
+    target.searchParams.set('message', String(error.message || 'No se pudo conectar Instagram.').slice(0, 300));
+  }
+  return res.redirect(303, target.toString());
+}));
+
+
 const storeSchema = z.object({ ownerId: objectId, name: text(120).min(1), slug: text(80).min(3).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Usá minúsculas, números y guiones.'), description: text(5000).default(''), active: trueBoolean.default(false) });
 async function validateStoreOwner(ownerId) { const user = await User.findOne({ _id: ownerId, role: 'vendedor', active: true }); if (!user) throw new AppError('Seleccioná un vendedor activo.', 422); return user; }
 router.get('/admin/stores', requireAdmin, asyncHandler(async (req, res) => {
@@ -446,8 +468,8 @@ router.put('/stores/:storeId/design', requireStoreAccess, requireFeature('design
   ok(res, safeStore(req.store));
 }));
 router.get('/stores/:storeId/social', requireStoreAccess, asyncHandler(async (req, res) => {
-  const facebook = await facebookAdsService.status(req.store._id);
-  ok(res, { networks: [{ key: 'facebook', label: 'Facebook', status: 'available' }, { key: 'instagram', label: 'Instagram', status: 'soon' }, { key: 'youtube', label: 'YouTube', status: 'soon' }, { key: 'tiktok', label: 'TikTok', status: 'soon' }], facebook });
+  const [facebook, instagram] = await Promise.all([facebookAdsService.status(req.store._id), instagramAdsService.status(req.store._id)]);
+  ok(res, { networks: [{ key: 'facebook', label: 'Facebook', status: 'available' }, { key: 'instagram', label: 'Instagram', status: 'available' }, { key: 'youtube', label: 'YouTube', status: 'soon' }, { key: 'tiktok', label: 'TikTok', status: 'soon' }, { key: 'google', label: 'Google Ads', status: 'soon' }], facebook, instagram });
 }));
 router.post('/stores/:storeId/social/facebook/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await facebookAdsService.createOAuthUrl(req.store, req.user))));
 router.post('/stores/:storeId/social/facebook/sandbox', requireStoreAccess, asyncHandler(async (req, res) => {
@@ -473,6 +495,33 @@ router.post('/stores/:storeId/social/facebook/ads', requireStoreAccess, asyncHan
   const body = z.object({ productId: objectId, name: text(120).min(1), primaryText: text(1000).min(1), headline: text(255).min(1), dailyBudget: z.coerce.number().finite().positive().max(999999999), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default('AR') }).parse(req.body);
   const item = await facebookAdsService.createTrafficAd(req.store, req.user, body);
   await audit(req, 'social.facebook.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status });
+  ok(res, item, 201);
+}));
+
+router.post('/stores/:storeId/social/instagram/connect', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.createOAuthUrl(req.store, req.user))));
+router.post('/stores/:storeId/social/instagram/sandbox', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = z.object({ accessToken: z.string().trim().min(20).max(4096), adAccountId: text(80).min(1), pageId: text(80).min(1), instagramUserId: text(80).min(1) }).parse(req.body);
+  const integration = await instagramAdsService.connectSandbox(req.store, req.user, body);
+  await audit(req, 'social.instagram.connected', 'integration', 'instagram', { mode: 'sandbox', adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId, instagramUserId: integration.selectedInstagramUserId });
+  ok(res, integration);
+}));
+router.post('/stores/:storeId/social/instagram/refresh', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.refresh(req.store._id))));
+router.put('/stores/:storeId/social/instagram/assets', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = z.object({ adAccountId: text(80).min(1), pageId: text(80).min(1), instagramUserId: text(80).min(1) }).parse(req.body);
+  const integration = await instagramAdsService.selectAssets(req.store._id, body);
+  await audit(req, 'social.instagram.assets.updated', 'integration', 'instagram', { adAccountId: integration.selectedAdAccountId, pageId: integration.selectedPageId, instagramUserId: integration.selectedInstagramUserId });
+  ok(res, integration);
+}));
+router.delete('/stores/:storeId/social/instagram', requireStoreAccess, asyncHandler(async (req, res) => {
+  const result = await instagramAdsService.disconnect(req.store._id);
+  await audit(req, 'social.instagram.disconnected', 'integration', 'instagram');
+  ok(res, result);
+}));
+router.get('/stores/:storeId/social/instagram/products', requireStoreAccess, asyncHandler(async (req, res) => ok(res, await instagramAdsService.products(req.store))));
+router.post('/stores/:storeId/social/instagram/ads', requireStoreAccess, asyncHandler(async (req, res) => {
+  const body = z.object({ productId: objectId, name: text(120).min(1), primaryText: text(1000).min(1), headline: text(255).min(1), dailyBudget: z.coerce.number().finite().positive().max(999999999), countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default('AR') }).parse(req.body);
+  const item = await instagramAdsService.createTrafficAd(req.store, req.user, body);
+  await audit(req, 'social.instagram.ad.created', 'social_ad', item._id, { productId: item.productId, campaignId: item.external?.campaignId, adId: item.external?.adId, status: item.status });
   ok(res, item, 201);
 }));
 

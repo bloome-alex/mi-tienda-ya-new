@@ -24,7 +24,7 @@ async function removeImage(index){const url=form.images[index];form.images.splic
 onBeforeRouteLeave(async()=>{await cleanupUploads();return true;});
 onUnmounted(()=>{cleanupUploads();});
 function addVariant(){form.variants.push({id:uniqueKey(),name:'',sku:'',stock:0,price:'',attributes:{talle:'',color:''}})}
-async function removeVariant(i){if(editing.value&&!await confirmDialog({title:'Quitar variante',message:'La variante dejará de estar disponible para nuevas compras. Si tiene pedidos reservados, la API impedirá quitarla hasta resolverlos.',confirmText:'Quitar variante'}))return;form.variants.splice(i,1)}
+async function removeVariant(i){if(editing.value&&!await confirmDialog({title:'Quitar variante',message:'La variante dejará de estar disponible para nuevas compras. Si tiene pedidos reservados, no se podrá quitar hasta resolverlos.',confirmText:'Quitar variante'}))return;form.variants.splice(i,1)}
 async function save(){saving.value=true;error.value='';try{const data={...form,categoryId:form.categoryId||null,variants:form.variants.map(v=>({...v,price:v.price===''||v.price==null?undefined:Number(v.price),attributes:Object.fromEntries(Object.entries(v.attributes||{}).filter(([,val])=>String(val).trim()))}))};const path=`/stores/${workspace.activeStoreId}/products`;if(editing.value)await api.put(`${path}/${route.params.id}`,data);else await api.post(path,data);notify.success(editing.value?'Producto actualizado.':'Producto creado.');await cleanupUploads();router.push('/app/products')}catch(e){error.value=e.message;notify.error(e.message)}finally{saving.value=false}}
 function reorder(i,d){const target=i+d;if(target<0||target>=form.images.length)return;[form.images[i],form.images[target]]=[form.images[target],form.images[i]]}
 </script>

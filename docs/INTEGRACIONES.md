@@ -225,3 +225,26 @@ Los uploads que se crean pero nunca se guardan en un producto/diseño quedan mar
 ### Chromium bajo PM2/root (v1.14.1)
 
 Si Node se ejecuta con UID 0, MiTiendaYa agrega automáticamente `--no-sandbox` y `--disable-setuid-sandbox` al Chromium de WhatsApp. También usa `--disable-dev-shm-usage`, `--disable-gpu`, `--no-first-run` y `--no-default-browser-check` para un arranque más estable en servidores. `WHATSAPP_NO_SANDBOX=true` queda disponible para forzar el mismo comportamiento en contenedores o entornos no-root.
+
+## Instagram Ads (v1.20.0)
+
+Instagram Ads utiliza la misma aplicación de Meta que Facebook Ads, pero una conexión separada por tienda. Requiere una cuenta profesional de Instagram (Business o Creator) vinculada a una Página que el usuario administre.
+
+Variables relevantes:
+
+```env
+META_APP_ID=
+META_APP_SECRET=
+META_GRAPH_VERSION=v26.0
+META_INSTAGRAM_REDIRECT_URI=https://TU-DOMINIO/api/social/instagram/callback
+META_FACEBOOK_LOGIN_CONFIG_ID=
+META_SANDBOX_CONNECT_ENABLED=false
+```
+
+En Marketing API v26 los creativos de Instagram usan `instagram_user_id`. MiTiendaYa limita los ad sets creados desde la pestaña Instagram a `publisher_platforms: ['instagram']` y todos los objetos se crean en `PAUSED`.
+
+Para validar la integración sin credenciales reales:
+
+```bash
+npm run test:mock:instagram
+```

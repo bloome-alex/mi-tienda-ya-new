@@ -238,7 +238,7 @@ function validateBeforeSave(design,details){
       if(item.enabled&&link.enabled&&!link.url.trim())throw problem(`Completá el enlace a ${name} en “${item.title||'Redes sociales'}”, o desactivá esa red.`,'sections',undefined,'url',target);
       if(link.url){
         let valid=false;try{const url=new URL(link.url);valid=['https:','http:'].includes(url.protocol)&&!url.username&&!url.password&&!/[\s\\]/.test(link.url)&&link.url.length<=2048;}catch{}
-        if(!valid)throw problem(`El enlace a ${name} debe ser una dirección HTTP o HTTPS completa, de hasta 2048 caracteres y sin credenciales.`,'sections',undefined,'url',target);
+        if(!valid)throw problem(`El enlace a ${name} debe ser una dirección web completa, de hasta 2048 caracteres y sin datos privados.`,'sections',undefined,'url',target);
       }
     }
   }

@@ -1,6 +1,6 @@
 {
   "name": "mi-tienda-ya-2",
-  "version": "1.19.1",
+  "version": "1.20.0",
   "private": true,
   "description": "Plataforma de tiendas online PWA con Vue, Express y MongoDB",
   "type": "module",
@@ -21,7 +21,8 @@
     "migrate:r2": "node scripts/migrate-r2.mjs",
     "test:mock:subscriptions": "node --test --test-concurrency=1 scripts/test-subscriptions-mock.mjs",
     "test:mock:facebook": "node --test --test-concurrency=1 scripts/test-facebook-ads-mock.mjs",
-    "test:mock:integrations": "npm run test:mock:subscriptions && npm run test:mock:facebook"
+    "test:mock:integrations": "npm run test:mock:subscriptions && npm run test:mock:facebook && npm run test:mock:instagram",
+    "test:mock:instagram": "node --test --test-concurrency=1 scripts/test-instagram-ads-mock.mjs"
   },
   "devDependencies": {
     "mongodb-memory-server": "11.3.0",

@@ -129,7 +129,7 @@ customPlanRequestSchema.index({ createdAt: -1 });
 
 const socialOAuthStateSchema = new Schema({
   tokenHash: { type: String, required: true, unique: true },
-  provider: { type: String, enum: ['facebook'], required: true },
+  provider: { type: String, enum: ['facebook', 'instagram'], required: true },
   storeId: { ...ref('Store'), required: true, index: true },
   userId: { ...ref('User'), required: true, index: true },
   expiresAt: { type: Date, required: true },
@@ -138,7 +138,7 @@ socialOAuthStateSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const socialIntegrationSchema = new Schema({
   storeId: { ...ref('Store'), required: true, index: true },
-  provider: { type: String, enum: ['facebook'], required: true },
+  provider: { type: String, enum: ['facebook', 'instagram'], required: true },
   connectionMode: { type: String, enum: ['oauth', 'sandbox'], default: 'oauth' },
   status: { type: String, enum: ['connected', 'error'], default: 'connected', index: true },
   accessToken: { type: String, required: true, select: false },
@@ -148,8 +148,9 @@ const socialIntegrationSchema = new Schema({
   scopes: { type: [String], default: [] },
   selectedAdAccountId: { type: String, default: '' },
   selectedPageId: { type: String, default: '' },
+  selectedInstagramUserId: { type: String, default: '' },
   adAccounts: { type: [new Schema({ id: String, accountId: String, name: String, currency: String, accountStatus: Number }, { _id: false })], default: [] },
-  pages: { type: [new Schema({ id: String, name: String }, { _id: false })], default: [] },
+  pages: { type: [new Schema({ id: String, name: String, instagramUserId: String, instagramUsername: String }, { _id: false })], default: [] },
   connectedBy: ref('User'),
   lastValidatedAt: Date,
   lastError: { type: String, default: '' },
@@ -158,7 +159,7 @@ socialIntegrationSchema.index({ storeId: 1, provider: 1 }, { unique: true, name:
 
 const socialAdSchema = new Schema({
   storeId: { ...ref('Store'), required: true, index: true },
-  provider: { type: String, enum: ['facebook'], required: true, index: true },
+  provider: { type: String, enum: ['facebook', 'instagram'], required: true, index: true },
   createdBy: ref('User'),
   productId: ref('Product'),
   name: { type: String, required: true, maxlength: 120 },
@@ -171,7 +172,7 @@ const socialAdSchema = new Schema({
   countryCode: { type: String, default: 'AR' },
   status: { type: String, enum: ['paused', 'error'], default: 'paused', index: true },
   external: {
-    adAccountId: String, pageId: String, campaignId: String, adSetId: String, creativeId: String, adId: String, imageHash: String,
+    adAccountId: String, pageId: String, instagramUserId: String, campaignId: String, adSetId: String, creativeId: String, adId: String, imageHash: String,
   },
   error: { type: String, default: '' },
 }, options);

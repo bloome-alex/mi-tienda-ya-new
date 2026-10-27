@@ -20,6 +20,8 @@ export const auditActions = Object.freeze({
   'whatsapp.connect': 'Conexión de WhatsApp solicitada', 'whatsapp.disconnect': 'WhatsApp desconectado',
   'social.facebook.connected': 'Facebook conectado', 'social.facebook.disconnected': 'Facebook desconectado',
   'social.facebook.assets.updated': 'Activos de Facebook actualizados', 'social.facebook.ad.created': 'Anuncio de Facebook creado',
+  'social.instagram.connected': 'Instagram conectado', 'social.instagram.disconnected': 'Instagram desconectado',
+  'social.instagram.assets.updated': 'Activos de Instagram actualizados', 'social.instagram.ad.created': 'Anuncio de Instagram creado',
 });
 export const auditEntities = Object.freeze({ user: 'Usuario', store: 'Tienda', plan: 'Plan', category: 'Categoría', product: 'Producto', order: 'Pedido', settings: 'Configuración', integration: 'Integración', social_ad: 'Anuncio social', subscription_support: 'Revisión de suscripción', store_transfer: 'Transferencia de tienda' });
 

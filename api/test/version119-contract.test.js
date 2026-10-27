@@ -64,7 +64,7 @@ test('Facebook Graph y la validación de assets son inyectables para ejecutar el
   assert.match(service, /this\.graph\(token\)/);
 });
 
-test('hay dos stacks mock independientes y comandos explícitos para ejecutarlos', async () => {
+test('los stacks mock de Mercado Pago y Facebook siguen disponibles con comandos explícitos', async () => {
   const pkg = JSON.parse(await readApp('package.json'));
   const subscriptions = await readApp('scripts/test-subscriptions-mock.mjs');
   const facebook = await readApp('scripts/test-facebook-ads-mock.mjs');

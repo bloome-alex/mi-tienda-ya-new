@@ -56,6 +56,7 @@ export const config = {
     appSecret: (process.env.META_APP_SECRET || '').trim(),
     graphVersion: (process.env.META_GRAPH_VERSION || 'v26.0').trim(),
     redirectUri: (process.env.META_REDIRECT_URI || `${(process.env.APP_URL || 'http://localhost:5000').replace(/\/$/, '')}/api/social/facebook/callback`).trim(),
+    instagramRedirectUri: (process.env.META_INSTAGRAM_REDIRECT_URI || `${(process.env.APP_URL || 'http://localhost:5000').replace(/\/$/, '')}/api/social/instagram/callback`).trim(),
     loginConfigId: (process.env.META_FACEBOOK_LOGIN_CONFIG_ID || '').trim(),
     sandboxEnabled: process.env.META_SANDBOX_CONNECT_ENABLED === 'true' || ((process.env.NODE_ENV || 'development') !== 'production' && process.env.META_SANDBOX_CONNECT_ENABLED !== 'false'),
   },
@@ -72,7 +73,9 @@ export function validateConfig() {
   if (config.facebookAds.appId && !/^\d+$/.test(config.facebookAds.appId)) throw new Error('META_APP_ID debe ser numérico.');
   if (config.facebookAds.loginConfigId && !/^\d+$/.test(config.facebookAds.loginConfigId)) throw new Error('META_FACEBOOK_LOGIN_CONFIG_ID debe ser numérico.');
   if (config.facebookAds.redirectUri && !/^https?:\/\//i.test(config.facebookAds.redirectUri)) throw new Error('META_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
+  if (config.facebookAds.instagramRedirectUri && !/^https?:\/\//i.test(config.facebookAds.instagramRedirectUri)) throw new Error('META_INSTAGRAM_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
   if (config.isProduction && config.facebookAds.appId && !config.facebookAds.redirectUri.startsWith('https://')) throw new Error('META_REDIRECT_URI debe usar HTTPS en producción.');
+  if (config.isProduction && config.facebookAds.appId && !config.facebookAds.instagramRedirectUri.startsWith('https://')) throw new Error('META_INSTAGRAM_REDIRECT_URI debe usar HTTPS en producción.');
   if (!Number.isInteger(config.bcryptRounds) || config.bcryptRounds < 10 || config.bcryptRounds > 14) throw new Error('BCRYPT_ROUNDS debe estar entre 10 y 14.');
   if (!Number.isInteger(config.sessionDays) || config.sessionDays < 1 || config.sessionDays > 90) throw new Error('SESSION_DAYS debe estar entre 1 y 90.');
   if (config.rootUser.length > 100) throw new Error('ROOT_USER no puede superar 100 caracteres.');
