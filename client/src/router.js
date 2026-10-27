@@ -37,6 +37,8 @@ const platformRoutes=[
     {path:'emails',component:()=>import('./views/admin/EmailsView.vue'),meta:{admin:true,title:'Emails'}},
     {path:'custom-plan-requests',component:()=>import('./views/admin/CustomPlanRequestsView.vue'),meta:{admin:true,title:'Solicitudes de planes'}},
     {path:'custom-plan-requests/:id',component:()=>import('./views/admin/CustomPlanRequestDetailView.vue'),meta:{admin:true,title:'Detalle de solicitud'}},
+    {path:'error-reports',component:()=>import('./views/admin/BugReportsView.vue'),meta:{admin:true,title:'Reportes de errores'}},
+    {path:'error-reports/:id',component:()=>import('./views/admin/BugReportDetailView.vue'),meta:{admin:true,title:'Detalle de reporte'}},
     {path:'settings/plans/new',component:()=>import('./views/admin/PlanFormView.vue'),meta:{admin:true,title:'Nuevo plan'}},
     {path:'settings/plans/:id',component:()=>import('./views/admin/PlanFormView.vue'),meta:{admin:true,title:'Editar plan'}},
     {path:'audit',component:()=>import('./views/admin/AuditView.vue'),meta:{admin:true,title:'Auditoría'}},
@@ -62,6 +64,7 @@ const platformRoutes=[
     {path:'pwa',component:()=>import('./views/seller/StorePwaView.vue'),meta:{title:'Aplicación PWA',feature:'store.pwa'}},
     {path:'plan',redirect:'/app/subscription'},
     {path:'subscription',component:()=>import('./views/seller/SubscriptionView.vue'),meta:{title:'Mi suscripción'}},
+    {path:'report-error',component:()=>import('./views/seller/BugReportView.vue'),meta:{title:'Reportar un error'}},
     {path:'transfers',component:()=>import('./views/seller/TransfersView.vue'),meta:{title:'Transferencias de tiendas'}},
     {path:'transfer-history',component:()=>import('./views/seller/TransferHistoryView.vue'),meta:{title:'Historial de Transferencias',feature:'stores.transfer'}},
     {path:'design',component:()=>import('./views/seller/DesignView.vue'),meta:{title:'Diseño de tu tienda',feature:'design.limited'}}

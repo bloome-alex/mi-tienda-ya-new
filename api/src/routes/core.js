@@ -30,11 +30,14 @@ import { youtubeAdsService } from '../services/YouTubeAdsService.js';
 import { tiktokAdsService } from '../services/TikTokAdsService.js';
 import { mercadoPagoAccountService } from '../services/MercadoPagoAccountService.js';
 import { commercePlanLimitService } from '../services/CommercePlanLimitService.js';
+import { bugReportService } from '../services/BugReportService.js';
+import { adminDashboardService } from '../services/AdminDashboardService.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
 const router = Router();
 const text = (max = 500) => z.string().trim().max(max);
 const money = z.coerce.number().finite().min(0).max(999999999).transform(n => Math.round(n * 100) / 100);
 const integer = (max = 1000000) => z.coerce.number().int().min(0).max(max);
+const nonnegativeInteger = z.coerce.number().int().min(0);
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Identificador inválido.');
 const email = z.string().trim().toLowerCase().email().max(254);
 const maybeEmail = z.union([email, z.literal('')]);
@@ -51,6 +54,7 @@ const audit = (req, action, entity, entityId, details, storeId = req.store?._id)
 const assertPlanFeature = async (user, featureKey) => { if (user?.role === 'admin' || await planFeatureService.has(user, featureKey)) return; const label = planFeatureService.label(featureKey); throw new AppError(`Tu plan no incluye ${label}.`, 403, 'PLAN_FEATURE_REQUIRED', { featureKey, label }); };
 const authLimiter = rateLimit({ windowMs: 15 * 60000, limit: 15, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: { code: 'RATE_LIMIT', message: 'Demasiados intentos. Esperá unos minutos.' } } });
 const subscriptionSupportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 3 } });
+const bugReportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 5, fields: 4 }, fileFilter(_req, file, cb) { if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.mimetype)) return cb(new AppError('Los reportes admiten imágenes JPG, PNG, WebP o GIF.', 422, 'BUG_REPORT_INVALID_FILE')); cb(null, true); } });
 const customPlanRequestLimiter = rateLimit({ windowMs: 15 * 60000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: { code: 'RATE_LIMIT', message: 'Recibimos varias solicitudes. Esperá unos minutos antes de volver a enviar.' } } });
 
 router.get('/public/config', asyncHandler(async (_req, res) => {
@@ -109,7 +113,7 @@ const planSchema = z.object({
   durationDays: integer(3660).refine(n => n > 0).default(30), featureKeys: z.array(featureKey).max(50).default([]),
   featurePresentation: z.array(z.object({ key: featureKey, title: text(120).default(''), description: text(500).default('') })).max(50).default([]),
   inheritsPlanId: objectId.nullable().optional().default(null), maxStores: integer(1000).refine(n => n > 0).default(1),
-  maxProducts: integer().default(100), maxPaymentMethods: integer(20).default(3), maxDeliveryMethods: integer(20).default(3), active: trueBoolean.default(true), visible: trueBoolean.default(true), featured: trueBoolean.default(false),
+  maxProducts: integer().default(100), maxPaymentMethods: nonnegativeInteger.default(3), maxDeliveryMethods: nonnegativeInteger.default(3), active: trueBoolean.default(true), visible: trueBoolean.default(true), featured: trueBoolean.default(false),
   sortOrder: z.coerce.number().int().min(-1000).max(1000).default(0),
 });
 const planPayload = body => {
@@ -133,6 +137,29 @@ router.get('/admin/custom-plan-requests', requireAdmin, asyncHandler(async (req,
 }));
 router.get('/admin/custom-plan-requests/:id', requireAdmin, asyncHandler(async (req, res) => {
   ok(res, await customPlanRequestService.getById(req.params.id));
+}));
+router.get('/admin/bug-reports', requireAdmin, asyncHandler(async (req, res) => {
+  const { page, limit } = pagination(req.query);
+  const result = await bugReportService.listAdmin({ page, limit, search: req.query.search, status: String(req.query.status || '') });
+  ok(res, result.items, 200, { page, limit, total: result.total });
+}));
+router.get('/admin/bug-reports/:id/attachments/:attachmentId', requireAdmin, asyncHandler(async (req, res) => {
+  const file = await bugReportService.attachment(req.params.id, req.params.attachmentId, req.user);
+  res.set('Cache-Control', 'private, no-store').set('X-Content-Type-Options', 'nosniff').type(file.mimeType).set('Content-Disposition', 'inline').send(file.body);
+}));
+router.get('/admin/bug-reports/:id', requireAdmin, asyncHandler(async (req, res) => ok(res, await bugReportService.getAdmin(req.params.id))));
+router.put('/admin/bug-reports/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const body = z.object({ status: z.enum(['new','reviewing','resolved','closed']).optional(), adminNote: text(5000).optional() }).parse(req.body);
+  const before = await bugReportService.getAdmin(req.params.id);
+  const item = await bugReportService.updateAdmin(req.params.id, req.user._id, body);
+  await audit(req, 'bug_report.updated', 'bug_report', item._id, { changes: AuditService.changes(before, item, ['status','adminNote','resolvedAt']) }, item.storeId?._id || item.storeId || null);
+  ok(res, item);
+}));
+router.delete('/admin/bug-reports/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const item = await bugReportService.getAdmin(req.params.id);
+  const result = await bugReportService.deleteAdmin(req.params.id);
+  await audit(req, 'bug_report.deleted', 'bug_report', req.params.id, { reporterId: item.reporterId?._id || item.reporterId, status: item.status }, item.storeId?._id || item.storeId || null);
+  ok(res, result);
 }));
 router.get('/admin/plans', requireAdmin, asyncHandler(async (req, res) => {
   const { page, limit } = pagination(req.query);
@@ -845,6 +872,21 @@ router.delete('/stores/:storeId/products/:id', requireStoreAccess, requireFeatur
   await assetService.cleanupProductImages(before, []);
   await audit(req, 'product.archived', 'product', before._id, { changes: AuditService.changes(before, { active: false, archived: true }, ['active', 'archived']) }); ok(res, await Product.findById(before._id).select('-reservations'));
 }));
+router.get('/me/bug-reports', requireAuth, asyncHandler(async (req, res) => {
+  if (req.user.role !== 'vendedor') throw new AppError('Esta sección está disponible para vendedores.', 403, 'BUG_REPORT_SELLER_ONLY');
+  ok(res, await bugReportService.listForUser(req.user._id, { limit: req.query.limit }));
+}));
+router.get('/me/bug-reports/:id/attachments/:attachmentId', requireAuth, asyncHandler(async (req, res) => {
+  const file = await bugReportService.attachment(req.params.id, req.params.attachmentId, req.user);
+  res.set('Cache-Control', 'private, no-store').set('X-Content-Type-Options', 'nosniff').type(file.mimeType).set('Content-Disposition', 'inline').send(file.body);
+}));
+router.post('/me/bug-reports', requireAuth, bugReportUpload.array('files', 5), asyncHandler(async (req, res) => {
+  const body = z.object({ comment: text(5000).min(10), storeId: z.union([objectId, z.literal('')]).optional() }).parse(req.body);
+  const item = await bugReportService.create(req.user, body, req.files || []);
+  await audit(req, 'bug_report.created', 'bug_report', item._id, { attachments: item.attachments?.length || 0 }, item.storeId?._id || item.storeId || null);
+  ok(res, { ...item, notification: 'Gracias por reportar el error. Tendremos información en próximas novedades de versión.' }, 201);
+}));
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { files: 5, fileSize: 5 * 1024 * 1024 }, fileFilter(_req, file, cb) { if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) return cb(new AppError('Solo imágenes JPG, PNG o WebP.', 422)); cb(null, true); } });
 router.post('/stores/:storeId/uploads', requireStoreAccess, requireAnyFeature(['management.products','design.limited','store.pwa']), upload.array('files', 5), asyncHandler(async (req, res) => {
   const purpose = req.body.purpose === undefined ? 'image' : z.string().max(40).parse(req.body.purpose);
@@ -860,13 +902,14 @@ router.delete('/stores/:storeId/uploads', requireStoreAccess, requireAnyFeature(
 
 router.get('/admin/dashboard', requireAdmin, asyncHandler(async (_req, res) => {
   const { Order } = await import('../models/commerce.js');
-  const [users, stores, activeStores, products, paid, recentOrders, activity, salesSeries] = await Promise.all([
+  const [users, stores, activeStores, products, paid, recentOrders, activity, salesSeries, subscriptions] = await Promise.all([
     User.countDocuments({ role: 'vendedor', active: true }), Store.countDocuments({ archived: { $ne: true } }), Store.countDocuments({ active: true, archived: { $ne: true } }), Product.countDocuments({ archived: { $ne: true } }),
     Order.aggregate([{ $match: { status: 'paid' } }, { $group: { _id: null, count: { $sum: 1 }, revenue: { $sum: '$total' }, productsSold: { $sum: { $sum: '$items.quantity' } } } }]),
     Order.find({ status: { $ne: 'creating' } }).sort({ createdAt: -1 }).limit(7).select('number total status createdAt storeId customer.name').populate('storeId', 'name').lean(),
     AuditService.recent(10),
     Order.aggregate([{ $match: { status: 'paid', paidAt: { $gte: new Date(Date.now() - 30 * 86400000) } } }, { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$paidAt', timezone: 'America/Argentina/Buenos_Aires' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
+    adminDashboardService.subscriptionSummary(),
   ]);
-  ok(res, { users, stores, activeStores, products, paidOrders: paid[0]?.count || 0, revenue: paid[0]?.revenue || 0, productsSold: paid[0]?.productsSold || 0, recentOrders, activity, salesSeries });
+  ok(res, { users, stores, activeStores, products, paidOrders: paid[0]?.count || 0, revenue: paid[0]?.revenue || 0, productsSold: paid[0]?.productsSold || 0, recentOrders, activity, salesSeries, subscriptions });
 }));
 export default router;

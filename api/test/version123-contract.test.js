@@ -57,8 +57,8 @@ test('los planes incorporan cupos de formas de pago y entrega y el backend los h
   const routes=read('src/routes/core.js');
   const limits=read('src/services/CommercePlanLimitService.js');
   const entitlement=read('src/services/core.js');
-  assert.match(model,/maxPaymentMethods: \{ type: Number, min: 0, max: 20, default: 3 \}/);
-  assert.match(model,/maxDeliveryMethods: \{ type: Number, min: 0, max: 20, default: 3 \}/);
+  assert.match(model,/maxPaymentMethods: \{ type: Number, min: 0, default: 3 \}/);
+  assert.match(model,/maxDeliveryMethods: \{ type: Number, min: 0, default: 3 \}/);
   assert.match(routes,/commercePlanLimitService\.assertUpdate/);
   assert.match(limits,/PAYMENT_METHOD_LIMIT/);
   assert.match(limits,/DELIVERY_METHOD_LIMIT/);
@@ -86,8 +86,8 @@ test('la migración preserva planes y cuentas Mercado Pago existentes',()=>{
   const limits=read('src/services/CommercePlanLimitService.js');
   const accounts=read('src/services/MercadoPagoAccountService.js');
   const core=read('src/services/core.js');
-  assert.match(limits,/maxPaymentMethods: 20/);
-  assert.match(limits,/maxDeliveryMethods: 20/);
+  assert.match(limits,/maxPaymentMethods: 0/);
+  assert.match(limits,/maxDeliveryMethods: 0/);
   assert.match(accounts,/id: 'mp-default'/);
   assert.match(accounts,/payment\.mercadoPagoAccountId = String\(first\.id\)/);
   assert.match(core,/initializeLegacyPlanLimits/);

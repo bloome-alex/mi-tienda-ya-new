@@ -1,15 +1,15 @@
 import { Plan, Subscription } from '../models/index.js';
 import { AppError } from '../middleware/core.js';
 
-const numericLimit = value => Math.max(0, Math.min(20, Number(value ?? 0) || 0));
+const numericLimit = value => Math.max(0, Math.trunc(Number(value ?? 0) || 0));
 
-/** Cupos de configuración de cobros/entregas. 0 representa ilimitado (hasta el tope técnico de 20). */
+/** Cupos comerciales de cobros/entregas. 0 representa ilimitado y no existe un tope técnico artificial. */
 export class CommercePlanLimitService {
   async initializeLegacyPlanLimits() {
-    await Plan.updateMany({ maxPaymentMethods: { $exists: false } }, { $set: { maxPaymentMethods: 20 } });
-    await Plan.updateMany({ maxDeliveryMethods: { $exists: false } }, { $set: { maxDeliveryMethods: 20 } });
-    await Subscription.updateMany({ 'planSnapshot.maxPaymentMethods': { $exists: false } }, { $set: { 'planSnapshot.maxPaymentMethods': 20 } });
-    await Subscription.updateMany({ 'planSnapshot.maxDeliveryMethods': { $exists: false } }, { $set: { 'planSnapshot.maxDeliveryMethods': 20 } });
+    await Plan.updateMany({ maxPaymentMethods: { $exists: false } }, { $set: { maxPaymentMethods: 0 } });
+    await Plan.updateMany({ maxDeliveryMethods: { $exists: false } }, { $set: { maxDeliveryMethods: 0 } });
+    await Subscription.updateMany({ 'planSnapshot.maxPaymentMethods': { $exists: false } }, { $set: { 'planSnapshot.maxPaymentMethods': 0 } });
+    await Subscription.updateMany({ 'planSnapshot.maxDeliveryMethods': { $exists: false } }, { $set: { 'planSnapshot.maxDeliveryMethods': 0 } });
   }
 
   assertUpdate({ currentPayments = [], currentDeliveries = [], nextPayments = [], nextDeliveries = [], entitlement }) {

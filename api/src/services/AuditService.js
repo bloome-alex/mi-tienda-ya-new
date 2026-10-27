@@ -17,13 +17,14 @@ export const auditActions = Object.freeze({
   'order.created': 'Pedido creado', 'order.pending': 'Pedido pendiente', 'order.awaiting_payment': 'Pedido esperando pago', 'order.processing': 'Pedido en proceso',
   'order.paid': 'Pedido pagado', 'order.cancelled': 'Pedido cancelado', 'order.fulfillment': 'Entrega del pedido actualizada', 'order.receipt.uploaded': 'Comprobante de transferencia recibido',
   'subscription.pending.cancelled': 'Vinculación pendiente de suscripción cancelada', 'subscription.support.created': 'Comprobante de suscripción enviado', 'subscription.support.approved': 'Comprobante de suscripción aprobado', 'subscription.support.rejected': 'Comprobante de suscripción rechazado',
+  'bug_report.created': 'Reporte de error creado', 'bug_report.updated': 'Reporte de error actualizado', 'bug_report.deleted': 'Reporte de error eliminado',
   'whatsapp.connect': 'Conexión de WhatsApp solicitada', 'whatsapp.disconnect': 'WhatsApp desconectado',
   'social.facebook.connected': 'Facebook conectado', 'social.facebook.disconnected': 'Facebook desconectado',
   'social.facebook.assets.updated': 'Activos de Facebook actualizados', 'social.facebook.ad.created': 'Anuncio de Facebook creado',
   'social.instagram.connected': 'Instagram conectado', 'social.instagram.disconnected': 'Instagram desconectado',
   'social.instagram.assets.updated': 'Activos de Instagram actualizados', 'social.instagram.ad.created': 'Anuncio de Instagram creado',
 });
-export const auditEntities = Object.freeze({ user: 'Usuario', store: 'Tienda', plan: 'Plan', category: 'Categoría', product: 'Producto', order: 'Pedido', settings: 'Configuración', integration: 'Integración', social_ad: 'Anuncio social', subscription_support: 'Revisión de suscripción', store_transfer: 'Transferencia de tienda' });
+export const auditEntities = Object.freeze({ user: 'Usuario', store: 'Tienda', plan: 'Plan', category: 'Categoría', product: 'Producto', order: 'Pedido', settings: 'Configuración', integration: 'Integración', social_ad: 'Anuncio social', subscription_support: 'Revisión de suscripción', bug_report: 'Reporte de error', store_transfer: 'Transferencia de tienda' });
 
 const secret = /password|passwd|contrase[nñ]a|secret|token|csrf|authorization|cookie|credential|api[_-]?key|private[_-]?key|encryption[_-]?key|digital[_-]?url/i;
 const unsafeKey = key => ['__proto__', 'constructor', 'prototype'].includes(key);

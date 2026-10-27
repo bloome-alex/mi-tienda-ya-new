@@ -32,7 +32,7 @@ onMounted(async()=>{
     featureMeta.value=meta;
     for(const feature of meta.groups.flatMap(group=>group.features))presentation[feature.key]={title:feature.label,description:feature.description};
     if(item){
-      Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,maxPaymentMethods:item.maxPaymentMethods??20,maxDeliveryMethods:item.maxDeliveryMethods??20,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
+      Object.assign(form,{name:item.name,icon:item.icon,previousPrice:item.previousPrice,price:item.price,durationDays:item.durationDays,featureKeys:[...(item.featureKeys||[])],inheritsPlanId:item.inheritsPlanId||null,maxStores:item.maxStores,maxProducts:item.maxProducts,maxPaymentMethods:item.maxPaymentMethods??0,maxDeliveryMethods:item.maxDeliveryMethods??0,active:item.active,visible:item.visible!==false,featured:item.featured,sortOrder:item.sortOrder});
       for(const entry of item.featurePresentation||[])presentation[entry.key]={title:entry.title||featureByKey.value.get(entry.key)?.label||entry.key,description:Object.prototype.hasOwnProperty.call(entry,'description')?entry.description:(featureByKey.value.get(entry.key)?.description||'')};
     }
   }catch(e){error.value=e.message}finally{loading.value=false}
@@ -84,8 +84,8 @@ async function save(){
           <div class="p-form-grid">
             <div class="p-field"><label for="plan-stores">Cantidad de tiendas *</label><input id="plan-stores" v-model.number="form.maxStores" type="number" min="1" max="1000" step="1" required/></div>
             <div class="p-field"><label for="plan-products">Productos por tienda *</label><input id="plan-products" v-model.number="form.maxProducts" type="number" min="0" step="1" required/><small>0 significa productos ilimitados.</small></div>
-            <div class="p-field"><label for="plan-payment-methods">Formas de pago por tienda *</label><input id="plan-payment-methods" v-model.number="form.maxPaymentMethods" type="number" min="0" max="20" step="1" required/><small>0 significa sin límite del plan (máximo técnico: 20).</small></div>
-            <div class="p-field"><label for="plan-delivery-methods">Formas de entrega por tienda *</label><input id="plan-delivery-methods" v-model.number="form.maxDeliveryMethods" type="number" min="0" max="20" step="1" required/><small>0 significa sin límite del plan (máximo técnico: 20).</small></div>
+            <div class="p-field"><label for="plan-payment-methods">Formas de pago por tienda *</label><input id="plan-payment-methods" v-model.number="form.maxPaymentMethods" type="number" min="0" step="1" required/><small>0 significa sin límite. No existe un máximo técnico artificial.</small></div>
+            <div class="p-field"><label for="plan-delivery-methods">Formas de entrega por tienda *</label><input id="plan-delivery-methods" v-model.number="form.maxDeliveryMethods" type="number" min="0" step="1" required/><small>0 significa sin límite. No existe un máximo técnico artificial.</small></div>
           </div>
         </section>
 

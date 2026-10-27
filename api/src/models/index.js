@@ -14,7 +14,7 @@ userSchema.index({ role: 1 }, { unique: true, partialFilterExpression: { role: '
 userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } });
 userSchema.set('optimisticConcurrency', true);
 const planFeaturePresentationSchema = new Schema({ key: { type: String, required: true }, title: { type: String, trim: true, maxlength: 120, default: '' }, description: { type: String, trim: true, maxlength: 500, default: '' } }, { _id: false });
-const planSchema = new Schema({ name: { type: String, required: true, maxlength: 100 }, icon: { type: String, default: 'store' }, previousPrice: nonnegative, price: nonnegative, durationDays: { type: Number, min: 1, default: 30 }, features: { type: [String], default: [] }, featureKeys: { type: [String], default: [] }, featurePresentation: { type: [planFeaturePresentationSchema], default: [] }, featureSchemaVersion: { type: Number, default: 3 }, inheritsPlanId: { ...ref('Plan'), default: null }, maxStores: { type: Number, min: 1, default: 1 }, maxProducts: { type: Number, min: 0, default: 100 }, maxPaymentMethods: { type: Number, min: 0, max: 20, default: 3 }, maxDeliveryMethods: { type: Number, min: 0, max: 20, default: 3 }, active: { type: Boolean, default: true }, visible: { type: Boolean, default: true }, featured: { type: Boolean, default: false }, sortOrder: { type: Number, default: 0 } }, options);
+const planSchema = new Schema({ name: { type: String, required: true, maxlength: 100 }, icon: { type: String, default: 'store' }, previousPrice: nonnegative, price: nonnegative, durationDays: { type: Number, min: 1, default: 30 }, features: { type: [String], default: [] }, featureKeys: { type: [String], default: [] }, featurePresentation: { type: [planFeaturePresentationSchema], default: [] }, featureSchemaVersion: { type: Number, default: 3 }, inheritsPlanId: { ...ref('Plan'), default: null }, maxStores: { type: Number, min: 1, default: 1 }, maxProducts: { type: Number, min: 0, default: 100 }, maxPaymentMethods: { type: Number, min: 0, default: 3 }, maxDeliveryMethods: { type: Number, min: 0, default: 3 }, active: { type: Boolean, default: true }, visible: { type: Boolean, default: true }, featured: { type: Boolean, default: false }, sortOrder: { type: Number, default: 0 } }, options);
 const deliverySchema = new Schema({ id: { type: String, required: true }, type: { type: String, enum: ['pickup', 'shipping', 'digital', 'custom'], required: true }, name: { type: String, required: true }, description: String, price: nonnegative, active: { type: Boolean, default: true } }, { _id: false });
 const paymentSchema = new Schema({ id: { type: String, required: true }, type: { type: String, enum: ['cash', 'transfer', 'mercadopago'], required: true }, name: { type: String, required: true }, instructions: String, deliveryIds: [String], active: { type: Boolean, default: true }, mercadoPagoAccountId: { type: String, default: '' }, bank: { holder: String, bank: String, cbu: String, alias: String, cuit: String } }, { _id: false });
 const mercadoPagoAccountSchema = new Schema({ id: { type: String, required: true }, name: { type: String, required: true, trim: true, maxlength: 120 }, accessToken: { type: String, select: false }, webhookSecret: { type: String, select: false }, sandbox: { type: Boolean, default: true } }, { _id: false });
@@ -54,7 +54,7 @@ uploadedImageSchema.index({ objectKey: 1 }, { unique: true, partialFilterExpress
 const storageCleanupSchema = new Schema({ storeId: ref('Store'), bucket: { type: String, required: true }, objectKey: { type: String, required: true, unique: true }, reason: { type: String, default: 'cleanup' }, attempts: { type: Number, default: 0 }, lastError: String, availableAt: { type: Date, default: Date.now, index: true } }, options);
 
 const subscriptionPlanSnapshotSchema = new Schema({
-  name: { type: String, required: true }, price: { type: Number, min: 0, required: true }, durationDays: { type: Number, min: 1, required: true }, maxStores: { type: Number, min: 1, required: true }, maxProducts: { type: Number, min: 0, required: true }, maxPaymentMethods: { type: Number, min: 0, default: 20 }, maxDeliveryMethods: { type: Number, min: 0, default: 20 },
+  name: { type: String, required: true }, price: { type: Number, min: 0, required: true }, durationDays: { type: Number, min: 1, required: true }, maxStores: { type: Number, min: 1, required: true }, maxProducts: { type: Number, min: 0, required: true }, maxPaymentMethods: { type: Number, min: 0, default: 0 }, maxDeliveryMethods: { type: Number, min: 0, default: 0 },
 }, { _id: false });
 const subscriptionSchema = new Schema({
   userId: { ...ref('User'), required: true, index: true },
@@ -127,6 +127,26 @@ const customPlanRequestSchema = new Schema({
   status: { type: String, enum: ['new', 'contacted', 'closed'], default: 'new', index: true },
 }, options);
 customPlanRequestSchema.index({ createdAt: -1 });
+
+const bugReportAttachmentSchema = new Schema({
+  name: { type: String, required: true, trim: true, maxlength: 240 },
+  mimeType: { type: String, enum: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], required: true },
+  size: { type: Number, min: 1, required: true },
+  objectKey: { type: String, required: true, select: false },
+}, { timestamps: false });
+const bugReportSchema = new Schema({
+  reporterId: { ...ref('User'), required: true, index: true },
+  storeId: { ...ref('Store'), default: null, index: true },
+  comment: { type: String, required: true, trim: true, maxlength: 5000 },
+  attachments: { type: [bugReportAttachmentSchema], default: [], validate: [items => items.length <= 5, 'Hasta 5 archivos por reporte.'] },
+  status: { type: String, enum: ['new', 'reviewing', 'resolved', 'closed'], default: 'new', index: true },
+  adminNote: { type: String, trim: true, maxlength: 5000, default: '' },
+  reviewedBy: { ...ref('User'), default: null },
+  resolvedAt: Date,
+}, options);
+bugReportSchema.index({ createdAt: -1 });
+bugReportSchema.index({ reporterId: 1, createdAt: -1 });
+bugReportSchema.index({ status: 1, createdAt: -1 });
 
 const socialOAuthStateSchema = new Schema({
   tokenHash: { type: String, required: true, unique: true },
@@ -223,6 +243,7 @@ export const Subscription = mongoose.models.Subscription || mongoose.model('Subs
 export const SubscriptionCharge = mongoose.models.SubscriptionCharge || mongoose.model('SubscriptionCharge', subscriptionChargeSchema);
 export const SubscriptionSupportRequest = mongoose.models.SubscriptionSupportRequest || mongoose.model('SubscriptionSupportRequest', subscriptionSupportRequestSchema);
 export const CustomPlanRequest = mongoose.models.CustomPlanRequest || mongoose.model('CustomPlanRequest', customPlanRequestSchema);
+export const BugReport = mongoose.models.BugReport || mongoose.model('BugReport', bugReportSchema);
 export const SocialOAuthState = mongoose.models.SocialOAuthState || mongoose.model('SocialOAuthState', socialOAuthStateSchema);
 export const SocialIntegration = mongoose.models.SocialIntegration || mongoose.model('SocialIntegration', socialIntegrationSchema);
 export const SocialAd = mongoose.models.SocialAd || mongoose.model('SocialAd', socialAdSchema);
