@@ -56,3 +56,9 @@ test('la tienda abre la sección del #ancla y el panel lateral no duplica el bot
   assert.match(source('styles/storefront.css'), /\.store-contact-form \.notice\.success\{background:var\(--store-soft\)/);
   assert.match(source('views/seller/DesignView.vue'), /<strong class="ed-nowrap">Guardar cambios<\/strong>/);
 });
+
+test('el campo conserva lo que se está escribiendo aunque todavía sea inválido (1.25.6)', () => {
+  const field = source('components/editor/DesignField.vue');
+  assert.match(field, /const shown = computed\(\(\) => draftText\.value \?\? props\.modelValue\)/);
+  assert.equal((field.match(/:value="shown"/g) || []).length, 2);
+});
