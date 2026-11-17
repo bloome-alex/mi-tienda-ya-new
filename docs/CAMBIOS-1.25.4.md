@@ -1,0 +1,3 @@
+# MiTiendaYa 1.25.4
+
+- **Mails del pedido con diseño.** La confirmación de pedido y la entrega digital pasan de texto plano a una plantilla HTML compatible con clientes de correo (tablas y estilos en línea): cabecera con el color y el logo de la tienda, estado del pedido (pendiente de pago / esperando a Mercado Pago / pago confirmado), foto de cada producto, variante, cantidad, subtotales, costo de entrega y total en pesos, datos de entrega (dirección) y de pago (instrucciones y datos bancarios de la transferencia), y botón para ver el estado del pedido. Se mantiene la versión de texto. Plantilla en `api/src/services/OrderEmailTemplate.js`; pruebas en `api/test/order-email.test.js`.

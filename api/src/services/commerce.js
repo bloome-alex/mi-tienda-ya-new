@@ -15,6 +15,7 @@ import { categoryService } from './CategoryService.js';
 import { r2Storage } from './R2StorageService.js';
 import { storageCleanupService } from './StorageCleanupService.js';
 import { domainService } from './DomainService.js';
+import { renderOrderConfirmation, renderDigitalDelivery } from './OrderEmailTemplate.js';
 
 export const FINAL_STATUSES = Object.freeze(['paid', 'cancelled']);
 const ACTIVE_STATUSES = ['pending', 'awaiting_payment', 'processing'];
@@ -700,20 +701,15 @@ export class CommerceWorker {
         if (!store) throw commerceError('No se encontró la tienda.');
         const accessToken = order.accessTokenEncrypted ? decryptSecret(order.accessTokenEncrypted) : '';
         const orderUrl = domainService.orderTrackingUrl(store, order._id, accessToken);
-        const lines = order.items.map(item => `${item.quantity} × ${item.name}${item.variantName ? ` (${item.variantName})` : ''}: $${item.lineTotal.toFixed(2)}`).join('\n');
-        let subject, bodyText, html;
+        let message;
         if (job.kind === 'digital') {
-          const digital = order.items.filter(item => item.type === 'digital');
-          if (digital.some(item => !/^https?:\/\//.test(item.digitalUrl || ''))) throw commerceError('Falta un enlace digital válido en el pedido.');
-          subject = `Tu compra digital · ${order.number}`;
-          bodyText = `Hola ${order.customer.name}, tu pago en ${store.name} está confirmado.\n\n${digital.map(item => `${item.name}: ${item.digitalUrl}`).join('\n')}\n\nPedido: ${orderUrl}`;
-          html = `<h2>Tu compra está lista</h2><p>Hola ${escapeHtml(order.customer.name)}, confirmamos tu pago en ${escapeHtml(store.name)}.</p><ul>${digital.map(item => `<li><a href="${escapeHtml(item.digitalUrl)}">${escapeHtml(item.name)}</a></li>`).join('')}</ul><p><a href="${escapeHtml(orderUrl)}">Ver pedido ${escapeHtml(order.number)}</a></p>`;
+          const digitalItems = order.items.filter(item => item.type === 'digital');
+          if (digitalItems.some(item => !/^https?:\/\//.test(item.digitalUrl || ''))) throw commerceError('Falta un enlace digital válido en el pedido.');
+          message = renderDigitalDelivery({ store, order, orderUrl, digitalItems });
         } else {
-          subject = `Recibimos tu pedido ${order.number}`;
-          bodyText = `Hola ${order.customer.name}, recibimos tu pedido en ${store.name}.\n\n${lines}\n\nTotal: $${order.total.toFixed(2)} ARS\nEl pedido todavía debe ser abonado y confirmado.\n\nConsultá su estado y las instrucciones de pago: ${orderUrl}`;
-          html = `<h2>Recibimos tu pedido</h2><p>${escapeHtml(store.name)} · ${escapeHtml(order.number)}</p><p style="white-space:pre-wrap">${escapeHtml(lines)}</p><p><strong>Total: $${order.total.toFixed(2)} ARS</strong></p><p>La recepción del pedido no confirma su pago.</p><p><a href="${escapeHtml(orderUrl)}">Consultar estado e instrucciones</a></p>`;
+          message = renderOrderConfirmation({ store, order, orderUrl });
         }
-        await this.mail.send({ to: order.customer.email, subject, text: bodyText, html, messageId: `<${job.kind}-${order._id}@mi-tienda-ya.local>` });
+        await this.mail.send({ to: order.customer.email, subject: message.subject, text: message.text, html: message.html, messageId: `<${job.kind}-${order._id}@mi-tienda-ya.local>` });
         await MailJob.updateOne({ _id: job._id }, { $set: { state: 'sent', sentAt: new Date() }, $unset: { leaseUntil: 1, lastError: 1 } });
         if (job.kind === 'digital') await Order.updateOne({ _id: order._id, status: 'paid' }, { $set: { digitalDeliveryStatus: 'sent', digitalDeliveredAt: new Date() }, $unset: { digitalDeliveryError: 1 } });
       } catch (error) {
