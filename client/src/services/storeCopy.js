@@ -79,7 +79,7 @@ const groups = {
 export const storeTextSections = Object.freeze({common:'Textos comunes',shop:'Tienda y catálogo',contact:'Contacto y WhatsApp',product:'Producto',cart:'Carrito',checkout:'Checkout',terms:'Términos',tracking:'Seguimiento del pedido'});
 export const storeTextFields = Object.freeze(Object.entries(groups).flatMap(([section, rows]) => rows.map(([key,label,value]) => Object.freeze({key,label,section,default:value,max:/Description|Note|Help|Hint|Success|Trust/.test(key)?4000:240,type:/Description|Note|Help|Hint|Success|Trust/.test(key)?'textarea':'text'}))));
 export const defaultStoreCopy = Object.freeze(Object.fromEntries(storeTextFields.map(field=>[field.key,field.default])));
-const tokens = new Set(['count','storeName','current','pages','from','to','total','date','orderNumber','amount']);
+const tokens = new Set(['count','storeName','current','pages','from','to','total','date','orderNumber','amount','price']);
 export class StoreCopy {
   constructor(source = {}) { this.source = source; }
   text(key, values = {}) {

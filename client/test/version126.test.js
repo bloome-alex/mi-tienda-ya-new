@@ -59,3 +59,8 @@ test('el estado del aviso se declara antes del watch inmediato que llama a load(
   const layout = source('layouts/StoreLayout.vue');
   assert.ok(layout.indexOf('const staleChanges=ref(false)') < layout.indexOf(',load,{immediate:true})'));
 });
+
+test('el precio “Desde” reemplaza la variable {price} (1.26.2)', async () => {
+  const { StoreCopy } = await import('../src/services/storeCopy.js');
+  assert.equal(new StoreCopy({}).text('priceFrom', { price: '$ 12.500,00' }), 'Desde $ 12.500,00');
+});
