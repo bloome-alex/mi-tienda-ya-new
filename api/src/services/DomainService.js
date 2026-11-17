@@ -72,6 +72,13 @@ export class DomainService {
     return this.pathUrl(store);
   }
 
+  /** Seguimiento público del pedido: vive en /pedido/:id del dominio de la tienda o, sin dominio propio, de la plataforma. */
+  orderTrackingUrl(store, orderId, token) {
+    const domainUrl = this.publicUrl(store);
+    const base = (domainUrl === this.pathUrl(store) ? this.appUrl : domainUrl).replace(/\/$/, '');
+    return `${base}/pedido/${orderId}?token=${encodeURIComponent(token)}`;
+  }
+
   publicDomain(store) {
     const domain = store?.domain || {};
     return {

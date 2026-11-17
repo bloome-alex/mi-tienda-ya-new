@@ -698,9 +698,8 @@ export class CommerceWorker {
         }
         const store = await Store.findById(order.storeId);
         if (!store) throw commerceError('No se encontró la tienda.');
-        const baseUrl = domainService.publicUrl(store).replace(/\/$/, '');
         const accessToken = order.accessTokenEncrypted ? decryptSecret(order.accessTokenEncrypted) : '';
-        const orderUrl = `${baseUrl}/pedido/${order._id}?token=${encodeURIComponent(accessToken)}`;
+        const orderUrl = domainService.orderTrackingUrl(store, order._id, accessToken);
         const lines = order.items.map(item => `${item.quantity} × ${item.name}${item.variantName ? ` (${item.variantName})` : ''}: $${item.lineTotal.toFixed(2)}`).join('\n');
         let subject, bodyText, html;
         if (job.kind === 'digital') {

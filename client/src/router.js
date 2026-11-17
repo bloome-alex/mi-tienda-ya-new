@@ -71,6 +71,8 @@ const platformRoutes=[
     {path:'transfer-history',component:()=>import('./views/seller/TransferHistoryView.vue'),meta:{title:'Historial de Transferencias',feature:'stores.transfer'}},
     {path:'design',component:()=>import('./views/seller/DesignView.vue'),meta:{title:'Diseño de tu tienda',feature:'design.limited'}}
   ]},
+  // Enlaces de seguimiento generados antes de 1.25.3 (mails y retorno de Mercado Pago) apuntaban a /t/:slug/pedido/:id.
+  {path:'/t/:slug/pedido/:id',redirect:to=>({path:'/pedido/'+to.params.id,query:to.query})},
   {path:'/t/:slug',component:()=>import('./layouts/StoreLayout.vue'),children:storeChildren},
   {path:'/pedido/:id',component:()=>import('./views/public/OrderTrackingView.vue'),meta:{title:'Tu pedido'}},
   {path:'/:pathMatch(.*)*',component:()=>import('./views/public/NotFoundView.vue'),meta:{title:'Página no encontrada'}}

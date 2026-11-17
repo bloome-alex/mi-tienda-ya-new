@@ -36,7 +36,7 @@ export class MercadoPagoService {
     const baseUrl = domainService.publicUrl(store).replace(/\/$/, '');
     const webhookBaseUrl = String(config.appUrl || '').replace(/\/$/, '');
     if (!baseUrl.startsWith('https://') || !webhookBaseUrl.startsWith('https://')) throw failure('Mercado Pago requiere APP_URL con HTTPS y acceso público para recibir pagos.', 422, 'HTTPS_REQUIRED');
-    const returnUrl = `${baseUrl}/pedido/${order._id}?token=${encodeURIComponent(token)}`;
+    const returnUrl = domainService.orderTrackingUrl(store, order._id, token);
     const items = order.items.map(item => ({
       id: `${item.productId}${item.variantId ? `:${item.variantId}` : ''}`,
       title: `${item.name}${item.variantName ? ` · ${item.variantName}` : ''}`.slice(0, 250),
