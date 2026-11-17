@@ -36,7 +36,7 @@ export class StoreNavigationService {
     if (item.target === 'catalog' && design.shop.showCatalog) return anchor('#catalogo');
     if (item.target === 'featured' && design.shop.showFeatured && products.some(product => product.active && !product.archived && product.featured)) return anchor('#destacados');
     if (item.target === 'contact' && contact) return anchor('#store-contact');
-    if (item.target === 'terms' && design.terms.enabled) return { ...base, path: base.path + '/terminos' };
+    if (item.target === 'terms' && design.terms.enabled) return { ...base, path: String(base.path || '').replace(/\/+$/, '') + '/terminos' };
     const sections = design.sections || [];
     const section = item.target === 'social' ? sections.find(value => value.enabled && value.type === 'social' && this.socialLinks(value).length) : item.target === 'section' ? sections.find(value => value.id === item.sectionId && value.enabled) : null;
     if (section) return anchor('#store-section-' + section.id);

@@ -1,6 +1,6 @@
 {
   "name": "mi-tienda-ya-2",
-  "version": "1.25.7",
+  "version": "1.25.8",
   "private": true,
   "description": "Plataforma de tiendas online PWA con Vue, Express y MongoDB",
   "type": "module",

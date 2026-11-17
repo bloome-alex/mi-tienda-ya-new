@@ -61,3 +61,11 @@ test('los enlaces sociales excluyen esquemas ejecutables, URLs con credenciales 
   assert.equal(StoreTextLayout.direction('inherit'),undefined);
   assert.deepEqual(StoreTextLayout.style('unset; color:red','bad'),{textAlign:'inherit'});
 });
+
+test('el enlace a términos no duplica la barra en dominios y subdominios propios (1.25.8)', () => {
+  const design = normalizeDesign({ terms: { enabled: true } });
+  const link = { enabled: true, label: 'Condiciones', target: 'terms' };
+  assert.equal(Navigation.destination(link, { base: { path: '/', query: {} }, design, store: {} }).path, '/terminos');
+  assert.equal(Navigation.destination(link, { base: { path: '/t/cafe-aurora', query: {} }, design, store: {} }).path, '/t/cafe-aurora/terminos');
+  assert.equal(Navigation.destination(link, { base: { path: '/t/cafe-aurora/', query: {} }, design, store: {} }).path, '/t/cafe-aurora/terminos');
+});
