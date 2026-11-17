@@ -67,7 +67,15 @@ async function load(){
    store.value=data.store;products.value=data.products;featuredProducts.value=data.featuredProducts||[];categories.value=data.categories;allCategories.value=data.categories;catalogMeta.value=data.meta;
   }
   document.title=store.value.name+' · MiTiendaYa';applyPwaMetadata();
+  scrollToHashAfterLoad(seq);
  }catch(e){if(seq===requestId)error.value=e.message;}finally{if(seq===requestId)loading.value=false;}
+}
+// Un enlace con #ancla (por ejemplo /t/tienda#store-contact) se abre en esa sección cuando el contenido ya está renderizado.
+function scrollToHashAfterLoad(seq){
+ const hash=route.hash;if(!hash||hash.length<2)return;
+ let tries=0;const attempt=()=>{if(seq!==requestId)return;let target=null;try{target=document.getElementById(decodeURIComponent(hash.slice(1)));}catch{target=null;}
+  if(target){target.scrollIntoView({block:'start'});return;}if(++tries<20)setTimeout(attempt,100);};
+ setTimeout(attempt,0);
 }
 async function getProduct(id){if(isPreview.value){const p=products.value.find(x=>x._id===id);if(!p)throw Object.assign(new Error('Producto no disponible.'),{status:404});return p;}return(await api.get(`/public/stores/${currentSlug.value}/products/${id}`)).product;}
 async function navigatePreview(data){

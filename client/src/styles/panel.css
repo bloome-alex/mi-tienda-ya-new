@@ -50,3 +50,6 @@
 
 /* Feedback de interacción también en superficies clickeables sin apariencia de botón. */
 .p-modal-backdrop{cursor:pointer}.p-modal-backdrop .p-confirm{cursor:default}
+.p-notifications.p-notifications-bottom{top:auto;bottom:22px;right:auto;left:280px;pointer-events:none}.p-notifications.p-notifications-bottom .p-toast{pointer-events:auto}
+@media(max-width:1000px){.p-notifications.p-notifications-bottom{left:240px}}
+@media(max-width:760px){.p-notifications.p-notifications-bottom{left:18px;right:18px;width:auto;bottom:16px}}

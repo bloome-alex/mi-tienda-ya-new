@@ -25,9 +25,20 @@ async function remove(item){
   if(props.disabled||!await confirmDialog({title:'Quitar enlace',message:`Se quitará “${item.label||names[item.target]}” de la navegación. La sección de la tienda se conserva.`,confirmText:'Quitar enlace',danger:true}))return;
   emit('update:modelValue',props.modelValue.filter(link=>link.id!==item.id));
 }
+// Texto sugerido para cada destino. Si el vendedor no personalizó el texto, acompaña el cambio de destino.
+const defaultLabels={home:'Tienda',catalog:'Catálogo',featured:'Destacados',contact:'Contacto',terms:'Términos',social:'Redes'};
+function suggestedLabel(item){return item.target==='section'?(props.design.sections.find(section=>section.id===item.sectionId)?.title||''):defaultLabels[item.target]||'';}
+function followsDefault(item){const label=String(item.label||'').trim();return !label||label===suggestedLabel(item)||Object.values(defaultLabels).includes(label);}
 function changeTarget(item,target){
+  const automatic=followsDefault(item);
   item.target=target;
   if(target!=='section')item.sectionId='';
+  if(automatic)item.label=suggestedLabel(item);
+}
+function changeSection(item,sectionId){
+  const automatic=followsDefault(item);
+  item.sectionId=sectionId;
+  if(automatic&&suggestedLabel(item))item.label=suggestedLabel(item);
 }
 function notice(item){
   if(!item.enabled)return 'Este enlace está desactivado; podés conservarlo para usarlo más adelante.';
@@ -54,7 +65,7 @@ defineExpose({openItem(id){expanded.value=id;}});
       <div class="ed-item-actions"><label><input v-model="item.enabled" type="checkbox" :disabled="disabled" :aria-label="'Mostrar enlace '+(item.label||names[item.target])"/>Visible</label><div><button type="button" class="ed-icon-button" :disabled="disabled||index===0" :aria-label="'Subir enlace '+(item.label||names[item.target])" @click="move(index,-1)"><Icon name="arrow-right" class="ed-arrow-up" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled||index===modelValue.length-1" :aria-label="'Bajar enlace '+(item.label||names[item.target])" @click="move(index,1)"><Icon name="arrow-right" class="ed-arrow-down" :size="14"/></button><button type="button" class="ed-icon-button" :disabled="disabled" :aria-label="'Quitar enlace '+(item.label||names[item.target])" @click="remove(item)"><Icon name="trash" :size="14"/></button></div></div>
       <div v-if="expanded===item.id" :id="'navbar-link-'+item.id" class="ed-block-body">
         <DesignField :model-value="item.target" :field="targetField" :scope="'navbar.links.'+item.id" :disabled="disabled" @update:model-value="changeTarget(item,$event)"/>
-        <DesignField v-if="item.target==='section'" v-model="item.sectionId" :field="{key:'sectionId',label:'Sección de destino',type:'select',options:[['','Seleccioná una sección'],...sectionOptions]}" :scope="'navbar.links.'+item.id" :disabled="disabled"/>
+        <DesignField v-if="item.target==='section'" :model-value="item.sectionId" @update:model-value="changeSection(item,$event)" :field="{key:'sectionId',label:'Sección de destino',type:'select',options:[['','Seleccioná una sección'],...sectionOptions]}" :scope="'navbar.links.'+item.id" :disabled="disabled"/>
         <p v-if="notice(item)" class="ed-notice"><Icon name="info" :size="14"/><span>{{notice(item)}}</span></p>
       </div>
     </article>
