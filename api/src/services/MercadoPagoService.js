@@ -66,10 +66,16 @@ export class MercadoPagoService {
   }
 
   verifySignature({ signature, requestId, dataId }, secret) {
-    if (!secret || typeof signature !== 'string' || typeof requestId !== 'string' || !dataId) return false;
-    const parts = Object.fromEntries(signature.split(',').map(part => part.trim().split('=')));
+    if (!secret || typeof signature !== 'string' || !dataId) return false;
+    const parts = {};
+    for (const raw of signature.split(',')) {
+      const index = raw.indexOf('=');
+      if (index < 1) continue;
+      parts[raw.slice(0, index).trim()] = raw.slice(index + 1).trim();
+    }
     if (!/^\d{10,16}$/.test(parts.ts || '') || !/^[a-f\d]{64}$/i.test(parts.v1 || '')) return false;
-    const manifest = `id:${String(dataId).toLowerCase()};request-id:${requestId};ts:${parts.ts};`;
+    // Mercado Pago indica omitir del manifest los pares ausentes (por ejemplo, x-request-id).
+    const manifest = [`id:${String(dataId).toLowerCase()}`, ...(typeof requestId === 'string' && requestId ? [`request-id:${requestId}`] : []), `ts:${parts.ts}`].join(';') + ';';
     const expected = crypto.createHmac('sha256', secret).update(manifest).digest();
     const actual = Buffer.from(parts.v1, 'hex');
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);

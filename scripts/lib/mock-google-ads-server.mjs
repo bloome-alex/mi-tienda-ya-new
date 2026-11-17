@@ -46,5 +46,5 @@ export class MockGoogleAdsServer {
 
 export class MockGoogleAssetPolicy {
   async destination(rawUrl){if(!String(rawUrl).includes('/producto/'))throw new Error('Unexpected destination');return 'https://store.example.com/producto/mock';}
-  async image(rawUrl){return {bytes:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlksAAAAASUVORK5CYII=',url:String(rawUrl),type:'image/png'};}
+  async image(rawUrl){return {bytes:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',url:String(rawUrl),type:'image/png'};}
 }

@@ -75,6 +75,10 @@ export const config = {
     authorizationUrl: (process.env.TIKTOK_ADS_AUTHORIZATION_URL || '').trim(),
   },
   orderReservationMinutes: number('ORDER_RESERVATION_MINUTES', 60),
+  // Efectivo/transferencia: 0 = sin vencimiento automático (el vendedor cancela a mano).
+  offlineOrderReservationHours: number('OFFLINE_ORDER_RESERVATION_HOURS', 0),
+  // Máximo de pedidos impagos en efectivo/transferencia abiertos desde una misma IP por tienda.
+  offlineOrdersPerIp: number('OFFLINE_ORDERS_PER_IP', 3),
   smtp: { host: process.env.SMTP_HOST, port: number('SMTP_PORT', 587), secure: process.env.SMTP_SECURE === 'true', user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS, from: process.env.SMTP_FROM || 'MiTiendaYa <no-reply@example.com>' },
 };
 export function validateConfig() {
@@ -100,6 +104,8 @@ export function validateConfig() {
   if (config.tiktokAds.apiVersion && !/^v\d+(?:\.\d+)?$/.test(config.tiktokAds.apiVersion)) throw new Error('TIKTOK_ADS_API_VERSION debe tener formato v2.0.');
   if (config.tiktokAds.redirectUri && !/^https?:\/\//i.test(config.tiktokAds.redirectUri)) throw new Error('TIKTOK_ADS_REDIRECT_URI debe ser una URL HTTP/HTTPS.');
   if (config.isProduction && config.tiktokAds.appId && !config.tiktokAds.redirectUri.startsWith('https://')) throw new Error('TIKTOK_ADS_REDIRECT_URI debe usar HTTPS en producción.');
+  if (!Number.isInteger(config.offlineOrderReservationHours) || config.offlineOrderReservationHours < 0 || config.offlineOrderReservationHours > 720) throw new Error('OFFLINE_ORDER_RESERVATION_HOURS debe estar entre 0 y 720.');
+  if (!Number.isInteger(config.offlineOrdersPerIp) || config.offlineOrdersPerIp < 1 || config.offlineOrdersPerIp > 100) throw new Error('OFFLINE_ORDERS_PER_IP debe estar entre 1 y 100.');
   if (!Number.isInteger(config.bcryptRounds) || config.bcryptRounds < 10 || config.bcryptRounds > 14) throw new Error('BCRYPT_ROUNDS debe estar entre 10 y 14.');
   if (!Number.isInteger(config.sessionDays) || config.sessionDays < 1 || config.sessionDays > 90) throw new Error('SESSION_DAYS debe estar entre 1 y 90.');
   if (config.rootUser.length > 100) throw new Error('ROOT_USER no puede superar 100 caracteres.');

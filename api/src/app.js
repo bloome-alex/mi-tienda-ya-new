@@ -21,8 +21,11 @@ export function createApp() {
   app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'https:', 'http:', 'data:', 'blob:'], connectSrc: ["'self'"], fontSrc: ["'self'", 'data:'], frameSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'self'"], formAction: ["'self'"], ...(config.isProduction ? {} : { upgradeInsecureRequests: null }) } }, crossOriginResourcePolicy: { policy: 'same-origin' }, referrerPolicy: { policy: 'no-referrer' } }));
   const origins = new Set([new URL(config.appUrl).origin, ...(!config.isProduction ? ['http://localhost:5173', 'http://127.0.0.1:5173', `http://localhost:${config.port}`, `http://127.0.0.1:${config.port}`] : [])]);
   const originAllowed = async origin => !origin || origins.has(origin) || await domainService.isAllowedOrigin(origin);
-  app.use(cors({ credentials: true, origin(origin, callback) { Promise.resolve(originAllowed(origin)).then(allowed => allowed ? callback(null, true) : callback(new AppError('Origen no permitido.', 403, 'ORIGIN_REJECTED'))).catch(() => callback(new AppError('Origen no permitido.', 403, 'ORIGIN_REJECTED'))); } }));
+  // CORS sólo protege la API: los archivos estáticos (CSS/JS con crossorigin) no deben fallar por el Origin.
+  app.use('/api', cors({ credentials: true, origin(origin, callback) { Promise.resolve(originAllowed(origin)).then(allowed => allowed ? callback(null, true) : callback(new AppError('Origen no permitido.', 403, 'ORIGIN_REJECTED'))).catch(() => callback(new AppError('Origen no permitido.', 403, 'ORIGIN_REJECTED'))); } }));
   app.use(express.json({ limit: '512kb' })); app.use(cookieParser());
+  // Express 5 deja req.body en undefined cuando no se envía cuerpo; los handlers esperan un objeto.
+  app.use((req, _res, next) => { if (req.body === undefined) req.body = {}; next(); });
   app.use('/api', asyncHandler(async (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.path.startsWith('/webhooks/') && req.get('origin') && !await originAllowed(req.get('origin'))) throw new AppError('Origen no permitido.', 403, 'ORIGIN_REJECTED');

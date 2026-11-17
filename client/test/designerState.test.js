@@ -7,6 +7,7 @@ import { normalizeDesign, defaultDesign, wallpaperSpecs, storeTextFields, social
 import { PREVIEW_MESSAGE, isTrustedPreviewMessage, previewSectionPath, readPreviewLocation } from '../src/services/previewProtocol.js';
 import { editorGroups, wallpaperFields } from '../src/components/editor/fields.js';
 import { validateImageFile, orientedImageDimensions, validateWallpaperDimensions } from '../src/components/editor/imageValidation.js';
+import { DesignTextCatalog } from '../src/services/designTextCatalog.js';
 
 // Exercise the actual SFC setup with memory-only boundaries. No browser, auth,
 // HTTP server, or production API implementation is replaced in the application.
@@ -27,6 +28,8 @@ async function editorFixture(t, { choice = 'cancel', put, post } = {}) {
       async post(path, body, options) { calls.push({ path, body, options }); if (!post) throw new Error('Unexpected upload in test'); return await post(path, body, options); }
     },
     workspace, registerStoreSwitchGuard() { return () => {}; },
+    // El editor consulta el plan: en estas pruebas el vendedor tiene todas las funcionalidades.
+    canFeature: () => true, DesignTextCatalog,
     normalizeDesign, defaultDesign, wallpaperSpecs, storeTextFields, socialNetworks,
     notify: { success(message) { messages.push(message); }, error(message) { messages.push(message); }, info(message) { messages.push(message); } },
     confirmDialog: async () => true, unsavedChangesDialog: async () => choice,
@@ -165,7 +168,7 @@ test('una red visible sin URL impide guardar, conserva el borrador y permite cor
   assert.equal(view.section.value,'sections');assert.equal(view.dirty.value,true);
   assert.match(view.saveError.value,/Instagram/);
   view.draft.value.sections[0].socialLinks[0].url='javascript:alert(1)';
-  assert.equal(await view.save(),false);assert.equal(calls.length,0);assert.match(view.saveError.value,/HTTP o HTTPS/);
+  assert.equal(await view.save(),false);assert.equal(calls.length,0);assert.match(view.saveError.value,/HTTP o HTTPS|dirección web completa/);
   view.draft.value.sections[0].socialLinks[0].url='https://instagram.com/mi-tienda';
   assert.equal(await view.save(),true);assert.equal(calls.length,1);
 });

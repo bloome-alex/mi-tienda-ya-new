@@ -62,6 +62,7 @@ const orderSchema = new Schema({
   requestHash: { type: String, required: true, select: false },
   accessTokenHash: { type: String, required: true, select: false },
   accessTokenEncrypted: { type: String, select: false },
+  clientIpHash: { type: String, select: false },
   preferenceId: String,
   checkoutUrl: String,
   collectorId: String,
@@ -83,6 +84,7 @@ const orderSchema = new Schema({
 orderSchema.index({ storeId: 1, idempotencyHash: 1 }, { unique: true });
 orderSchema.index({ storeId: 1, status: 1, createdAt: -1 });
 orderSchema.index({ status: 1, finalEffectsAt: 1 });
+orderSchema.index({ storeId: 1, clientIpHash: 1, status: 1 }, { partialFilterExpression: { clientIpHash: { $type: 'string' } } });
 orderSchema.index({ paymentId: 1 }, { unique: true, partialFilterExpression: { paymentId: { $type: 'string' } } });
 
 const stockMovementSchema = new Schema({

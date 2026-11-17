@@ -38,6 +38,9 @@ export const PLAN_FEATURES = Object.freeze([
 
 const featureMap = new Map(PLAN_FEATURES.map(item => [item.key, item]));
 export const ALL_PLAN_FEATURE_KEYS = Object.freeze(PLAN_FEATURES.map(item => item.key));
+/** Al terminar la prueba sin plan, el vendedor conserva la edición de su contenido
+ * (como promete la FAQ) pero no puede publicar ni usar integraciones. */
+export const CONTENT_ONLY_FEATURE_KEYS = Object.freeze(['dashboard.statistics', 'management.products', 'management.categories', 'management.stock', 'management.orders', 'design.limited']);
 
 const idOf = value => value?._id ? String(value._id) : value ? String(value) : '';
 const plain = value => value?.toObject ? value.toObject() : { ...value };
@@ -216,6 +219,7 @@ export class PlanFeatureService {
     if (user.role === 'admin') return this.allKeys();
     if (user.planId) return this.keysForPlan(user.planId?._id || user.planId);
     if (user.trialEndsAt && new Date(user.trialEndsAt) > new Date()) return this.allKeys();
+    if (user.role === 'vendedor' && user.trialStartedAt) return [...CONTENT_ONLY_FEATURE_KEYS];
     return [];
   }
 

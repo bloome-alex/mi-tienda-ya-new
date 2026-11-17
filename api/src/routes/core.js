@@ -862,7 +862,8 @@ router.post('/stores/:storeId/products', requireStoreAccess, requireFeature('man
 }));
 router.put('/stores/:storeId/products/:id', requireStoreAccess, requireFeature('management.products'), asyncHandler(async (req, res) => {
   const patch = parsePatch(productSchema, req.body);
-  const currentForPlan = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl -reservations');
+  // Las reservas se necesitan para impedir cambios estructurales con pedidos pendientes.
+  const currentForPlan = await Product.findOne({ _id: req.params.id, storeId: req.store._id, archived: { $ne: true } }).select('+digitalUrl');
   if (!currentForPlan) throw new AppError('Producto no encontrado.', 404);
   if (Object.keys(patch).length === 1 && Object.hasOwn(patch, 'featured')) {
     // La acción de destacado no reemplaza variantes ni cantidades leídas antes.
@@ -873,10 +874,11 @@ router.put('/stores/:storeId/products/:id', requireStoreAccess, requireFeature('
     await audit(req, 'product.featured.updated', 'product', before._id, { changes: AuditService.changes(before, { featured: patch.featured }, ['featured']) }); ok(res, item); return;
   }
   const current = currentForPlan;
-  const merged = productSchema.parse({ ...current.toObject({ flattenMaps: true }), ...patch }); await validateProduct(merged, req.store._id, current._id);
+  // toJSON convierte ObjectId (categoryId, relatedProductIds) a texto, como los envía el panel.
+  const merged = productSchema.parse({ ...JSON.parse(JSON.stringify(current.toObject({ flattenMaps: true }))), ...patch }); await validateProduct(merged, req.store._id, current._id);
   await assetService.assertOwned(req.store._id, merged.images);
   delete merged.stock; merged.variants = merged.variants.map(variant => ({ ...variant, stock: current.variants.find(existing => existing.id === variant.id)?.stock || 0 }));
-  if (current.reservations.length && (merged.type !== current.type || merged.madeToOrder !== current.madeToOrder || JSON.stringify(merged.variants.map(v => v.id)) !== JSON.stringify(current.variants.map(v => v.id)))) throw new AppError('Hay pedidos pendientes. Resolvelos antes de cambiar el tipo o la estructura de variantes.', 409, 'RESERVATIONS_PENDING');
+  if ((current.reservations || []).length && (merged.type !== current.type || merged.madeToOrder !== current.madeToOrder || JSON.stringify(merged.variants.map(v => v.id)) !== JSON.stringify(current.variants.map(v => v.id)))) throw new AppError('Hay pedidos pendientes. Resolvelos antes de cambiar el tipo o la estructura de variantes.', 409, 'RESERVATIONS_PENDING');
   const item = await Product.findOneAndUpdate({ _id: current._id, storeId: req.store._id, stockVersion: current.stockVersion }, { $set: merged, $inc: { stockVersion: 1 } }, { returnDocument: 'after', runValidators: true }).select('+digitalUrl -reservations');
   if (!item) throw new AppError('El stock cambió mientras editabas. Recargá el producto e intentá nuevamente.', 409, 'STOCK_CONFLICT');
   await assetService.markAttached(req.store._id, item.images);

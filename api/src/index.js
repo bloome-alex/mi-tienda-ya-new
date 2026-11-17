@@ -5,6 +5,8 @@ import { bootstrap } from './services/core.js';
 import { whatsappService } from './services/WhatsAppService.js';
 import { initCommerce, stopCommerce } from './services/commerce.js';
 import { subscriptionService } from './services/SubscriptionService.js';
+import path from 'node:path';
+import { clientBuildStatus } from './utils/clientBuild.js';
 
 let server, closing = false;
 async function close(signal = 'shutdown') {
@@ -19,6 +21,12 @@ async function close(signal = 'shutdown') {
 }
 try {
   validateConfig(); mongoose.set('sanitizeFilter', false);
+  const build = clientBuildStatus(path.join(config.projectRoot, 'client'));
+  if (['stale', 'unknown'].includes(build.status)) {
+    const message = build.status === 'stale' ? `El frontend compilado (client/dist, ${build.builtAt || 'fecha desconocida'}) no corresponde al código actual de client/.` : 'client/dist no tiene build-info.json: no se puede verificar que el frontend esté actualizado.';
+    if (config.isProduction && process.env.ALLOW_STALE_CLIENT_BUILD !== 'true') throw new Error(`${message} Ejecutá "npm run build" antes de iniciar.`);
+    console.warn(`[api] ADVERTENCIA: ${message} Ejecutá "npm run build".`);
+  }
   await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10000 });
   await bootstrap(); await initCommerce(); subscriptionService.startPendingWorker();
   const app = createApp();

@@ -7,6 +7,7 @@ import { config } from '../src/config.js';
 import { createApp } from '../src/app.js';
 import { bootstrap } from '../src/services/core.js';
 import { quotaService } from '../src/services/QuotaService.js';
+import { ALL_PLAN_FEATURE_KEYS } from '../src/services/PlanFeatureService.js';
 import { User, Plan, Store, Product, Session } from '../src/models/index.js';
 import { hashToken, randomToken } from '../src/utils/crypto.js';
 let memory, app, admin;
@@ -16,7 +17,8 @@ async function actor(user) {
   return { user, call(method, url, body) { const req = request(app)[method](url).set('Cookie', `mt_session=${token}`).set('X-CSRF-Token', csrf); return body === undefined ? req : req.send(body); } };
 }
 async function owner(name, maxStores = 2, maxProducts = 2) {
-  const plan = await Plan.create({ name: `Plan ${name}`, price: 100, maxStores, maxProducts });
+  // Desde el esquema de funcionalidades v3 un plan sin featureKeys no habilita ninguna sección.
+  const plan = await Plan.create({ name: `Plan ${name}`, price: 100, maxStores, maxProducts, featureKeys: [...ALL_PLAN_FEATURE_KEYS] });
   const user = await User.create({ role: 'vendedor', name, email: `${name}@example.test`, planId: plan._id, planExpiresAt: new Date(Date.now() + 86400000), trialStartedAt: new Date(), trialEndsAt: new Date(Date.now() + 86400000) });
   return { ...(await actor(user)), plan };
 }

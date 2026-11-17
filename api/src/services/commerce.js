@@ -4,7 +4,7 @@ import path from 'node:path';
 import mongoose from 'mongoose';
 import sharp from 'sharp';
 import { config } from '../config.js';
-import { Store, Product, Category, User } from '../models/index.js';
+import { Store, Product, Category, User, Plan } from '../models/index.js';
 import { Order, StockMovement, MailJob } from '../models/commerce.js';
 import { EntitlementService, MailService, AuditService } from './core.js';
 import { termsService } from './TermsService.js';
@@ -20,6 +20,8 @@ export const FINAL_STATUSES = Object.freeze(['paid', 'cancelled']);
 const ACTIVE_STATUSES = ['pending', 'awaiting_payment', 'processing'];
 const ALL_VISIBLE_STATUSES = [...ACTIVE_STATUSES, ...FINAL_STATUSES];
 const MAX_STOCK = 100000000;
+const PAYMENT_RECHECK_MS = 120000;
+const UNVERIFIABLE_RESERVATION_MS = 24 * 3600000;
 const hash = value => crypto.createHash('sha256').update(String(value)).digest('hex');
 const escapeHtml = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const regexText = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -111,11 +113,28 @@ async function movement(values) {
 /** Verifica la vigencia y el cupo efectivo en cada acceso público. Un cambio de
  * plan o el regreso a prueba no depende de que un proceso haya despublicado
  * físicamente las tiendas excedentes: sólo las primeras del cupo pueden vender. */
+const entitlementCache = new Map();
+const PUBLIC_ENTITLEMENT_TTL_MS = 30000;
+export function clearPublicAccessCache() { entitlementCache.clear(); }
+/** El entitlement es la parte costosa (plan, herencias, suscripción, settings). Se
+ * cachea 30 s con una clave que incluye las versiones del dueño y de su plan, así
+ * un cambio de plan o de asignación se aplica de inmediato. */
+async function cachedEntitlement(owner) {
+  const planId = owner.planId?._id || owner.planId;
+  const plan = planId ? await Plan.findById(planId).select('updatedAt').lean() : null;
+  const key = `${owner._id}:${+owner.updatedAt || 0}:${planId || ''}:${+plan?.updatedAt || 0}`;
+  const cached = entitlementCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.value;
+  const value = await EntitlementService.forUser(owner);
+  if (entitlementCache.size > 5000) entitlementCache.clear();
+  entitlementCache.set(key, { value, expires: Date.now() + PUBLIC_ENTITLEMENT_TTL_MS });
+  return value;
+}
 export async function assertPublicStoreAllowed(store, { status = 404 } = {}) {
   const unavailable = () => commerceError('Esta tienda no está disponible por el momento.', status, 'STORE_UNAVAILABLE');
   if (!store || !store.active || store.archived) throw unavailable();
   const owner = await User.findById(store.ownerId);
-  const entitlement = owner?.active ? await EntitlementService.forUser(owner) : null;
+  const entitlement = owner?.active ? await cachedEntitlement(owner) : null;
   if (!entitlement?.allowed) throw unavailable();
   const admitted = await Store.find({ ownerId: owner._id, active: true, archived: { $ne: true } })
     .sort({ createdAt: 1, _id: 1 }).limit(Math.max(1, entitlement.maxStores)).select('_id').lean();
@@ -315,7 +334,7 @@ export class CommerceService {
     return crypto.createHmac('sha256', secret).update(`${orderId}:${key}`).digest('hex');
   }
 
-  async createOrder(store, input, { actorId, manual = false } = {}) {
+  async createOrder(store, input, { actorId, manual = false, clientIp = '' } = {}) {
     const normalized = this.normalizeInput(input);
     const idempotencyHash = hash(normalized.idempotencyKey);
     const requestHash = hash(JSON.stringify({ ...normalized, idempotencyKey: undefined }));
@@ -350,6 +369,13 @@ export class CommerceService {
     const total = money((subtotalCents + cents(deliveryCost)) / 100);
     if (payment.type === 'mercadopago' && total <= 0) throw commerceError('Mercado Pago requiere un importe mayor a cero.');
     if (payment.type === 'mercadopago') this.mercadoPago.credentials(store, payment.mercadoPagoAccountId);
+    const offline = payment.type !== 'mercadopago';
+    const clientIpHash = !manual && clientIp ? this.token('ip', `${store._id}:${clientIp}`) : '';
+    if (offline && clientIpHash) {
+      const open = await Order.countDocuments({ storeId: store._id, clientIpHash, status: { $in: ['creating', ...ACTIVE_STATUSES] } });
+      if (open >= Math.max(1, Number(config.offlineOrdersPerIp) || 3)) throw commerceError('Tenés varios pedidos sin pagar en esta tienda. Completá o esperá la confirmación de esos pedidos antes de crear otro.', 429, 'TOO_MANY_PENDING_ORDERS');
+    }
+    const offlineHours = Math.max(0, Math.min(720, Number(config.offlineOrderReservationHours) || 0));
     const orderId = new mongoose.Types.ObjectId();
     const token = this.token(orderId, normalized.idempotencyKey);
     const minutes = Math.max(15, Math.min(1440, Number(config.orderReservationMinutes) || 60));
@@ -362,7 +388,8 @@ export class CommerceService {
         delivery: { id: delivery.id, type: delivery.type, name: delivery.name, description: delivery.description || '', price: deliveryCost },
         idempotencyHash, requestHash, accessTokenHash: hash(token), accessTokenEncrypted: encryptSecret(token),
         digitalDeliveryStatus: snapshots.some(i => i.type === 'digital') ? 'pending' : 'not_applicable',
-        reservationExpiresAt: payment.type === 'mercadopago' ? new Date(Date.now() + minutes * 60000) : undefined,
+        reservationExpiresAt: payment.type === 'mercadopago' ? new Date(Date.now() + minutes * 60000) : (offline && offlineHours && !manual ? new Date(Date.now() + offlineHours * 3600000) : undefined),
+        ...(clientIpHash ? { clientIpHash } : {}),
         history: [{ status: 'creating', actorId, note: manual ? 'Pedido creado desde administración.' : 'Pedido iniciado desde la tienda.' }],
       });
     } catch (error) {
@@ -623,21 +650,39 @@ export class CommerceWorker {
     for (const order of unfinished) await this.commerce.finalize(order);
     // Check the provider before expiry so a delayed webhook never cancels a
     // known approved payment. On provider outage retain stock and retry.
-    const expired = await Order.find({ status: { $in: ACTIVE_STATUSES }, 'payment.type': 'mercadopago', reservationExpiresAt: { $lt: new Date() }, $or: [{ providerCheckedAt: { $lt: new Date(Date.now() - 120000) } }, { providerCheckedAt: { $exists: false } }] }).limit(10);
+    const expired = await Order.find({ status: { $in: ACTIVE_STATUSES }, 'payment.type': 'mercadopago', reservationExpiresAt: { $lt: new Date() }, $or: [{ providerCheckedAt: { $lt: new Date(Date.now() - PAYMENT_RECHECK_MS) } }, { providerCheckedAt: null }] })
+      .sort({ providerCheckedAt: 1, reservationExpiresAt: 1, _id: 1 }).limit(10);
     for (const order of expired) {
       try {
         const store = await Store.findById(order.storeId).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
-        if (!store) continue;
+        if (!store) throw commerceError('La tienda del pedido ya no existe.', 404, 'STORE_NOT_FOUND');
         const checked = await this.commerce.verifyPayment(store, String(order._id));
         if (ACTIVE_STATUSES.includes(checked.status)) await this.commerce.changeStatus(store._id, String(order._id), { status: 'cancelled', confirmFinal: true, note: 'La reserva de Mercado Pago venció sin un pago aprobado.' });
-      } catch (error) { console.error('[payment-reconcile]', error.code || error.name); }
+      } catch (error) {
+        console.error('[payment-reconcile]', error.code || error.name);
+        // Registrar el intento evita que los mismos pedidos con error ocupen siempre el lote.
+        await Order.updateOne({ _id: order._id }, { $set: { providerCheckedAt: new Date(), paymentIssue: 'No se pudo verificar el pago con Mercado Pago al vencer la reserva. Revisá las credenciales de la cuenta y el pago en Mercado Pago.' } });
+        if (order.reservationExpiresAt < new Date(Date.now() - UNVERIFIABLE_RESERVATION_MS)) {
+          // Tras 24 h sin poder verificar se libera el stock; si luego llega un pago aprobado
+          // reconcilePayment lo deja marcado para reintegro manual.
+          await this.commerce.changeStatus(order.storeId, String(order._id), { status: 'cancelled', confirmFinal: true, note: 'No se pudo verificar el pago durante 24 h después del vencimiento; se liberó el stock. Revisá el pago en Mercado Pago.' }).catch(inner => console.error('[payment-reconcile:cancel]', inner.code || inner.name));
+        }
+      }
     }
     // Handles a reservation write that completes late after a crashed creator
     // was cancelled by another worker. Pending order reservations remain intact.
-    const dangling = await Product.find({ 'reservations.0': { $exists: true } }).select('_id reservations').limit(100).lean();
-    const orderIds = [...new Set(dangling.flatMap(p => p.reservations.map(r => String(r.orderId))))];
-    const finals = await Order.find({ _id: { $in: orderIds }, status: { $in: FINAL_STATUSES } });
+    const reservedOrderIds = await Product.distinct('reservations.orderId', { 'reservations.0': { $exists: true } });
+    const finals = await Order.find({ _id: { $in: reservedOrderIds }, status: { $in: FINAL_STATUSES } }).limit(200);
     for (const order of finals) await this.commerce.finalize(order);
+    await this.expireOfflineOrders();
+  }
+
+  async expireOfflineOrders() {
+    if (!(Number(config.offlineOrderReservationHours) > 0)) return;
+    const stale = await Order.find({ status: { $in: ACTIVE_STATUSES }, 'payment.type': { $in: ['cash', 'transfer'] }, reservationExpiresAt: { $lt: new Date() }, 'receipt.uploadedAt': { $exists: false } }).sort({ reservationExpiresAt: 1 }).limit(50);
+    for (const order of stale) {
+      await this.commerce.changeStatus(order.storeId, String(order._id), { status: 'cancelled', confirmFinal: true, note: 'La reserva venció sin pago confirmado ni comprobante; se liberó el stock.' }).catch(error => console.error('[offline-expiry]', error.code || error.name));
+    }
   }
 
   async processMail() {

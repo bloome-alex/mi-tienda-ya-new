@@ -119,6 +119,8 @@ pm2 logs mi-tienda-ya-2
 pm2 restart mi-tienda-ya-2 --update-env
 ```
 
+Desde la versión 1.25.2, `npm run build` guarda en `client/dist/build-info.json` una huella del código del cliente. Al iniciar, el servidor la compara con `client/`: con `NODE_ENV=production` **se niega a arrancar** si el frontend compilado no corresponde al código actual (o si falta `build-info.json`), para no publicar una interfaz desactualizada. En desarrollo sólo muestra una advertencia. En una emergencia puede omitirse con `ALLOW_STALE_CLIENT_BUILD=true`. La imagen Docker no se ve afectada: compila el cliente en la misma construcción.
+
 Cuando actualices el proyecto, instalá sus dependencias y compilá antes de reiniciar:
 
 ```bash

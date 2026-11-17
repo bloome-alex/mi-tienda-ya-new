@@ -51,6 +51,7 @@ test('Express sirve las páginas legales antes del fallback SPA',()=>{
   assert.match(app,/res\.redirect\(301, '\/politica-de-privacidad'\)/);
 });
 
-test('la versión distribuida es 1.25.1',()=>{
-  for(const file of ['package.json','api/package.json','client/package.json']) assert.equal(JSON.parse(readApp(file)).version,'1.25.1');
+test('la versión distribuida es 1.25.1 o posterior',()=>{
+  const atLeast=(version,minimum)=>{ const a=version.split('.').map(Number), b=minimum.split('.').map(Number); for(let i=0;i<3;i++){ if(a[i]!==b[i]) return a[i]>b[i]; } return true; };
+  for(const file of ['package.json','api/package.json','client/package.json']) assert.ok(atLeast(JSON.parse(readApp(file)).version,'1.25.1'));
 });

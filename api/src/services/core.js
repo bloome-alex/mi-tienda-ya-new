@@ -123,7 +123,10 @@ export class AuthService {
   }
   async rootLogin({ username, password }, res) {
     const admin = await User.findOne({ role: 'admin', username }).select('+passwordHash');
-    const valid = admin ? await bcrypt.compare(password, admin.passwordHash) : await bcrypt.compare(password, '$2b$12$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX').catch(() => false);
+    // Con un usuario inexistente se compara igual contra un hash válido del mismo costo,
+    // para que el tiempo de respuesta no revele si el usuario administrador existe.
+    this.dummyHash ||= bcrypt.hash(randomToken(), config.bcryptRounds);
+    const valid = admin ? await bcrypt.compare(password, admin.passwordHash) : await bcrypt.compare(password, await this.dummyHash).then(() => false);
     if (!admin || !admin.active || !valid) throw new AppError('Usuario o contraseña incorrectos.', 401, 'INVALID_CREDENTIALS');
     await AuditService.log({ actorId: admin._id, action: 'auth.root.login', entity: 'user', entityId: admin._id });
     return this.session(admin, res);

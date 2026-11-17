@@ -5,6 +5,7 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { config } from '../src/config.js';
 import { createApp } from '../src/app.js';
+import { ALL_PLAN_FEATURE_KEYS } from '../src/services/PlanFeatureService.js';
 import { bootstrap, MailService, EntitlementService } from '../src/services/core.js';
 import { User, Plan, Store, Product, Category, MagicLink, Session } from '../src/models/index.js';
 import { encryptSecret, decryptSecret } from '../src/utils/crypto.js';
@@ -137,7 +138,7 @@ test('payment configuration rejects a stale editor snapshot and detects concurre
 test('entitlements resolve Mongo ObjectId values and enforce the current plan product limit', async () => {
   const entitlement = await EntitlementService.forUser(new mongoose.Types.ObjectId(seller.user._id));
   assert.equal(entitlement.allowed, true);
-  const plan = await Plan.create({ name: 'Limitado', price: 100, maxProducts: 1, maxStores: 1 });
+  const plan = await Plan.create({ name: 'Limitado', price: 100, maxProducts: 1, maxStores: 1, featureKeys: [...ALL_PLAN_FEATURE_KEYS] });
   await User.updateOne({ _id: seller.user._id }, { $set: { planId: plan._id, planExpiresAt: new Date(Date.now() + 86400000) } });
   const blocked = await post(seller, `/api/stores/${seller.store._id}/products`, { name: 'Supera el plan', price: 200 });
   assert.equal(blocked.status, 403); assert.equal(blocked.body.error.code, 'PRODUCT_LIMIT');

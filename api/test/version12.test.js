@@ -12,6 +12,17 @@ import { config } from '../src/config.js';
 import { createApp } from '../src/app.js';
 import { User, Store, Plan, Product, Category, Session, Settings, AuditLog, UploadedImage } from '../src/models/index.js';
 import { Order, StockMovement, MailJob } from '../src/models/commerce.js';
+import { r2Storage } from '../src/services/R2StorageService.js';
+
+// R2 en memoria: las pruebas nunca deben escribir en el bucket real configurado en .env.
+const r2Objects = new Map();
+r2Storage.fetch = async (url, { method, body, headers }) => {
+  const key = decodeURIComponent(new URL(url).pathname);
+  if (method === 'PUT') { r2Objects.set(key, { body: Buffer.from(body), type: headers['content-type'] }); return new Response('', { status: 200 }); }
+  if (method === 'GET') { const item = r2Objects.get(key); return item ? new Response(item.body, { status: 200, headers: { 'content-type': item.type || 'application/octet-stream' } }) : new Response('', { status: 404 }); }
+  if (method === 'DELETE') { r2Objects.delete(key); return new Response(null, { status: 204 }); }
+  return new Response('', { status: 400 });
+};
 import { AuditService, redactAudit, auditChanges } from '../src/services/AuditService.js';
 import { CommerceService, InventoryService, safePublicStore } from '../src/services/commerce.js';
 import { validateDesign } from '../src/utils/design.js';
@@ -22,6 +33,7 @@ import { defaultDesign, sectionTemplate, blockTemplate, slideTemplate, designEnu
 const models = [User, Store, Plan, Product, Category, Session, Settings, AuditLog, UploadedImage, Order, StockMovement, MailJob];
 let mongo, app, directory;
 before(async () => {
+  Object.assign(config.r2, { accountId: 'test', accessKeyId: 'test', secretAccessKey: 'test', assetsBucket: 'assets-test', receiptsBucket: 'receipts-test', publicUrl: 'https://media.test', endpoint: 'https://r2.test', prefix: 'v12-test' });
   config.encryptionKey = 'ed'.repeat(32); config.sessionSecret = 'version12-test-private-secret'; config.isProduction = false; config.appUrl = 'http://localhost:5000'; config.trustProxy = 0;
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mi-tienda-v12-')); config.uploadDir = directory;
   mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri()); await Promise.all(models.map(model => model.init())); app = createApp();
@@ -158,7 +170,10 @@ test('fondos usan dimensiones orientadas y se vuelven a verificar contra la tien
   assert.equal((await saveDesign(who,{wallpaper:{enabled:true,mode:'shared',sharedImage:desktop.body.data[0].url}})).status,422);
   assert.equal((await saveDesign(who,{wallpaper:{enabled:true,mode:'shared',sharedImage:'https://example.test/fondo.webp'}})).status,422);
   assert.equal((await saveDesign(who,{wallpaper:{enabled:false,sharedImage:'/uploads/images/no-registrada.webp'}})).status,422);
-  await fs.writeFile(path.join(directory,'images',asset.name),await picture(1920,1080));
+  // Se reemplaza el objeto almacenado en R2: la verificación por hash debe rechazarlo.
+  const stored=await UploadedImage.findOne({url:asset.url}).lean();
+  const storedKey=[...r2Objects.keys()].find(key=>key.endsWith('/'+stored.objectKey)); assert.ok(storedKey,'el fondo no quedó en R2');
+  r2Objects.set(storedKey,{body:await picture(1920,1080),type:'image/png'});
   assert.equal((await saveDesign(who,{wallpaper:{enabled:true,mode:'shared',sharedImage:asset.url}})).status,422);
   assert.equal((await upload(who,await picture(1920,1920),'wallpaper-shared',{storeId:other.store._id})).status,404);
 });

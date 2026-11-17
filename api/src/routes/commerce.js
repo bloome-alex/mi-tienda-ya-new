@@ -60,18 +60,19 @@ router.get('/public/stores/:slug', asyncHandler(async (req, res) => ok(res, awai
 router.get('/public/stores/:slug/products/:id', asyncHandler(async (req, res) => ok(res, await catalog.product(req.params.slug, req.params.id))));
 router.post('/public/stores/:slug/recommendations', asyncHandler(async (req, res) => {
   const store = await catalog.storeBySlug(req.params.slug);
-  ok(res, await catalog.recommend(store, req.body.productIds || []));
+  ok(res, await catalog.recommend(store, req.body?.productIds || []));
 }));
 router.post('/public/stores/:slug/contact', contactLimit, asyncHandler(async (req, res) => ok(res, await catalog.contact(req.params.slug, req.body))));
 router.post('/public/stores/:slug/orders', checkoutLimit, asyncHandler(async (req, res) => {
   const store = await catalog.storeBySlug(req.params.slug);
-  ok(res, await commerce.createOrder(store, req.body), 201);
+  ok(res, await commerce.createOrder(store, req.body, { clientIp: req.ip }), 201);
 }));
 router.get('/public/orders/:id', asyncHandler(async (req, res) => {
   const order = await commerce.publicOrder(req.params.id, req.query.token);
   const store = await Store.findById(order.storeId);
   res.set('Cache-Control', 'private, no-store');
-  ok(res, { order: safeOrder(order, { publicView: true }), store: store ? safePublicStore(store) : null, paymentInstructions: order.payment, ...(!['paid', 'cancelled'].includes(order.status) && order.checkoutUrl ? { checkoutUrl: order.checkoutUrl } : {}) });
+  const publicOrder = safeOrder(order, { publicView: true });
+  ok(res, { order: publicOrder, store: store ? safePublicStore(store) : null, paymentInstructions: publicOrder.payment, ...(!['paid', 'cancelled'].includes(order.status) && order.checkoutUrl ? { checkoutUrl: order.checkoutUrl } : {}) });
 }));
 router.post('/public/orders/:id/verify-payment', verificationLimit, asyncHandler(async (req, res) => {
   const order = await commerce.publicOrder(req.params.id, req.query.token);

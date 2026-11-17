@@ -20,7 +20,8 @@ const listFrom = (value, ...keys) => {
 
 export class TikTokMarketingClient {
   constructor(accessToken = '', { fetchImpl = globalThis.fetch, baseUrl = 'https://business-api.tiktok.com/open_api', apiVersion = config.tiktokAds.apiVersion, timeoutMs = 20000 } = {}) {
-    this.accessToken = accessToken;
+    // No usar this.accessToken: pisaría el método accessToken(authCode) del intercambio OAuth.
+    this.token = accessToken;
     this.fetch = fetchImpl;
     this.baseUrl = String(baseUrl || 'https://business-api.tiktok.com/open_api').replace(/\/$/, '');
     this.apiVersion = apiVersion;
@@ -39,7 +40,7 @@ export class TikTokMarketingClient {
     let response;
     try {
       response = await this.fetch(url, {
-        method, headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...(auth && this.accessToken ? { 'Access-Token': this.accessToken } : {}) },
+        method, headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...(auth && this.token ? { 'Access-Token': this.token } : {}) },
         body, signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {

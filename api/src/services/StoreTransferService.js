@@ -1,4 +1,5 @@
-import { StoreTransfer, Store, User } from '../models/index.js';
+import { StoreTransfer, Store, User, SocialIntegration, SocialOAuthState } from '../models/index.js';
+import { Order } from '../models/commerce.js';
 import { AppError } from '../middleware/core.js';
 import { EntitlementService } from './core.js';
 import { quotaService } from './QuotaService.js';
@@ -8,6 +9,27 @@ import { storeTransferPolicy } from './StoreTransferPolicy.js';
 const lowerEmail = value => String(value || '').trim().toLowerCase();
 const idOf = value => value?._id ? String(value._id) : value ? String(value) : '';
 const pendingStore = { archived: { $ne: true } };
+const ACTIVE_ORDER_STATUSES = ['creating', 'pending', 'awaiting_payment', 'processing'];
+
+/**
+ * Los cobros, datos bancarios, contacto e integraciones publicitarias pertenecen
+ * a la persona, no a la tienda. Al cambiar de dueño se quitan para que el nuevo
+ * propietario no cobre en cuentas ajenas ni use cuentas publicitarias ajenas.
+ */
+export function detachOwnerResources(store, newOwner) {
+  store.integrations ||= {};
+  store.integrations.mercadopago = { accounts: [], accessToken: '', webhookSecret: '', sandbox: true };
+  store.payments = (store.payments || [])
+    .filter(payment => payment.type !== 'mercadopago')
+    .map(payment => {
+      const item = payment.toObject ? payment.toObject() : { ...payment };
+      if (item.type === 'transfer') return { ...item, active: false, instructions: '', bank: { holder: '', bank: '', cbu: '', alias: '', cuit: '' } };
+      return item;
+    });
+  const contact = store.contact?.toObject ? store.contact.toObject() : { ...(store.contact || {}) };
+  store.contact = { ...contact, email: newOwner?.email || '', phone: '', whatsapp: '', showWhatsapp: false };
+  return store;
+}
 
 function publicParty(value, fallback = {}) {
   if (value && typeof value === 'object' && (value.email || value.name)) return { id: idOf(value), name: value.name || '', email: value.email || '' };
@@ -98,6 +120,7 @@ export class StoreTransferService {
     if (email === lowerEmail(user.email)) throw new AppError('No podés transferirte una tienda a tu propia cuenta.', 422, 'TRANSFER_SAME_OWNER');
     const store = await Store.findOne({ _id: storeId, ownerId: user._id, ...pendingStore });
     if (!store) throw new AppError('La tienda no existe o ya no te pertenece.', 404, 'STORE_NOT_FOUND');
+    if (await Order.exists({ storeId: store._id, status: { $in: ACTIVE_ORDER_STATUSES } })) throw new AppError('La tienda tiene pedidos sin finalizar. Marcalos como pagados o cancelados antes de transferirla.', 409, 'TRANSFER_ORDERS_PENDING');
     const existing = await StoreTransfer.findOne({ storeId: store._id, status: 'pending' });
     if (existing) throw new AppError('Esta tienda ya tiene una transferencia pendiente.', 409, 'TRANSFER_ALREADY_PENDING');
     const recipient = await User.findOne({ role: 'vendedor', email });
@@ -134,8 +157,11 @@ export class StoreTransferService {
       transfer = await StoreTransfer.findById(transfer._id);
       const store = await Store.findOne({ _id: transfer.storeId, ownerId: transfer.fromUserId, ...pendingStore }).select('+integrations.mercadopago.accessToken +integrations.mercadopago.webhookSecret +integrations.mercadopago.accounts.accessToken +integrations.mercadopago.accounts.webhookSecret');
       if (!store) throw new AppError('La tienda cambió de propietario o ya no está disponible.', 409, 'TRANSFER_STORE_CHANGED');
+      if (await Order.exists({ storeId: store._id, status: { $in: ACTIVE_ORDER_STATUSES } })) throw new AppError('La tienda tiene pedidos sin finalizar. El dueño actual debe resolverlos antes de transferirla.', 409, 'TRANSFER_ORDERS_PENDING');
       store.ownerId = user._id;
+      detachOwnerResources(store, user);
       const saved = await quotaService.saveStore(store, { ownerChanged: true });
+      await Promise.all([SocialIntegration.deleteMany({ storeId: store._id }), SocialOAuthState.deleteMany({ storeId: store._id })]);
       const accepted = await StoreTransfer.findOneAndUpdate({ _id: transfer._id, status: 'pending' }, { $set: { status: 'accepted', acceptedAt: new Date(), toUserId: user._id, 'toUserSnapshot.name': user.name || '', 'toUserSnapshot.email': email }, $unset: { processingAt: 1 } }, { returnDocument: 'after' });
       if (!accepted) throw new AppError('No se pudo cerrar la transferencia. Recargá la página antes de continuar.', 409, 'TRANSFER_FINALIZE_FAILED');
       return { transfer: accepted, store: saved };

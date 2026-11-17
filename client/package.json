@@ -1,19 +1,19 @@
 {
   "name": "@mi-tienda-ya/client",
-  "version": "1.25.1",
+  "version": "1.25.2",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && node ../scripts/write-client-build-info.mjs",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "vue": "3.5.44",
-    "vue-router": "5.4.0"
+    "vue": "3.5.45",
+    "vue-router": "5.5.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "6.0.10",
-    "vite": "8.3.4"
+    "@vitejs/plugin-vue": "6.0.11",
+    "vite": "8.3.8"
   }
 }

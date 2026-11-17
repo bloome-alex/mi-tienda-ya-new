@@ -103,7 +103,8 @@ export class QuotaService {
       const store = await Store.findOne({ _id: storeId, ...present });
       if (!store) throw new AppError('Tienda no encontrada.', 404);
       const entitlement = await EntitlementService.forUser(store.ownerId);
-      const maximum = entitlement.allowed && entitlement.maxProducts > 0 ? entitlement.maxProducts : Infinity;
+      // El tope del plan se respeta aunque el plan esté vencido: 0 significa ilimitado.
+      const maximum = entitlement.maxProducts > 0 ? entitlement.maxProducts : Infinity;
       const rows = await this.ensureSlots(Product, { storeId, ...present }, 'quotaSlot');
       const slot = freeSlot(rows, 'quotaSlot', maximum);
       if (rows.length >= maximum || slot === null) throw new AppError('Alcanzaste el límite de productos de tu plan.', 403, 'PRODUCT_LIMIT');
@@ -114,7 +115,7 @@ export class QuotaService {
       } catch (error) { if (quotaDuplicate(error)) continue; throw error; }
       const currentStore = await Store.findById(storeId);
       const current = await EntitlementService.forUser(currentStore.ownerId);
-      if (current.allowed && current.maxProducts > 0) {
+      if (current.maxProducts > 0) {
         const allowed = await Product.find({ storeId, ...present }).sort(rank).limit(current.maxProducts).select('_id').lean();
         if (!allowed.some(row => String(row._id) === String(product._id))) {
           // Sólo se archiva este intento que todavía no se devolvió al cliente.

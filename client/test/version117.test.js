@@ -40,7 +40,10 @@ test('shared reads keep independent plan sections usable without reopening their
   const payments=source('views/seller/PaymentsView.vue');
   assert.match(order,/p\.type!==['"]mercadopago['"]\|\|canFeature\(['"]payments\.mercadopago['"]\)/);
   assert.match(payments,/visiblePayments/);
-  assert.match(payments,/payment\.type!==['"]mercadopago['"]\|\|canFeature\(['"]payments\.mercadopago['"]\)/);
+  // Desde 1.24 se listan todas las formas de pago: tras un downgrade el vendedor debe poder
+  // desactivar o quitar las de Mercado Pago (la API lo permite). La gestión de cuentas MP sí exige el plan.
+  assert.match(payments,/visiblePayments=computed\(\(\)=>store\.value\?\.payments\|\|\[\]\)/);
+  assert.match(payments,/v-if="canFeature\('payments\.mercadopago'\)"/);
 });
 
 test('new plan gates are used by navigation and design levels',()=>{
