@@ -11,3 +11,8 @@
 
 @media(max-width:700px){.gallery-grid .product-thumbnails{grid-template-columns:repeat(var(--gallery-mobile-cols,2),minmax(0,1fr))}}
 .store-contact-form .notice.success{background:var(--store-soft);color:var(--store-text);border:1px solid var(--store-border);border-left:4px solid var(--store-primary)}
+
+.pwa-prompt-open .store-whatsapp,.pwa-prompt-open .store-whatsapp-pill{bottom:104px!important;transition:bottom .25s}
+@media(max-width:700px){.pwa-prompt-open .store-whatsapp,.pwa-prompt-open .store-whatsapp-pill{bottom:96px!important}}
+.store-preview-cart-notice{margin:0 0 22px}
+.store-update-banner{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:120;display:flex;align-items:center;gap:12px;padding:10px 12px 10px 18px;border-radius:999px;background:var(--store-surface);color:var(--store-text);border:1px solid var(--store-border);box-shadow:0 10px 30px #0000002e;font-size:.82rem;max-width:calc(100vw - 24px)}.store-update-banner .store-button{padding:7px 14px;font-size:.78rem}.store-update-close{background:none;border:0;color:var(--store-muted);cursor:pointer;display:grid;place-items:center;padding:4px}

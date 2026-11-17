@@ -12,6 +12,9 @@ const sf=useStorefront(),swapLoaded=ref(false),swapFailed=ref(false);
 const copy=new StoreCopy(()=>sf.design.value);
 const settings=computed(()=>sf.design.value.shop);
 const available=computed(()=>props.product.type==='digital'||props.product.madeToOrder||(props.product.variants?.length?props.product.variants.some(v=>v.stock>0):props.product.stock>0));
+// Si las variantes tienen precios distintos, la tarjeta muestra el menor como “Desde $X”.
+const prices=computed(()=>(props.product.variants||[]).map(v=>Number(v.price>0?v.price:props.product.price)).filter(Number.isFinite));
+const priceRange=computed(()=>prices.value.length>1&&Math.max(...prices.value)>Math.min(...prices.value)?{min:Math.min(...prices.value)}:null);
 const canSwap=computed(()=>settings.value.productHoverSwap&&props.product.images?.length>1&&!swapFailed.value);
 watch(()=>props.product.images?.[1],()=>{swapLoaded.value=false;swapFailed.value=false;});
 function add(){try{sf.cart.value.add(props.product,null,1);notify.success('Producto agregado al carrito.');}catch(e){notify.error(e.message);}}
@@ -27,7 +30,7 @@ function add(){try{sf.cart.value.add(props.product,null,1);notify.success('Produ
       <span v-if="product.featured" class="product-featured-chip"><Icon name="star" :size="12"/>{{copy.text('featuredBadge')}}</span>
       <RouterLink :to="sf.link('/producto/'+product._id)"><h3>{{product.name}}</h3></RouterLink>
       <p v-if="settings.showDescription&&product.description" class="product-short-description">{{product.description}}</p>
-      <div class="product-price-line" :style="{justifyContent:settings.cardAlign==='center'?'center':settings.cardAlign==='right'?'flex-end':'flex-start'}"><span class="product-price">{{money(product.price)}}</span><span v-if="settings.showPreviousPrice&&product.previousPrice>product.price" class="product-old-price">{{money(product.previousPrice)}}</span></div>
+      <div class="product-price-line" :style="{justifyContent:settings.cardAlign==='center'?'center':settings.cardAlign==='right'?'flex-end':'flex-start'}"><span class="product-price">{{priceRange?copy.text('priceFrom',{price:money(priceRange.min)}):money(product.price)}}</span><span v-if="settings.showPreviousPrice&&product.previousPrice>product.price" class="product-old-price">{{money(product.previousPrice)}}</span></div>
       <span v-if="settings.showStock&&product.type!=='digital'&&!product.madeToOrder" class="store-muted product-stock">{{copy.text('stockAvailable',{count:product.variants?.length?product.variants.reduce((s,v)=>s+v.stock,0):product.stock})}}</span>
       <template v-if="settings.cardShowButton"><RouterLink v-if="product.variants?.length" :to="sf.link('/producto/'+product._id)" class="store-add-btn" :aria-label="copy.text('chooseOptions')||'Elegir opciones'">{{copy.text('chooseOptions')}} <Icon name="plus" :size="16"/></RouterLink><button v-else type="button" class="store-add-btn" :disabled="!available" :aria-label="copy.text(available?'add':'soldOut')||'Agregar producto'" @click="add">{{copy.text(available?'add':'soldOut')}} <Icon name="plus" :size="16"/></button></template>
     </div>

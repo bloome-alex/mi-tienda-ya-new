@@ -68,7 +68,7 @@ export const editorGroups = {
   ],
   shop: [
     group('structure', 'Estructura y anuncio', 'La primera impresión de tu tienda.', [
-      variants('layout','Estilo general',[['editorial','Editorial'],['minimal','Minimalista'],['bold','Impacto']],{help:'Define el estilo general; la portada y las tarjetas se ajustan por separado.'}),
+      variants('layout','Estilo general',[['editorial','Editorial','Títulos con carácter y secciones aireadas'],['minimal','Minimalista','Líneas finas y menos adornos'],['bold','Impacto','Títulos más gruesos y cabecera marcada']],{help:'Cambia la tipografía de los títulos, los bordes de la cabecera y los separadores de sección. La composición de la portada y el diseño de las tarjetas se eligen por separado más abajo.'}),
       toggle('showAnnouncement','Mostrar barra de anuncio'), text('announcement','Texto del anuncio',240,{needs:enable('shop.showAnnouncement','Activá la barra de anuncio para editar su texto.')}),
       ...flowFields('announcementAlign','announcementDirection',enable('shop.showAnnouncement','Activá la barra de anuncio para editar esta opción.'))
     ]),
@@ -91,7 +91,7 @@ export const editorGroups = {
       toggle('showFeatured','Mostrar productos destacados','Se eligen desde el listado o formulario de Productos. Se muestran hasta 12 productos.'),text('featuredTitle','Título de destacados',240,{needs:featured}),
       ...flowFields('featuredAlign','featuredDirection',featured),
       variants('featuredLayout','Presentación',[['grid','Grilla','Todos a la vista'],['rail','Carrusel horizontal','Navegación con flechas']],{needs:featured}),
-      range('featuredColumns','Columnas en escritorio',1,5,'',featured),range('featuredMobileColumns','Columnas en celular',1,4,'',featured),
+      {...range('featuredColumns','Columnas en escritorio',1,5,'',featured),help:'En pantallas angostas (por ejemplo la vista previa o una notebook chica) se muestran menos columnas para que las tarjetas no queden muy chicas.'},range('featuredMobileColumns','Columnas en celular',1,4,'',featured),
       toggle('featuredAutoplay','Avanzar automáticamente',undefined,rail),range('featuredInterval','Tiempo entre avances',2,20,'s',autoplay),range('featuredSpeed','Duración del movimiento',150,1500,'ms',rail),
       toggle('featuredLoop','Volver al inicio al terminar',undefined,rail),toggle('featuredPauseOnHover','Pausar al pasar el mouse','El foco de teclado y la preferencia de menos movimiento siempre pausan el avance. La persona también puede pausarlo manualmente.',autoplay),
       ...spacingFields('featured',featured)
@@ -102,7 +102,7 @@ export const editorGroups = {
       variants('categoryPanelAnimation','Animación del panel',[['slide','Deslizar','Entra desde arriba'],['fade','Aparecer','Transición suave'],['scale','Expandir','Escala levemente al abrir']],{needs:d=>catalog(d)||(!d.shop.showCategories?'Activá las categorías para mostrar este filtro.':d.shop.categoryNavigation!=='drawer'?'Elegí Panel desplegable para configurar su animación.':'')}),
       range('categoryPanelDuration','Duración de la animación',120,700,'ms',d=>catalog(d)||(!d.shop.showCategories?'Activá las categorías para mostrar este filtro.':d.shop.categoryNavigation!=='drawer'?'Elegí Panel desplegable para configurar su animación.':'')),
       ...flowFields('catalogAlign','catalogDirection',catalog),
-      variants('catalogVariant','Distribución del catálogo',[['grid','Grilla'],['compact','Compacta'],['editorial','Editorial']],{needs:catalog}),range('catalogColumns','Columnas en escritorio',1,5,'',catalog),range('catalogMobileColumns','Columnas en celular',1,4,'',catalog),...spacingFields('catalog',catalog)
+      variants('catalogVariant','Distribución del catálogo',[['grid','Grilla'],['compact','Compacta'],['editorial','Editorial']],{needs:catalog}),{...range('catalogColumns','Columnas en escritorio',1,5,'',catalog),help:'En pantallas angostas (por ejemplo la vista previa o una notebook chica) se muestran menos columnas para que las tarjetas no queden muy chicas.'},range('catalogMobileColumns','Columnas en celular',1,4,'',catalog),...spacingFields('catalog',catalog)
     ]),
     group('cards','Tarjetas de producto','Estilo, información y comportamiento.', [
       variants('cardVariant','Diseño de tarjeta',[['minimal','Minimalista'],['bordered','Con borde'],['elevated','Elevada'],['overlay','Superpuesta']]),

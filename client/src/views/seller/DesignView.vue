@@ -32,6 +32,7 @@ const expandedGroups=reactive({brand:'general',navbar:'title',shop:'hero',produc
 const uploads=reactive({});
 const uploadTasks=new Map();
 const sessionUploads=new Set();
+const undoDraft=ref(null);
 let observer,messageTimer,releaseStoreGuard,loadSequence=0,navigationId=0,uploadGeneration=0,savePromise,leavePromise,unloadAttached=false;
 const changedDesign=computed(()=>!!saved.value&&JSON.stringify(draft.value)!==saved.value);
 const changedGeneral=computed(()=>!!savedGeneral.value&&JSON.stringify(general.value)!==savedGeneral.value);
@@ -202,13 +203,15 @@ function preset(value){
 async function reset(){
   if(saving.value)return;
   if(await confirmDialog({title:'Restaurar el diseño inicial',message:'Se reemplazarán las opciones de diseño habilitadas por tu plan por sus valores iniciales. Los datos generales de la tienda se conservan. Podés revisar el resultado antes de guardar.',confirmText:'Restaurar diseño',danger:true})){
-    abortUploads();await cleanupSessionUploads();const previous=JSON.parse(JSON.stringify(draft.value)),next=normalizeDesign(defaultDesign);
+    // Las imágenes subidas en esta sesión no se borran acá: “Deshacer” puede volver a usarlas; se limpian al guardar o al salir.
+    abortUploads();const previous=JSON.parse(JSON.stringify(draft.value)),next=normalizeDesign(defaultDesign);
     const preserveCopy=sections=>{for(const field of storeTextFields.filter(item=>sections.includes(item.section)))next.copy[field.key]=previous.copy[field.key];};
     if(!canPremium.value){next.navbar=previous.navbar;next.sections=previous.sections;next.product=previous.product;next.terms=previous.terms;preserveCopy(['product','terms']);}
     if(!canEnterprise.value){next.cart=previous.cart;next.checkout=previous.checkout;preserveCopy(['cart','checkout']);}
-    draft.value=next;saveError.value='';notify.info('Diseño inicial cargado en la vista previa.');
+    undoDraft.value=previous;draft.value=next;saveError.value='';notify.info('Diseño inicial cargado en la vista previa. Podés deshacerlo antes de guardar.');
   }
 }
+function undoReset(){if(!undoDraft.value)return;draft.value=normalizeDesign(undoDraft.value);undoDraft.value=null;saveError.value='';notify.info('Recuperamos el diseño que tenías antes de restaurar.');}
 function problem(message,tab,group,field,extra={}){const error=new Error(message);error.designField={tab,group,field,...extra};return error;}
 function validateBeforeSave(design,details){
   if(!details.name.trim()||details.name.trim().length>120)throw problem('Ingresá un nombre de tienda de hasta 120 caracteres.','brand','general','name');
@@ -280,7 +283,7 @@ async function performSave(){
     if(designSnapshot!==saved.value){
       const result=await api.put(`/stores/${id}/design`,{design});
       if(store.value?._id!==id)return false;
-      saved.value=designSnapshot;designWritten=true;updateStoreRecord(result);await cleanupSessionUploads();
+      saved.value=designSnapshot;designWritten=true;undoDraft.value=null;updateStoreRecord(result);await cleanupSessionUploads();
     }
     if(generalSnapshot!==savedGeneral.value){
       const result=await api.put(`/stores/${id}`,details);
@@ -349,6 +352,7 @@ onUnmounted(()=>{loadSequence++;releaseStoreGuard?.();observer?.disconnect();abo
             </template>
             <p v-if="['light-colors','dark-colors'].includes(group.key)" class="ed-help">Elegí textos y fondos con suficiente contraste. Podés probar ambos modos con el selector de tema de la vista previa.</p>
           </DesignGroup>
+          <div v-if="undoDraft" class="design-undo" role="status"><span>Cargaste el diseño inicial. Todavía no se guardó.</span><button type="button" class="btn btn-secondary btn-sm" :disabled="saving" @click="undoReset">Deshacer</button></div>
           <button class="design-reset" :disabled="saving" @click="reset">Restaurar diseño inicial</button>
         </aside>
         <section class="design-preview-area" aria-label="Vista previa interactiva">

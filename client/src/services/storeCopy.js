@@ -24,6 +24,7 @@ const groups = {
     ['catalogNoResultsTitle','Título sin resultados','No encontramos productos.'], ['catalogNoResultsDescription','Descripción sin resultados','Probá con otra búsqueda o elegí una categoría diferente.'],
     ['catalogClearSearch','Restablecer búsqueda','Ver todos los productos'], ['catalogPagination','Estado de paginación','Página {current} de {pages}'],
     ['stockAvailable','Stock visible en tarjetas','{count} disponibles'],
+    ['priceFrom','Precio de productos con variantes de distinto valor','Desde {price}'],
   ],
   contact: [
     ['contactEyebrow','Texto superior de contacto','SIEMPRE CERCA'], ['contactTitle','Título de contacto','Hablemos.'],

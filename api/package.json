@@ -1,6 +1,6 @@
 {
   "name": "@mi-tienda-ya/api",
-  "version": "1.25.8",
+  "version": "1.26.0",
   "type": "module",
   "private": true,
   "scripts": {

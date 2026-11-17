@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watchEffect, onMounted, onUnmounted } from 'vue';
 import Notifications from './components/Notifications.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 const online = ref(navigator.onLine);
@@ -7,6 +7,9 @@ const installEvent = ref(null);
 const installScope = () => document.querySelector('meta[name="mty-store-slug"]')?.content || location.pathname.match(/^\/t\/([^/]+)/)?.[1] || 'platform';
 const dismissKey = () => `mty-install-dismissed:${installScope()}`;
 const dismissed = ref(sessionStorage.getItem(dismissKey()) === '1');
+// Mientras el aviso de instalación está visible, los botones flotantes de la tienda (WhatsApp) suben para no quedar tapados.
+const promptVisible = computed(() => Boolean(installEvent.value && !dismissed.value));
+watchEffect(() => document.documentElement.classList.toggle('pwa-prompt-open', promptVisible.value));
 function connectionChanged() { online.value = navigator.onLine; }
 function available(event) { event.preventDefault(); installEvent.value = event; dismissed.value = sessionStorage.getItem(dismissKey()) === '1'; }
 async function install() { await installEvent.value?.prompt(); installEvent.value = null; }

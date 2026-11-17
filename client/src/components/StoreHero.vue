@@ -26,7 +26,7 @@ watch(() => slides.value.length, length => { if (index.value >= length) index.va
 </script>
 
 <template>
-  <section v-if="visible" class="store-section store-hero-shell" :style="spacing" :dir="StoreTextLayout.direction(settings.heroDirection)" :aria-roledescription="settings.heroVariant === 'carousel' ? 'carrusel' : undefined" :aria-label="settings.heroVariant === 'carousel' ? 'Novedades de la tienda' : undefined" @pointerenter="playback.pointerEnter" @pointerleave="playback.pointerLeave" @focusin="playback.focusIn" @focusout="playback.focusOut">
+  <section v-if="visible" class="store-section store-hero-shell" :style="spacing" :dir="StoreTextLayout.direction(settings.heroDirection)" :aria-roledescription="settings.heroVariant === 'carousel' ? 'carrusel' : undefined" :aria-label="settings.heroVariant === 'carousel' ? 'Novedades de la tienda' : undefined" @pointerenter="playback.pointerEnter" @pointerleave="playback.pointerLeave" @pointerdown="playback.pointerDown" @focusin="playback.focusIn" @focusout="playback.focusOut">
     <div class="store-hero-frame" :class="['hero-variant-' + settings.heroVariant, 'hero-align-' + settings.heroAlign, {'hero-has-image':current.image, 'hero-edge':settings.heroFullWidth && !settings.heroPaddingX}]">
       <div v-if="current.image" :key="current.id + current.image" class="store-hero-visual" :class="{'hero-visual-overlay':overlayVariant}"><img :src="current.image" :alt="isImage ? (title || sf.store.value.name) : ''" fetchpriority="high"/></div>
       <div v-else class="store-hero-placeholder" :class="{'hero-visual-overlay':overlayVariant}" aria-hidden="true"><span></span><span></span><Icon name="package" :size="70"/></div>

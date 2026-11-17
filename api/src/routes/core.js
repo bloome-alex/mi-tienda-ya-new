@@ -16,6 +16,7 @@ import { categoryService, safeCategory } from '../services/CategoryService.js';
 import { imageService } from '../services/ImageService.js';
 import { assetService } from '../services/AssetService.js';
 import { domainService } from '../services/DomainService.js';
+import { emailImageService } from '../services/EmailImageService.js';
 import { subscriptionService } from '../services/SubscriptionService.js';
 import { subscriptionSupportService } from '../services/SubscriptionSupportService.js';
 import { sellerMailService } from '../services/SellerMailService.js';
@@ -76,6 +77,12 @@ router.post('/public/custom-plan-requests', customPlanRequestLimiter, asyncHandl
   const body = z.object({ email, whatsapp: text(60).min(6), description: text(5000).min(10) }).parse(req.body);
   const item = await customPlanRequestService.create(body);
   ok(res, { _id: item._id, message: 'Recibimos tu solicitud. Vamos a contactarte con los datos que nos dejaste.' }, 201);
+}));
+// Miniatura JPG de una foto de producto para los mails (Outlook no muestra WebP).
+router.get('/public/email-images/:storeId/:imageId.jpg', asyncHandler(async (req, res) => {
+  const body = await emailImageService.thumbnail(req.params.storeId, req.params.imageId);
+  if (!body) throw new AppError('Imagen no encontrada.', 404, 'IMAGE_NOT_FOUND');
+  res.set({ 'Cache-Control': 'public, max-age=604800, immutable', 'Cross-Origin-Resource-Policy': 'cross-origin' }).type('image/jpeg').send(body);
 }));
 router.get('/public/stores/:slug/manifest.webmanifest', asyncHandler(async (req, res) => {
   const store = await Store.findOne({ slug: req.params.slug, archived: { $ne: true } }).lean();

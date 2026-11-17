@@ -61,11 +61,11 @@ test('el cliente expone las páginas globales y un editor administrativo',()=>{
   assert.match(home,/Condiciones del servicio/);
 });
 
-test('la base legal permanece incluida en la versión 1.25.x',()=>{
+test('la base legal permanece incluida desde la versión 1.25',()=>{
   const rootPackage=JSON.parse(readApp('package.json'));
   const apiPackage=JSON.parse(read('package.json'));
   const clientPackage=JSON.parse(readApp('client/package.json'));
-  assert.match(rootPackage.version,/^1\.25\./);
-  assert.match(apiPackage.version,/^1\.25\./);
-  assert.match(clientPackage.version,/^1\.25\./);
+  assert.match(rootPackage.version,/^1\.(2[5-9]|[3-9]\d)\./);
+  assert.match(apiPackage.version,/^1\.(2[5-9]|[3-9]\d)\./);
+  assert.match(clientPackage.version,/^1\.(2[5-9]|[3-9]\d)\./);
 });

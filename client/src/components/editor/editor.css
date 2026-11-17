@@ -203,3 +203,4 @@
 .design-view .ed-field [aria-invalid="true"]{border-color:var(--danger,#dc2626)!important;box-shadow:0 0 0 1px var(--danger,#dc2626)}
 .design-view .ed-block-toggle small.ed-status-error{color:var(--danger,#dc2626)}
 .design-view .ed-nowrap{white-space:nowrap}
+.design-view .design-undo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 16px 0;padding:10px 12px;border:1px solid var(--warning,#d97706);border-radius:10px;background:var(--surface-alt);font-size:12px}

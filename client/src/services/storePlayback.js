@@ -5,7 +5,9 @@ export function useStorePlayback({ enabled, interval, pauseOnHover = true, advan
   const media = typeof window === 'undefined' ? null : window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const reducedMotion = ref(Boolean(media?.matches)), manuallyPaused = ref(false), hovered = ref(false), focused = ref(false);
   const hidden = ref(typeof document !== 'undefined' && document.hidden);
-  const playing = computed(() => Boolean(toValue(enabled)) && !manuallyPaused.value && !focused.value && !hidden.value && !reducedMotion.value && !(toValue(pauseOnHover) && hovered.value));
+  const playing = computed(() => Boolean(toValue(enabled)) && !manuallyPaused.value && !focused.value && !hidden.value && !reducedMotion.value && !(toValue(pauseOnHover) && hovered.value) && !touchHold.value);
+  // En pantallas táctiles no hay hover: al tocar el carrusel se pausa unos segundos para que el botón no cambie bajo el dedo.
+  const touchHold = ref(false); let touchTimer;
   let timer;
   function schedule() {
     clearTimeout(timer);
@@ -20,7 +22,7 @@ export function useStorePlayback({ enabled, interval, pauseOnHover = true, advan
     document.addEventListener('visibilitychange', onVisibilityChange);
   });
   onUnmounted(() => {
-    clearTimeout(timer);
+    clearTimeout(timer); clearTimeout(touchTimer);
     media?.removeEventListener?.('change', onMotionChange);
     document.removeEventListener('visibilitychange', onVisibilityChange);
   });
@@ -30,6 +32,7 @@ export function useStorePlayback({ enabled, interval, pauseOnHover = true, advan
     toggle: () => { manuallyPaused.value = !manuallyPaused.value; },
     pointerEnter: event => { if (event.pointerType !== 'touch') hovered.value = true; },
     pointerLeave: () => { hovered.value = false; },
+    pointerDown: event => { if (event.pointerType === 'touch') { touchHold.value = true; clearTimeout(touchTimer); touchTimer = setTimeout(() => { touchHold.value = false; }, 6000); } },
     focusIn: () => { focused.value = true; },
     focusOut: event => { if (!event.currentTarget.contains(event.relatedTarget)) focused.value = false; }
   };

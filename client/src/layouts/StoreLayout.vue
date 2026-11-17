@@ -17,6 +17,7 @@ import { StoreNavigationService, StoreTextLayout } from '../services/storeNaviga
 import StoreWhatsapp from '../components/StoreWhatsapp.vue';
 import { StoreThemeService, browserStoreThemeEnvironment } from '../services/storeTheme.js';
 import '../styles/store-customization.css';
+import { onStoreChange } from '../services/storeUpdates.js';
 const route=useRoute(),router=useRouter(),loading=ref(true),error=ref(''),store=ref(null),products=ref([]),featuredProducts=ref([]),categories=ref([]),allCategories=ref([]),catalogMeta=ref({}),menu=ref(false);
 const currentSlug=computed(()=>storefrontSlug(route));
 const isPreview=computed(()=>typeof route.query.preview==='string'&&/^[a-f\d]{24}$/i.test(route.query.preview));
@@ -51,7 +52,7 @@ function resetPwaMetadata(){const manifest=document.querySelector('link[rel="man
 async function all(path){const result=await api.list(path+'?limit=500');let data=result.data;for(let page=2;data.length<(result.meta?.total||0);page++){const next=await api.list(path+`?limit=500&page=${page}`);data=[...data,...next.data];if(!next.data.length)break;}return data;}
 async function load(){
  const seq=++requestId,slug=currentSlug.value,previewId=isPreview.value?route.query.preview:null;
- loading.value=true;error.value='';previewSeeded=false;menu.value=false;contactSent.value=false;activeNavigation=null;previewNavigationSequence++;
+ loading.value=true;error.value='';staleChanges.value=false;previewSeeded=false;menu.value=false;contactSent.value=false;activeNavigation=null;previewNavigationSequence++;
  Object.assign(contactForm,{name:'',email:'',message:'',website:''});
  try{
   if(previewId){
@@ -124,12 +125,17 @@ async function sendContact(){if(isPreview.value){notify.info('Esta es una vista 
 provide(storefrontKey,{store,products,featuredProducts,categories,allCategories,catalogMeta,design,cart,isPreview,link,getProduct,load,storeTheme,colorMode});
 watch([()=>currentSlug.value,()=>route.query.preview],load,{immediate:true});
 watch(()=>route.fullPath,()=>{menu.value=false;if(!loading.value){document.title=store.value?.name?(route.path.endsWith('/terminos')&&(design.value.terms.enabled||isPreview.value)?design.value.terms.title+' · '+store.value.name:store.value.name+' · MiTiendaYa'):'MiTiendaYa';reportPreviewLocation();}},{flush:'post'});
+// Si el vendedor guarda cambios en el panel (otra pestaña del mismo navegador), la tienda ofrece recargar.
+const staleChanges=ref(false);let stopStoreUpdates=()=>{};
+function refreshStore(){staleChanges.value=false;load();}
+onMounted(()=>{stopStoreUpdates=onStoreChange(({storeId})=>{if(!isPreview.value&&store.value&&String(store.value._id)===storeId)staleChanges.value=true;});});
+onUnmounted(()=>stopStoreUpdates());
 onMounted(()=>window.addEventListener('message',receive));onUnmounted(()=>{requestId++;previewNavigationSequence++;window.removeEventListener('message',receive);storeTheme.dispose();resetPwaMetadata();});
 </script>
 <template>
 <div v-if="loading" class="loading store-loading"><span class="spinner"></span>Preparando tu visita…</div>
 <div v-else-if="error || !store" class="store-unavailable"><Icon name="store" :size="46" /><h1>Volvemos pronto.</h1><p>{{error||'La tienda no está disponible por el momento.'}}</p><button class="btn btn-secondary" @click="load">Volver a intentar</button></div>
-<div v-else class="storefront" :class="['store-layout-'+design.shop.layout,{'has-wallpaper':design.wallpaper.enabled}]" :data-store-theme="colorMode" :style="storefrontStyle" :dir="design.brand.textDirection">
+<div v-else class="storefront" :class="['store-layout-'+design.shop.layout,{'has-wallpaper':design.wallpaper.enabled}]" :data-store-theme="colorMode" :style="storefrontStyle" :dir="design.brand.textDirection"><div v-if="staleChanges" class="store-update-banner" role="status"><span>Guardaste cambios en esta tienda.</span><button type="button" class="store-button" @click="refreshStore">Ver cambios</button><button type="button" class="store-update-close" aria-label="Cerrar aviso" @click="staleChanges=false"><Icon name="close" :size="15"/></button></div>
   <div v-if="isPreview" class="store-preview-notice">VISTA PREVIA · Los cambios de diseño aún no publicados se muestran acá.</div>
   <div v-if="design.shop.showAnnouncement && design.shop.announcement" class="store-announcement" :style="StoreTextLayout.style(design.shop.announcementAlign)" :dir="StoreTextLayout.direction(design.shop.announcementDirection)">{{design.shop.announcement}}</div>
   <StoreNavbar @height="navbarHeight=$event"/>

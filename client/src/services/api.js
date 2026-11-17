@@ -1,3 +1,4 @@
+import { announceStoreChange } from './storeUpdates.js';
 export class ApiError extends Error {
   constructor(message, status, code, details) { super(message); this.name = 'ApiError'; this.status = status; this.code = code; this.details = details; }
 }
@@ -16,6 +17,7 @@ export class ApiClient {
     let payload;
     try { payload = await response.json(); } catch { throw new ApiError('Recibimos una respuesta inesperada. Intentá nuevamente.', response.status, 'INVALID_RESPONSE'); }
     if (!response.ok) throw new ApiError(payload.error?.message || 'No se pudo completar la operación.', response.status, payload.error?.code, payload.error?.details);
+    announceStoreChange(method, path);
     return raw ? payload : payload.data;
   }
   get(path, options) { return this.request(path, options); }

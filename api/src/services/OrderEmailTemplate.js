@@ -1,5 +1,6 @@
 import { escapeHtml } from '../utils/http.js';
 import { normalizeDesign } from '../../../client/src/services/design.js';
+import { emailImageService } from './EmailImageService.js';
 
 /**
  * Mails transaccionales del pedido (confirmación y entrega digital).
@@ -33,7 +34,8 @@ function statusMessage(order) {
 
 function itemsTable(order, brand) {
   const rows = order.items.map(item => {
-    const image = safeImage(item.image);
+    // Foto en JPG para que también se vea en Outlook; si no es una foto gestionada, se usa la original.
+    const image = safeImage(emailImageService.emailUrl(item.image) || item.image);
     const thumb = image
       ? `<img src="${escapeHtml(image)}" width="64" height="64" alt="${escapeHtml(item.name)}" style="display:block;width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #e7e5e4">`
       : `<div style="width:64px;height:64px;border-radius:10px;background:#f5f5f4;border:1px solid #e7e5e4"></div>`;
