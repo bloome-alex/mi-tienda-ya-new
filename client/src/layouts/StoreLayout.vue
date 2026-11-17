@@ -38,6 +38,8 @@ const contactVisible=computed(()=>design.value.shop.showContact&&!!(store.value?
 const cart=computed(()=>cartFor(currentSlug.value+(isPreview.value?':preview':'')));
 const contactForm=reactive({name:'',email:'',message:'',website:''});
 const contactBusy=ref(false),contactSent=ref(false);
+// Debe declararse antes de load(): el watch inmediato llama a load() al montar.
+const staleChanges=ref(false);let stopStoreUpdates=()=>{};
 let previewSeeded=false,requestId=0,previewNavigationSequence=0,activeNavigation=null;
 function reportPreviewLocation(type=PREVIEW_MESSAGE.location,navigationId){
  if(!isPreview.value||!store.value||store.value._id!==route.query.preview||store.value.slug!==currentSlug.value||window.parent===window)return;
@@ -126,7 +128,6 @@ provide(storefrontKey,{store,products,featuredProducts,categories,allCategories,
 watch([()=>currentSlug.value,()=>route.query.preview],load,{immediate:true});
 watch(()=>route.fullPath,()=>{menu.value=false;if(!loading.value){document.title=store.value?.name?(route.path.endsWith('/terminos')&&(design.value.terms.enabled||isPreview.value)?design.value.terms.title+' · '+store.value.name:store.value.name+' · MiTiendaYa'):'MiTiendaYa';reportPreviewLocation();}},{flush:'post'});
 // Si el vendedor guarda cambios en el panel (otra pestaña del mismo navegador), la tienda ofrece recargar.
-const staleChanges=ref(false);let stopStoreUpdates=()=>{};
 function refreshStore(){staleChanges.value=false;load();}
 onMounted(()=>{stopStoreUpdates=onStoreChange(({storeId})=>{if(!isPreview.value&&store.value&&String(store.value._id)===storeId)staleChanges.value=true;});});
 onUnmounted(()=>stopStoreUpdates());

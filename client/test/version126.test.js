@@ -54,3 +54,8 @@ test('la tienda ofrece ver los cambios guardados desde el panel en otra pestaña
   assert.match(source('services/api.js'), /announceStoreChange\(method, path\)/);
   assert.match(source('layouts/StoreLayout.vue'), /class="store-update-banner"/);
 });
+
+test('el estado del aviso se declara antes del watch inmediato que llama a load() (1.26.1)', () => {
+  const layout = source('layouts/StoreLayout.vue');
+  assert.ok(layout.indexOf('const staleChanges=ref(false)') < layout.indexOf(',load,{immediate:true})'));
+});
