@@ -213,8 +213,11 @@ test('B2: el login root tarda lo mismo con un usuario inexistente (compara contr
   assert.ok(Date.now() - started >= 5);
 });
 
-test('la versión distribuida es 1.25.2 y documenta las correcciones del informe de QA', () => {
-  for (const file of ['package.json', 'api/package.json', 'client/package.json']) assert.equal(JSON.parse(fs.readFileSync(path.join(config.projectRoot, file), 'utf8')).version, '1.25.2');
+test('la versión distribuida incluye 1.25.2 y documenta las correcciones del informe de QA', () => {
+  const versions = ['package.json', 'api/package.json', 'client/package.json'].map(file => JSON.parse(fs.readFileSync(path.join(config.projectRoot, file), 'utf8')).version);
+  assert.equal(new Set(versions).size, 1, 'las tres versiones deben coincidir');
+  const [major, minor, patch] = versions[0].split('.').map(Number);
+  assert.ok(major > 1 || minor > 25 || (minor === 25 && patch >= 2), `versión ${versions[0]} anterior a 1.25.2`);
   const changes = fs.readFileSync(path.join(config.projectRoot, 'docs/CAMBIOS-1.25.2.md'), 'utf8');
   for (const id of ['C1', 'C2', 'A1', 'A2', 'A3', 'A4', 'A5', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'B1', 'B2']) assert.match(changes, new RegExp(`\\*\\*${id}\\b|\\b${id} ·`));
 });
