@@ -67,7 +67,7 @@ export class DomainService {
 
   publicUrl(store) {
     const domain = store?.domain || {};
-    if (domain.mode === 'subdomain' && domain.subdomain) return `https://${this.managedHostname(domain.subdomain)}`;
+    if (domain.mode === 'subdomain' && domain.subdomain && (domain.status || 'verified') === 'verified') return `https://${this.managedHostname(domain.subdomain)}`;
     if (domain.mode === 'custom' && domain.customDomain && domain.status === 'verified') return `https://${domain.customDomain}`;
     return this.pathUrl(store);
   }
@@ -112,13 +112,17 @@ export class DomainService {
     const mode = input?.mode;
     if (!['path', 'subdomain', 'custom'].includes(mode)) throw new AppError('Elegí una modalidad de dominio válida.', 422, 'INVALID_DOMAIN_MODE');
     const previous = this.publicDomain(store);
-    const previousCustomDomain = store.domain?.mode === 'custom' ? store.domain?.customDomain : '';
+    const provisionedHost = domain => domain?.mode === 'custom' ? domain?.customDomain || '' : domain?.mode === 'subdomain' && domain?.provisionedAt ? this.managedHostname(domain.subdomain) : '';
+    const previousProvisionedHost = provisionedHost(store.domain);
     if (mode === 'path') {
       store.domain = { mode: 'path', subdomain: null, customDomain: null, status: 'unconfigured', verificationToken: '', dnsVerifiedAt: null, verifiedAt: null, provisionedAt: null, provisioningError: '' };
     } else if (mode === 'subdomain') {
       const subdomain = this.normalizeSubdomain(input.subdomain);
       await this.ensureUnique('domain.subdomain', subdomain, store._id);
-      store.domain = { mode: 'subdomain', subdomain, customDomain: null, status: 'verified', verificationToken: '', dnsVerifiedAt: null, verifiedAt: new Date(), provisionedAt: null, provisioningError: '' };
+      const already = store.domain?.mode === 'subdomain' && store.domain?.subdomain === subdomain && store.domain?.status === 'verified';
+      // Con aprovisionamiento automático, el subdominio necesita su propio sitio de nginx y certificado (no hay certificado comodín).
+      const needsProvisioning = this.provisioner.enabled?.() && !already;
+      store.domain = already ? store.domain : { mode: 'subdomain', subdomain, customDomain: null, status: needsProvisioning ? 'pending' : 'verified', verificationToken: '', dnsVerifiedAt: null, verifiedAt: needsProvisioning ? null : new Date(), provisionedAt: null, provisioningError: '' };
     } else {
       const customDomain = this.normalizeCustomDomain(input.customDomain);
       await this.ensureUnique('domain.customDomain', customDomain, store._id);
@@ -134,14 +138,32 @@ export class DomainService {
       };
     }
     await store.save();
-    const currentCustomDomain = store.domain?.mode === 'custom' ? store.domain?.customDomain : '';
-    if (previousCustomDomain && previousCustomDomain !== currentCustomDomain) await this.provisioner.deprovision({ storeId: store._id });
+    const wantedHost = store.domain?.mode === 'custom' ? store.domain?.customDomain : store.domain?.mode === 'subdomain' ? this.managedHostname(store.domain.subdomain) : '';
+    if (previousProvisionedHost && previousProvisionedHost !== wantedHost) await this.provisioner.deprovision({ storeId: store._id });
+    if (store.domain?.mode === 'subdomain' && store.domain.status === 'pending') await this.provisionSubdomain(store);
     this.cache.clear();
     return { before: previous, after: this.publicDomain(store) };
   }
 
+  async provisionSubdomain(store) {
+    const hostname = this.managedHostname(store.domain.subdomain);
+    try {
+      await this.provisioner.provision({ storeId: store._id, domain: hostname });
+    } catch (error) {
+      store.domain.status = 'pending';
+      store.domain.provisioningError = error.message;
+      await store.save();
+      this.cache.clear();
+      throw new AppError('No pudimos activar el certificado seguro de ' + hostname + '. Tu tienda sigue disponible en su enlace de MiTiendaYa. Intentá nuevamente en unos minutos.', 502, 'SUBDOMAIN_PROVISIONING_FAILED');
+    }
+    const now = new Date();
+    Object.assign(store.domain, { status: 'verified', verifiedAt: now, provisionedAt: now, provisioningError: '' });
+    await store.save();
+  }
+
   async deprovisionStore(store) {
-    if (store?.domain?.mode !== 'custom' || !store?.domain?.customDomain) return false;
+    const provisioned = store?.domain?.mode === 'custom' ? store?.domain?.customDomain : store?.domain?.mode === 'subdomain' && store?.domain?.provisionedAt;
+    if (!provisioned) return false;
     const removed = await this.provisioner.deprovision({ storeId: store._id });
     this.cache.clear();
     return removed;

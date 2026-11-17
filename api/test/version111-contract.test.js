@@ -21,7 +21,7 @@ test('DomainProvisioningService usa execFile sin shell y sudo no interactivo', a
 test('verificar TXT aprovisiona Nginx y SSL antes de marcar el dominio verified', async () => {
   const source = await read('src/services/DomainService.js');
   const txt = source.indexOf('resolveTxt(name)');
-  const provision = source.indexOf('this.provisioner.provision');
+  const provision = source.indexOf('this.provisioner.provision', txt);
   const verified = source.indexOf("store.domain.status = 'verified'", provision);
   assert.ok(txt >= 0 && provision > txt && verified > provision);
   assert.match(source, /store\.domain\.provisioningError = error\.message/);
@@ -32,7 +32,7 @@ test('verificar TXT aprovisiona Nginx y SSL antes de marcar el dominio verified'
 test('cambiar o archivar una tienda limpia el sitio Nginx anterior', async () => {
   const domain = await read('src/services/DomainService.js');
   const routes = await read('src/routes/core.js');
-  assert.match(domain, /previousCustomDomain !== currentCustomDomain/);
+  assert.match(domain, /previousProvisionedHost !== wantedHost/);
   assert.match(domain, /deprovisionStore\(store\)/);
   assert.match(routes, /domainService\.deprovisionStore\(before\)/);
 });
